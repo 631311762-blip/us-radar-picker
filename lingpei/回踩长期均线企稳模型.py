@@ -16,6 +16,7 @@ DROP_MIN, DROP_MAX = 0.08, 0.35  # 距前高（试盘段峰值）回撤幅度范
 # ---- 方向约束（2026-11-09 修复：只要「从高点向均线回踩」，不要「从下往上贴线」）----
 PEAK_ABOVE_MA_MIN = 1.10   # 近段峰值至少高出 MA60 10%（排除低位刚爬升、峰值≈现价的形态）
 TRIAL_ABOVE_MA = True      # 试盘日收盘须站上当时 MA60（冲高前已在均线上方，排除突破回踩）
+MA60_MAX_BREAK = 0.015     # 现价最多低于 MA60 1.5%（回踩允许轻微毛刺，排除从下往上反弹贴线）
 
 
 def detect_coil_v2(bars):
@@ -75,6 +76,10 @@ def detect_coil_v2(bars):
         ma60_t = sum(b["c"] for b in bars[trial_idx - 59:trial_idx + 1]) / 60
         if ma60_t and bars[trial_idx]["c"] <= ma60_t:
             return None
+
+    # 5d) 方向约束：现价不得有效跌破 MA60（排除均线之下反弹上来的形态）
+    if cur["c"] < ma60 * (1 - MA60_MAX_BREAK):
+        return None
 
     # 评分：贴线越紧、间距越居中、回撤越合理，分越高
     score = 100 - min(dev60, dev30) * 1000 - abs(gap - 24) * 1.5 - abs(drop - 0.20) * 120
