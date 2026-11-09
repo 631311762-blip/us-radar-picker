@@ -1,0 +1,74 @@
+name: stock-v3 每日选股闭环
+
+on:
+  schedule:
+    # 北京时间 17:30 收盘后（A股收盘 15:00，留出新浪数据滚动时间）；GitHub cron 用 UTC → 09:30
+    # 周一至周五运行；中国节假日行情不更新时，脚本会自身安全 ABORT，不推送、不污染
+    - cron: '30 9 * * 1-5'
+  workflow_dispatch: {}   # 允许在 Actions 页面手动触发（调试用）
+
+permissions:
+  contents: write        # 允许本 workflow 把每日选股结果推回仓库
+
+concurrency:
+  group: stock-v3-daily
+  cancel-in-progress: false
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      TZ: Asia/Shanghai          # 关键：脚本按北京时间判断"是否已收盘"，必须用东八区
+      LANG: C.UTF-8
+      PYTHONIOENCODING: utf-8
+      SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}   # 微信推送凭证（不落盘、不入库）
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install -U pip
+          pip install requests numpy pandas
+
+      - name: 行情源连通性预检
+        run: |
+          echo "== 新浪日线 =="
+          curl -s -m 20 "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=sh600000&scale=240&ma=no&datalen=3" | head -c 160
+          echo ""
+          echo "== 东财候选池 =="
+          curl -s -m 20 "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=3&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23&fields=f12,f14" | head -c 160
+          echo ""
+
+      - name: 运行每日闭环
+        working-directory: stock-v3
+        run: python daily_v3.py
+        continue-on-error: true   # 推送失败 / 非交易日 ABORT 不阻断后续入库
+
+      - name: 提交并推送结果
+        run: |
+          git config user.name "stock-v3-bot"
+          git config user.email "bot@stock-v3.local"
+          git add stock-v3/
+          if git diff --cached --quiet; then
+            echo "无变更，跳过提交"
+            exit 0
+          fi
+          git commit -m "daily: 选股结果自动同步 $(TZ=Asia/Shanghai date +%F)"
+          for i in 1 2 3; do
+            git fetch origin
+            git merge origin/main --no-edit -m "merge: 同步上游改动" || true
+            if git push origin HEAD:main; then
+              echo "推送成功"
+              break
+            fi
+            sleep 8
+          done
