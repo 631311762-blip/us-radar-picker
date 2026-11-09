@@ -201,6 +201,11 @@
         "code": "301595",
         "name": "太力科技",
         "close": 42.6
+      },
+      {
+        "code": "300878",
+        "name": "维康药业",
+        "close": 31.71
       }
     ]
   },
@@ -222,6 +227,18 @@
     {
       "date": "2026-11-09",
       "qualified": 40,
+      "review": {
+        "samples": 0,
+        "wins": 0,
+        "losses": 0,
+        "pending": 0,
+        "win_rate": null,
+        "note": "首次运行/同日重跑，无此前归档候选，昨日复盘无样本"
+      }
+    },
+    {
+      "date": "2026-11-09",
+      "qualified": 41,
       "review": {
         "samples": 0,
         "wins": 0,
