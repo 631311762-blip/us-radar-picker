@@ -530,6 +530,16 @@ def build_markdown(top, meta, audit_removed, review_res, cum_rate, qualified_cou
 
 # ---------- 主流程 ----------
 def main():
+    # 共同前置层接入（强制）：数据入口自动切到共享样本池/K线缓存。
+    _ad = None
+    try:
+        import sys as _s, os as _o
+        _s.path.insert(0, _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "..", "common"))
+        import adapter as _ad
+        _ad.install("yidian", globals())
+    except Exception:
+        _ad = None
+    globals()["_COMMON_ADAPTER"] = _ad
     log("=" * 60)
     log("易点模型推荐 启动 | 基准日 %s" % TODAY)
     token = (os.environ.get("PUSHPLUS_TOKEN") or "").strip()
@@ -626,6 +636,14 @@ def main():
     watch_pool = [{"code": q["code"], "name": q["name"], "signals": q["signals"]}
                   for q in qualified if q["signals"]]
     top = qualified[:TOP_N]
+
+    # 共同前置层：写统一推荐台账（出口 gate + 回溯/参数修正）
+    _ad = globals().get("_COMMON_ADAPTER")
+    if _ad:
+        try:
+            _ad.record("yidian", top)
+        except Exception:
+            pass
 
     state = load_state()
     review_res = review(state, quote_map)

@@ -674,6 +674,14 @@ def run_review(params, top_n=None):
     archive_path = cloud_archive(payload)
     save_pending(qualified[:top_n], run_date)
 
+    # 共同前置层：写统一推荐台账（出口 gate + 回溯/参数修正）
+    _ad = globals().get("_COMMON_ADAPTER")
+    if _ad:
+        try:
+            _ad.record("low_shadow", qualified[:top_n])
+        except Exception:
+            pass
+
     # ---- 中文简报（同时打印与推送） ----
     L = []
     L.append("## 低位上影线样本 · 收盘后模型简报")
@@ -717,6 +725,16 @@ def run_review(params, top_n=None):
 def main():
     global DEMO
     DEMO = False
+    # 共同前置层接入（强制）：数据入口自动切到共享样本池/K线缓存。
+    _ad = None
+    try:
+        import sys as _s, os as _o
+        _s.path.insert(0, _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "..", "common"))
+        import adapter as _ad
+        _ad.install("low_shadow", globals())
+    except Exception:
+        _ad = None
+    globals()["_COMMON_ADAPTER"] = _ad
     parser = argparse.ArgumentParser(description="低位上影线样本 收盘后模型")
     parser.add_argument("--mode", default="review",
                         choices=["review", "afterclose", "backtest"],

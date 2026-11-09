@@ -1,0 +1,36 @@
+{
+  "_comment": "所有纳入共同前置框架的 A 股模型注册表。新增模型：在 models 里加一项即可自动套用四个共同条件（全市场行情/立信剔除/ST剔除/回溯修正），无需改动 workflow。cmd 为相对仓库根的命令；由 run_all.py 顺序执行。",
+  "version": 2,
+  "models": [
+    {
+      "name": "shanshui",
+      "label": "善水模型 v10",
+      "cmd": "python3 shanshui/daily_shanshui.py --model v10 --top 10",
+      "enabled": true
+    },
+    {
+      "name": "low_shadow",
+      "label": "低位上影线模型",
+      "cmd": "python3 low_shadow/low_shadow_screener.py --mode review",
+      "enabled": true
+    },
+    {
+      "name": "lingpei",
+      "label": "领湃模型 B_V2",
+      "cmd": "bash -lc 'cd lingpei && python3 _lixin_update.py && python3 领湃模型_每日.py && python3 领湃跟踪修正.py'",
+      "enabled": true
+    },
+    {
+      "name": "kaizhong",
+      "label": "凯众模型 v4",
+      "cmd": "python3 kaizhong/daily_v4.py",
+      "enabled": true
+    },
+    {
+      "name": "yidian",
+      "label": "易点模型",
+      "cmd": "python3 yidian/run.py",
+      "enabled": true
+    }
+  ]
+}

@@ -502,6 +502,16 @@ def build_ledger(hits, hist, last_date, fmap, cal, rv, candidate_n):
 
 # ---------------- 主流程 ----------------
 def main():
+    # 共同前置层接入（强制）：patch lib 的列表来源到共享样本池（已剔除 ST/立信）。
+    # 凯众 K 线保留自有新浪增量缓存，但出口 gate 仍会对最终推荐再做一次剔除兜底。
+    _ad = None
+    try:
+        import sys as _s, os as _o
+        _s.path.insert(0, _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "..", "common"))
+        import adapter as _ad
+        _ad.install("kaizhong", vars(lib))
+    except Exception:
+        _ad = None
     print("[1/5] 探测最新交易日 ...")
     try:
         last_date = AS_OF or lib.market_last_date()
@@ -524,6 +534,12 @@ def main():
     print("[3/5] 全市场 v4 扫描（合规剔除静默执行）...")
     hits, dates, px, lo = scan_and_matrix(last_date, f10, names)
     cal = [d for d in dates if d <= last_date]
+    # 共同前置层：写统一推荐台账（出口 gate 强制再剔一次 ST/立信）
+    if _ad:
+        try:
+            _ad.record("kaizhong", hits[:TOP])
+        except Exception:
+            pass
     print(f"      命中 {len(hits)} 只")
 
     hist = load_hist()
