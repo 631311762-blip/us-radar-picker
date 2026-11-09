@@ -212,6 +212,19 @@ def main():
         md.append("　" + "、".join(f"{b['name']}({b['code']})" for b in blocked))
         md.append("")
 
+    # ── 启动首日观察榜（2026-11-09 应用户「能不能第一天就推荐」新增）
+    #    纯展示：复用 build() 已算好的全市场因子行，不改主榜/权重/参数/状态，
+    #    异常绝不影响主闭环。是否纳入正式选股仍走影子验证闸门，人工不得手改。
+    try:
+        import firstday_board
+        _lixin = {b["code"] for b in blocked}
+        _fd = firstday_board.render(r.get("pool") or [], _lixin)
+        if _fd:
+            md += _fd
+            md.append("")
+    except Exception as e:
+        print("  [警告] 首日观察榜生成失败，不影响主流程：", e)
+
     # 影子假设跟踪段
     if sh and sh.get("md"):
         md += sh["md"]
