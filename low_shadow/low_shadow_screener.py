@@ -40,6 +40,7 @@
 """
 
 import argparse
+import csv
 import json
 import logging
 import math
@@ -222,9 +223,15 @@ def em_hist(code, count=150):
             if len(p) < 6:
                 continue
             try:
+                # p[6] = f57 成交额(元)，与原型盘前主路径 f6 同口径；
+                # 缺失时回退 成交量*收盘价（仅 demo / 异常兜底）。
+                amount = _to_float(p[6]) if len(p) > 6 else 0.0
+                if amount <= 0:
+                    amount = float(p[5]) * float(p[2])
                 bars.append({
                     "date": p[0], "open": float(p[1]), "close": float(p[2]),
                     "high": float(p[3]), "low": float(p[4]), "vol": float(p[5]),
+                    "amount": amount,
                 })
             except ValueError:
                 continue
@@ -278,14 +285,26 @@ def load_lixin_exclude():
 # ----------------------------------------------------------------------------
 # 参数（可被「参数修正」模块持久化覆盖）
 # ----------------------------------------------------------------------------
+# 原型 us_radar_picker.py::SHADOW 的 8 道硬条件（逐字对齐，勿随意放宽）
 DEFAULT_PARAMS = {
-    "lookback": 120,          # 区间回看窗口（交易日）
-    "upper_shadow_min": 0.50, # 上影线占整根K线最小比例
-    "low_pos_pct": 0.40,      # 收盘价位于区间底部的最大比例（越小越严格）
-    "min_score": 60,          # 入选最低评分
-    "env_threshold": 60,      # 环境门槛：通过环境过滤标的数 >= 此值才推个股
-    "top_n": 6,               # 简报展示前 N 只
-    "vol_mult": 1.20,         # 放量倍数阈值
+    # --- 形态硬条件（原型 SHADOW）---
+    "upper_amp_min": 0.08,          # 上影/开盘 >= 8%
+    "upper_to_body_min": 2.0,       # 上影/实体 >= 2 倍
+    "body_abs_max_pct": 0.07,       # 当日涨跌幅绝对值 <= 7%
+    "vol_ratio_min": 1.5,           # 量比(对前5日均量) >= 1.5
+    "low_pos_max_pct": 0.15,        # 距20日低点涨幅 <= 15%
+    "below_ma20": True,             # 收盘必须低于 MA20（硬性）
+    "min_amount": 5e7,              # 当日成交额 >= 5000万（f57 真实元）
+    "shadow_comp_enabled": True,    # 启用「次选路径」
+    "comp_shadow_min": 0.06,        # 次选：上影/开盘 >= 6%
+    "comp_upper_to_body_min": 3.5,  # 次选：上影/实体 >= 3.5
+    "comp_low_pos_max_pct": 0.05,   # 次选：距20日低点 <= 5%
+    # --- 框架参数 ---
+    "lookback": 120,          # K线回看窗口（>=21 根即可判定末根）
+    "top_n": 6,               # 简报展示前 N 只（原型 topN）
+    "candidate_pool": 60,     # 候选池上限（原型 candidatePool）
+    "env_threshold": 60,      # 合格候选数 >= 此值视为「信号异常放量」告警（非空仓开关）
+    "vol_mult": 1.20,         # 保留兼容（旧 env 统计用）
 }
 
 
@@ -347,7 +366,7 @@ def _demo_kline(symbol, lookback):
         if inject and i == n - 1:
             hi = max(op, cl) * (1 + rng.uniform(0.06, 0.12))
             cl = min(op, cl) * (1 - rng.uniform(0.01, 0.03))
-            lo = cl * (1 - rng.uniform(0.01))
+            lo = cl * (1 - rng.uniform(0.0, 0.01))
         vol = rng.uniform(0.5, 2.0) * 1_000_000
         recs.append({
             "date": (base + timedelta(days=int(i * 1.55))).strftime("%Y-%m-%d"),
@@ -362,83 +381,144 @@ def _demo_kline(symbol, lookback):
 # 特征与形态识别
 # ----------------------------------------------------------------------------
 def extract_last_features(recs, params):
-    """从K线提取末根与区间特征。失败时返回 None。"""
-    if not recs or len(recs) < 2:
+    """从K线提取末根特征（对齐原型 shadow_evaluate 的 8 道硬条件所需字段）。
+
+    成交额 amount 取东财 K 线 f57（真实元，与原型盘前主路径 f6 同口径）；
+    缺失时回退 成交量*收盘价。至少需要 21 根日K（20 根窗口 + 当日）。
+    """
+    if not recs or len(recs) < 21:
         return None
     try:
         recs = sorted(recs, key=lambda x: x["date"])
         last = recs[-1]
-        look = recs[-params["lookback"]:]
-        lo_min = min(r["low"] for r in look)
-        hi_max = max(r["high"] for r in look)
-        rng = hi_max - lo_min
-        pos = (last["close"] - lo_min) / rng if rng > 0 else 0.5  # 区间位置 0~1
-
-        body_high = max(last["open"], last["close"])
-        body_low = min(last["open"], last["close"])
-        bar_rng = last["high"] - last["low"]
-        if bar_rng <= 0:
+        o, h, l, c, v = (last["open"], last["high"], last["low"],
+                          last["close"], last["vol"])
+        if o <= 0 or h <= 0:
             return None
-        upper_shadow = (last["high"] - body_high) / bar_rng   # 上影线占比
-        lower_shadow = (body_low - last["low"]) / bar_rng
-        close_in_lower_half = last["close"] <= (body_high + body_low) / 2
+        body_abs = abs(c - o)
+        upper = h - max(o, c)
+        upper_amp = upper / o                                   # 上影/开盘
+        upper_to_body = upper / body_abs if body_abs > 0 else 99.0
 
+        win = recs[-20:]                                        # 含当日共 20 根
+        low_20 = min(r["low"] for r in win)
+        ma20 = sum(r["close"] for r in win) / len(win)
+        prev5 = recs[-6:-1]                                     # 当日前 5 根
+        vol_ma5 = sum(r["vol"] for r in prev5) / len(prev5) if prev5 else v
+        vol_ratio = v / vol_ma5 if vol_ma5 > 0 else 0.0
+        pos_pct = (c - low_20) / low_20 if low_20 > 0 else 99.0
+        prev_close = recs[-2]["close"]
+        pct_chg = (c / prev_close - 1) * 100 if prev_close > 0 else 0.0
+        # 成交额(元)：东财直连路径由 em_hist 解析 f57 得到，与原型盘前主路径 f6 同口径。
+        # 共同前置层共享 K 线缓存路径不返回 amount，其 vol 单位为「手」，
+        # 故 ×100 换算成股数再 ×收盘价近似成交额，避免 v*c 偏小 100 倍误杀全部信号。
+        amount = last.get("amount") or 0.0
+        if amount <= 0:
+            amount = v * 100.0 * c
+
+        main_path = upper_amp >= params["upper_amp_min"]
+        comp_path = (params["shadow_comp_enabled"]
+                     and upper_amp >= params["comp_shadow_min"]
+                     and upper_to_body >= params["comp_upper_to_body_min"])
+
+        # 兼容旧字段（简报/回溯）
+        bar_rng = h - l
+        upper_shadow = upper / bar_rng if bar_rng > 0 else 0.0
         closes = [r["close"] for r in recs]
-        ma60 = sum(closes[-60:]) / min(60, len(closes)) if len(closes) >= 20 else last["close"]
-        below_ma = last["close"] < ma60
-
-        avg_vol = sum(r["vol"] for r in recs[-20:]) / min(20, len(recs))
-        vol_up = last["vol"] > avg_vol * params["vol_mult"]
+        ma60 = sum(closes[-60:]) / min(60, len(closes))
 
         return {
-            "date": last["date"], "close": last["close"],
-            "upper_shadow": upper_shadow, "lower_shadow": lower_shadow,
-            "close_in_lower_half": close_in_lower_half,
-            "pos_in_range": pos, "below_ma": below_ma, "vol_up": vol_up,
-            "ma60": round(ma60, 2),
+            "date": last["date"], "close": c,
+            "upper_amp": upper_amp, "upper_to_body": upper_to_body,
+            "vol_ratio": vol_ratio, "pos_pct": pos_pct,
+            "pct_chg": pct_chg, "ma20": ma20, "low_20": low_20,
+            "amount": amount,
+            "main_path": main_path, "comp_path": comp_path,
+            "is_comp": bool(comp_path and not main_path),
+            # 兼容字段
+            "upper_shadow": upper_shadow, "pos_in_range": min(pos_pct, 1.0),
+            "below_ma": c < ma60, "ma60": round(ma60, 2),
         }
     except Exception as e:  # noqa: BLE001
         log.debug("特征提取失败：%s", e)
         return None
 
 
+def _check_shadow(feat, params):
+    """原型 8 道硬条件。返回 (是否通过, 淘汰原因)。"""
+    if feat is None:
+        return False, "K线不足"
+    if not (feat["main_path"] or feat["comp_path"]):
+        return False, "上影幅度"
+    if feat["upper_to_body"] < params["upper_to_body_min"]:
+        return False, "上影实体比"
+    if feat["vol_ratio"] < params["vol_ratio_min"]:
+        return False, "量比"
+    pos_limit = (params["comp_low_pos_max_pct"] if feat["is_comp"]
+                 else params["low_pos_max_pct"])
+    if feat["pos_pct"] > pos_limit:
+        return False, "低位"
+    if feat["amount"] < params["min_amount"]:
+        return False, "成交额"
+    if abs(feat["pct_chg"]) > params["body_abs_max_pct"] * 100:
+        return False, "涨跌幅"
+    if params["below_ma20"] and feat["close"] >= feat["ma20"]:
+        return False, "MA20"
+    return True, "通过"
+
+
 def is_low_shadow(feat, params):
-    """形态筛：上影线足够长且收在下半部，且处于低位。"""
-    if feat is None:
-        return False
-    shadow_ok = feat["upper_shadow"] >= params["upper_shadow_min"] \
-        and feat["close_in_lower_half"]
-    low_ok = feat["pos_in_range"] <= params["low_pos_pct"] or feat["below_ma"]
-    return shadow_ok and low_ok
+    """形态筛：对齐原型 us_radar_picker.py::shadow_evaluate 的 8 道硬条件。"""
+    return _check_shadow(feat, params)[0]
 
 
-def score_stock(feat, params):
-    """多因子评分（0~100）。"""
-    if feat is None:
-        return 0.0
-    s = 0.0
-    s += min(feat["upper_shadow"] / max(params["upper_shadow_min"], 1e-6), 1.0) * 30
-    s += (1 - min(feat["pos_in_range"], 1.0)) * 30
-    if feat["vol_up"]:
-        s += 15
-    if feat["below_ma"]:
-        s += 15
-    if feat["lower_shadow"] < 0.1:  # 下影线短，主力试盘未承接
-        s += 10
-    return round(min(100.0, s), 1)
+def shadow_diagnose(feat, params):
+    """返回未通过的首个硬条件名，用于筛选漏斗复盘。"""
+    return _check_shadow(feat, params)[1]
+
+
+def pct_rank(values):
+    """分位排名（逐字对齐原型 us_radar_picker.py::pct_rank）。"""
+    n = len(values)
+    if n <= 1:
+        return [1.0] * n
+    order = sorted(range(n), key=lambda i: values[i])
+    ranks = [0.0] * n
+    i = 0
+    while i < n:
+        j = i
+        while j + 1 < n and values[order[j + 1]] == values[order[i]]:
+            j += 1
+        avg = (i + j) / 2.0 + 1
+        for k in range(i, j + 1):
+            ranks[order[k]] = avg / n
+        i = j + 1
+    return ranks
+
+
+def rank_candidates(cands):
+    """原型 shadow_rank：候选池内分位评分（0~100）后排序，无绝对分数线。"""
+    if not cands:
+        return []
+    s_upper = pct_rank([c["upper_amp"] for c in cands])
+    s_vol = pct_rank([c["vol_ratio"] for c in cands])
+    s_low = pct_rank([-c["pos_pct"] for c in cands])
+    s_ratio = pct_rank([c["upper_to_body"] for c in cands])
+    for i, c in enumerate(cands):
+        c["score"] = round((s_upper[i] * 0.30 + s_vol[i] * 0.25
+                            + s_low[i] * 0.25 + s_ratio[i] * 0.20) * 100, 2)
+    cands.sort(key=lambda x: x["score"], reverse=True)
+    return cands
 
 
 # ----------------------------------------------------------------------------
-# 环境门槛
+# 环境参考（旧版 env_pass 计数恒真，已不作为空仓开关；保留仅供归档统计）
 # ----------------------------------------------------------------------------
 def env_pass(recs, params):
-    """环境过滤：价格未处于区间高位（非追高环境）且非地量。"""
     feat = extract_last_features(recs, params)
     if feat is None:
         return False
-    if feat["pos_in_range"] >= 0.85:   # 区间极度高位，环境过热
-        return False
-    if feat["vol_up"] is False and feat["pos_in_range"] > 0.6:
+    if feat["pos_in_range"] >= 0.85:
         return False
     return True
 
@@ -507,6 +587,33 @@ def save_pending(candidates, run_date):
         log.warning("pending 写入失败：%s", e)
 
 
+def save_full_list(qualified, meta, run_date):
+    """全市场合格清单完整落盘（JSON + CSV），不截断，供复盘/核对。"""
+    ensure_archive()
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    jpath = os.path.join(ARCHIVE_DIR, "qualified_%s.json" % ts)
+    cpath = os.path.join(ARCHIVE_DIR, "qualified_%s.csv" % ts)
+    cols = ["symbol", "name", "score", "date", "close", "upper_amp",
+            "upper_to_body", "vol_ratio", "pos_pct", "amount", "pct_chg",
+            "ma20", "low_20", "comp_path"]
+    try:
+        with open(jpath, "w", encoding="utf-8") as f:
+            json.dump({"run_date": run_date,
+                       "total_scanned": meta.get("total_scanned"),
+                       "qualified_count": len(qualified),
+                       "candidates": qualified}, f, ensure_ascii=False, indent=2)
+        with open(cpath, "w", encoding="utf-8-sig", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(cols)
+            for c in qualified:
+                w.writerow([c.get(k, "") for k in cols])
+        log.info("全量合格清单：%s / %s（%d 只）", jpath, cpath, len(qualified))
+        return jpath, cpath
+    except Exception as e:  # noqa: BLE001
+        log.warning("全量清单写入失败：%s", e)
+        return None, None
+
+
 def run_backtest(params):
     """回溯上一日候选次日表现，更新历史并计算胜率，触发参数修正。"""
     ensure_archive()
@@ -572,18 +679,18 @@ def run_backtest(params):
 
 
 def correct_params(params, win_rate):
-    """依据近期胜率修正阈值。"""
+    """依据近期胜率修正原型硬条件阈值（收紧/放宽），持久化到 params.json。"""
     if win_rate is None:
         return "维持当前参数"
     if win_rate < 0.45:
-        params["upper_shadow_min"] = min(0.70, params["upper_shadow_min"] + 0.05)
-        params["low_pos_pct"] = max(0.20, params["low_pos_pct"] - 0.03)
-        params["min_score"] = min(80, params["min_score"] + 2)
+        params["upper_amp_min"] = min(0.15, round(params["upper_amp_min"] + 0.01, 3))
+        params["low_pos_max_pct"] = max(0.05, round(params["low_pos_max_pct"] - 0.02, 3))
+        params["vol_ratio_min"] = min(2.5, round(params["vol_ratio_min"] + 0.1, 2))
         action = "收紧阈值（胜率偏低）"
     elif win_rate > 0.60:
-        params["upper_shadow_min"] = max(0.40, params["upper_shadow_min"] - 0.03)
-        params["low_pos_pct"] = min(0.50, params["low_pos_pct"] + 0.02)
-        params["min_score"] = max(50, params["min_score"] - 2)
+        params["upper_amp_min"] = max(0.05, round(params["upper_amp_min"] - 0.01, 3))
+        params["low_pos_max_pct"] = min(0.30, round(params["low_pos_max_pct"] + 0.02, 3))
+        params["vol_ratio_min"] = max(1.0, round(params["vol_ratio_min"] - 0.1, 2))
         action = "放宽阈值（胜率偏高）"
     else:
         action = "维持当前参数"
@@ -610,69 +717,81 @@ def run_review(params, top_n=None):
     if not lixin_ok:
         log.warning("立信排除集尚未生成（请先运行领湃），本日立信剔除为 0")
 
-    total = len(universe)
-    env_count = 0
+    total = len(universe)                 # 全市场样本总数（非抽样）
+    data_ok = 0
     audited_out = 0
+    funnel = {}
     candidates = []
 
     for stk in universe:
         try:
             sym = stk["symbol"]
             recs = get_kline(sym, params["lookback"])
-            # 环境过滤计数（宽松口径）
-            if env_pass(recs, params):
-                env_count += 1
+            if not recs or len(recs) < 21:
+                continue
+            data_ok += 1
             # 立信审计一票否决（复用领湃排除集 + 名称黑名单兜底）
             auditor = get_auditor(sym)
             if sym in lixin_set or auditor in AUDIT_BLACKLIST:
                 audited_out += 1
                 continue
-            # 形态筛
             feat = extract_last_features(recs, params)
             if not is_low_shadow(feat, params):
-                continue
-            sc = score_stock(feat, params)
-            if sc < params["min_score"]:
+                reason = shadow_diagnose(feat, params)
+                funnel[reason] = funnel.get(reason, 0) + 1
                 continue
             candidates.append({
                 "symbol": sym, "name": stk.get("name", ""),
-                "score": sc, "close": feat["close"],
-                "upper_shadow": round(feat["upper_shadow"], 3),
-                "pos_in_range": round(feat["pos_in_range"], 3),
-                "auditor": ("立信剔除" if (sym in lixin_set) else auditor),
+                "date": feat["date"], "close": feat["close"],
+                "upper_amp": round(feat["upper_amp"], 4),
+                "upper_to_body": round(feat["upper_to_body"], 2),
+                "vol_ratio": round(feat["vol_ratio"], 3),
+                "pos_pct": round(feat["pos_pct"], 4),
+                "amount": round(feat["amount"], 0),
+                "pct_chg": round(feat["pct_chg"], 2),
+                "ma20": round(feat["ma20"], 2),
+                "low_20": round(feat["low_20"], 2),
+                "comp_path": feat["is_comp"],
+                "auditor": auditor,
             })
         except Exception as e:  # noqa: BLE001
             log.debug("处理 %s 异常，跳过：%s", stk.get("symbol"), e)
             continue
 
-    candidates.sort(key=lambda x: x["score"], reverse=True)
-    qualified = candidates
+    # 全市场合格清单：8 道硬条件全部通过者，不截断
+    qualified = rank_candidates(candidates)
+    n_qualified = len(qualified)
+    pool = qualified[:params["candidate_pool"]]
 
-    if env_count < params["env_threshold"]:
-        log.warning("环境过滤通过 %d 只 < 门槛 %d → 空仓，不推个股",
-                    env_count, params["env_threshold"])
-        qualified = []
-        position = "空仓（环境未达门槛）"
+    if n_qualified == 0:
+        position = "空仓（全市场无符合 8 道硬条件的信号）"
+    elif n_qualified >= params["env_threshold"]:
+        position = "正常推个股（信号数达门槛，疑似口径/行情异常，请复核）"
     else:
         position = "正常推个股"
+    log.info("8 道硬条件筛选漏斗：%s", funnel)
 
     backtest = run_backtest(params)
 
     payload = {
         "run_date": run_date,
         "mode": "review",
-        "total_scanned": total,
-        "env_pass_count": env_count,
-        "env_threshold": params["env_threshold"],
+        "total_scanned": total,           # 全市场 A 股全量，非抽样
+        "data_ok_count": data_ok,
         "audit_veto_count": audited_out,
-        "qualified_count": len(qualified),
+        "qualified_count": n_qualified,   # 全市场符合条件总数
+        "candidate_pool": params["candidate_pool"],
         "position": position,
+        "funnel": funnel,
         "params": params,
-        "top_samples": qualified[:top_n],
+        "top_samples": pool[:top_n],
         "backtest": backtest,
     }
+    full_json, full_csv = save_full_list(qualified, payload, run_date)
+    payload["full_list_json"] = full_json
+    payload["full_list_csv"] = full_csv
     archive_path = cloud_archive(payload)
-    save_pending(qualified[:top_n], run_date)
+    save_pending(pool, run_date)
 
     # 共同前置层：写统一推荐台账（出口 gate + 回溯/参数修正）
     _ad = globals().get("_COMMON_ADAPTER")
@@ -686,27 +805,32 @@ def run_review(params, top_n=None):
     L = []
     L.append("## 低位上影线样本 · 收盘后模型简报")
     L.append("- 运行日：**%s**" % run_date)
-    L.append("- 扫描标的总数：%d" % total)
-    L.append("- 环境过滤通过：%d 只（门槛 ≥ %d）" % (env_count, params["env_threshold"]))
+    L.append("- 样本总数：**%d 只（全市场 A 股全量扫描，非抽样）**" % total)
+    L.append("- 有效K线标的：%d 只" % data_ok)
     L.append("- 立信审计剔除：%d 只（一票否决）" % audited_out)
-    L.append("- 合格股数（审计后）：%d 只" % len(qualified))
+    L.append("- 符合 8 道硬条件：**%d 只**（全量清单见下方）" % n_qualified)
+    L.append("- 候选池：%d 只（上限 %d）" % (len(pool), params["candidate_pool"]))
     L.append("- 仓位状态：**%s**" % position)
     L.append("---")
-    if qualified:
-        L.append("前 %d 只样本：" % min(top_n, len(qualified)))
-        for i, c in enumerate(qualified[:top_n], 1):
-            L.append("> %d. `%s` %s | 评分 %s | 收盘 %s | 上影 %s | 区间位 %s"
+    if pool:
+        L.append("前 %d 只（候选池内分位评分）：" % min(top_n, len(pool)))
+        for i, c in enumerate(pool[:top_n], 1):
+            L.append("> %d. `%s` %s | 评分 %s | 收盘 %s | 上影/开 %s | 上影/实体 %s | 量比 %s | 距20日低 %s"
                      % (i, c["symbol"], c["name"], c["score"], c["close"],
-                        c["upper_shadow"], c["pos_in_range"]))
+                        c["upper_amp"], c["upper_to_body"], c["vol_ratio"], c["pos_pct"]))
     else:
-        L.append("空仓提示：当前环境/样本未达推股条件，保持空仓观望。")
+        L.append("空仓提示：今日全市场无同时满足 8 道硬条件的标的，保持空仓观望。")
     L.append("---")
+    L.append("- 筛选漏斗（各硬条件淘汰数）：%s" % funnel)
     if backtest:
         L.append("- 近期胜率：%s（回溯样本 %d）" % (backtest.get("win_rate"), backtest.get("backtest_samples")))
         L.append("- 参数动作：%s" % backtest.get("action"))
     else:
         L.append("- 近期胜率：暂无（首批运行）")
         L.append("- 参数动作：维持当前参数")
+    L.append("- 全量合格清单：%s" % (full_json or "写入失败"))
+    if full_csv:
+        L.append("- 全量清单(CSV)：%s" % full_csv)
     L.append("- 归档路径：%s" % archive_path)
     brief = "\n".join(L)
 
@@ -716,9 +840,7 @@ def run_review(params, top_n=None):
     print(brief)
     print("=" * 56 + "\n")
 
-    # 推送微信（仅在有候选或空仓决策时推送，数据异常已在上面单独推送）
     push("低位上影线模型 %s" % run_date, brief)
-
     return payload
 
 
