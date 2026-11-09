@@ -1,0 +1,59 @@
+{
+  "date": "2026-11-09",
+  "candidates": [
+    {
+      "symbol": "300868",
+      "name": "杰美特",
+      "score": 99.4,
+      "close": 46.05,
+      "upper_shadow": 0.536,
+      "pos_in_range": 0.02,
+      "auditor": "未知"
+    },
+    {
+      "symbol": "600590",
+      "name": "泰豪科技",
+      "score": 98.7,
+      "close": 6.88,
+      "upper_shadow": 0.922,
+      "pos_in_range": 0.043,
+      "auditor": "未知"
+    },
+    {
+      "symbol": "603778",
+      "name": "国晟科技",
+      "score": 98.6,
+      "close": 7.16,
+      "upper_shadow": 0.831,
+      "pos_in_range": 0.047,
+      "auditor": "未知"
+    },
+    {
+      "symbol": "920078",
+      "name": "族兴新材",
+      "score": 98.6,
+      "close": 15.05,
+      "upper_shadow": 0.507,
+      "pos_in_range": 0.047,
+      "auditor": "未知"
+    },
+    {
+      "symbol": "001896",
+      "name": "豫能控股",
+      "score": 98.4,
+      "close": 9.38,
+      "upper_shadow": 0.714,
+      "pos_in_range": 0.052,
+      "auditor": "未知"
+    },
+    {
+      "symbol": "688323",
+      "name": "瑞华泰",
+      "score": 98.4,
+      "close": 19.15,
+      "upper_shadow": 0.661,
+      "pos_in_range": 0.052,
+      "auditor": "未知"
+    }
+  ]
+}
