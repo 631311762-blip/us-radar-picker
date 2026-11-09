@@ -422,9 +422,10 @@ def main():
     sample = em_hist("600519", 8) or em_hist("000001", 8)
     base_date = sample[-1]["d"] if sample else last_weekday(today)
     print("[基准] 上一交易日 = %s" % base_date)
-    # 非交易日保护：行情最新日≠当日（盘前跑时基准应为上一交易日，这里仅做基本判断）
-    if base_date >= today.isoformat():
-        print("[退出] 行情日期异常（%s），疑似非交易日或数据未更新" % base_date)
+    # 交易日保护：行情最新日应等于当日（盘后跑，今天已收盘数据已更新）；
+    # 若最新日早于今天（盘前/休市/数据未更新），说明当日数据还没出来，退出不推送。
+    if base_date < today.isoformat():
+        print("[退出] 行情日期异常（最新%s < 今日%s），疑似盘前或数据未更新" % (base_date, today))
         return
 
     print("[1/3] 获取全 A 股票池...")
