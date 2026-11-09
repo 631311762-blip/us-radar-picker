@@ -49,6 +49,10 @@ def render(pool, lixin_blocked=None, maxn=8):
             continue
         if r.get("code") in lixin_blocked:
             continue
+        # 2026-11-09：与形态闸门保持一致，破位反弹票不进观察榜。
+        # build() 过滤后 pool 本就不含这些票，这里是开关关闭/异常时的双重保险。
+        if r.get("shape_bad"):
+            continue
         if not _buyable(r):
             continue
         cands.append(r)
@@ -57,7 +61,8 @@ def render(pool, lixin_blocked=None, maxn=8):
     cands.sort(key=lambda x: -(x.get("score") or 0))
 
     md = ["### 👀 启动首日观察榜（dsc=0：今日刚放量突破，非推荐）",
-          "　口径：当日涨≥5% 且量>2×20日均量、收盘创/近20日新高；已剔除涨停买不进与立信审计股。",
+          "　口径：当日涨≥5% 且量>2×20日均量、收盘创/近20日新高；"
+          "已剔除涨停买不进、立信审计股与破位反弹票。",
           "　⚠️ 仅供观察，**不纳入主榜打分排序、不写状态、不参与结算**。历史回测未证明首日票更优，",
           "　　且首日多为涨停/大涨、次日实际难成交；是否纳入正式选股需走影子验证闸门（人工不得手改）。",
           ""]

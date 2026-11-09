@@ -271,6 +271,37 @@ def build(topn=6):
         r["score"] = round(sum(W[k] * r["pct"][j]
                                for j, k in enumerate(FACTORS)) / tot * 100, 2)
     rows.sort(key=lambda x: -x["score"])
+    n_universe = len(rows)          # 闸门前的有效样本数，推送端仍显示全市场口径
+
+    def _tier(x):
+        d = x.get("dsc", 99)
+        if d <= 1:
+            return 0
+        if d <= 3:
+            return 1
+        return 2
+
+    # 记录「无闸门时」的主榜候选序，供形态剔除名单聚焦到原本会进榜的票
+    pre_seq = sorted([x for x in rows if buyable(x)],
+                     key=lambda x: (_tier(x), -x["score"]))[:16]
+    pre_rank = {x["code"]: i for i, x in enumerate(pre_seq)}
+
+    # ── 形态闸门（2026-11-09 用户要求：剔除「破位反弹」错筛）──────────────
+    #    位置必须在【横截面打分之后】：每只票的分数仍由全市场 n_universe 只的
+    #    百分位算出，闸门只做「出榜前硬过滤」，不改变任何一只票的分数与排序。
+    #    与「立信审计一票否决」「buyable 涨停剔除」同级，不改 9 因子权重、不改
+    #    model2.P / factor_fit.json / holdout.json、不改交易规则与结算口径。
+    #    独立模块 shape_gate.py；SHAPE_GATE=off 可一键回退；异常不阻断主闭环。
+    #    过滤后 pool 也同步干净，首日观察榜不会再出现破位反弹票。
+    shape_excluded = []
+    try:
+        import shape_gate
+        rows, shape_excluded = shape_gate.apply(rows, cache, base_date)
+        if shape_excluded:
+            print(f"  形态闸门：剔除破位反弹 {len(shape_excluded)} 只"
+                  f"（其中高分票：{'、'.join(x['name'] for x in shape_excluded[:4])}）")
+    except Exception as e:
+        print("  [警告] 形态闸门异常，本次跳过该过滤：", e)
 
     def apply_audit(cand):
         aud = audit_check.main([x["code"] for x in cand], verbose=False)
@@ -294,13 +325,7 @@ def build(topn=6):
     #    → 第 2 层其余按分数兜底（保证榜单不空）。
     #    注意 dsc=0 当天已涨停的票仍会被 buyable() 剔除（符合"次日涨幅>7%不追"），
     #    所以"启动第1天且买得进"天然稀缺，全市场通常只有个位数，属正常现象。
-    def _tier(x):
-        d = x.get("dsc", 99)
-        if d <= 1:
-            return 0
-        if d <= 3:
-            return 1
-        return 2
+    #    _tier() 已在打分后统一定义（形态剔除名单也要用同一分层口径）。
     fresh_sorted = sorted(latent_src, key=lambda x: (_tier(x), -x["score"]))
     # 审计一票否决必须在【分层后】的序列上做：新鲜票原始分数排名可能在一百名开外，
     # 旧的"只查前 18 名"做法会把它们整批漏掉，等于白分层
@@ -337,9 +362,14 @@ def build(topn=6):
             days = (dates.index(base_date) - dates.index(first) + 1
                     if first in dates and base_date in dates else 1)
             p["since"] = dict(first=first, days=max(1, days), fresh=False)
+    # 形态剔除名单：优先「原本会进榜」的票（用户实际看到的错筛），再补高分同类票
+    shape_shown = sorted(
+        shape_excluded,
+        key=lambda x: (pre_rank.get(x["code"], 999), -(x.get("score") or 0)))[:12]
     return dict(allpicks=all_picks, latpicks=final, cybpicks=[],
-                blocked=blk1 + blk2,
-                base_date=base_date, universe=len(rows), pool=rows)
+                blocked=blk1 + blk2, shape_excluded=shape_shown,
+                shape_excluded_total=len(shape_excluded),
+                base_date=base_date, universe=n_universe, pool=rows)
 
 
 def show(r):
@@ -407,9 +437,15 @@ def record(r):
                        since=p.get("since")))
     json.dump(db, open(f, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
+    # 形态剔除名单精简落盘（只留判定依据，便于事后审计，不参与结算）
+    sx = [dict(code=x["code"], name=x["name"], score=x["score"],
+               reasons=x.get("shape_reasons", []),
+               evidence=x.get("shape_evidence", {}))
+          for x in r.get("shape_excluded", [])]
     out = dict(base_date=r["base_date"], universe=r["universe"],
                generated=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-               PICKS=r["latpicks"], blocked=r["blocked"])
+               PICKS=r["latpicks"], blocked=r["blocked"],
+               shape_excluded=sx)
     json.dump(out, open(os.path.join(HERE, "今日推荐.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
 

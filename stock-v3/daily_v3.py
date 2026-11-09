@@ -212,6 +212,19 @@ def main():
         md.append("　" + "、".join(f"{b['name']}({b['code']})" for b in blocked))
         md.append("")
 
+    # ── 形态剔除名单（2026-11-09 应用户「破位反弹要先删除掉」新增）
+    #    纯展示：build() 已在出榜前完成过滤，这里只把被删的票和依据列出来，
+    #    不写状态、不参与结算。异常绝不影响主闭环。
+    try:
+        import shape_gate
+        _sx_md = shape_gate.render_md(r.get("shape_excluded") or [],
+                                      total=r.get("shape_excluded_total"))
+        if _sx_md:
+            md += _sx_md
+            md.append("")
+    except Exception as e:
+        print("  [警告] 形态剔除名单生成失败，不影响主流程：", e)
+
     # ── 启动首日观察榜（2026-11-09 应用户「能不能第一天就推荐」新增）
     #    纯展示：复用 build() 已算好的全市场因子行，不改主榜/权重/参数/状态，
     #    异常绝不影响主闭环。是否纳入正式选股仍走影子验证闸门，人工不得手改。
