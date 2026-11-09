@@ -1,0 +1,53 @@
+name: 凯众模型 v4 每日流程
+
+on:
+  schedule:
+    # UTC 08:40 = 北京时间 16:40，A 股收盘后（行情快照已落库）
+    - cron: "40 8 * * 1-5"
+  workflow_dispatch:
+  push:
+    # 只要 kaizhong/ 下的脚本或本 workflow 有改动，就自动跑一遍验证
+    paths:
+      - "kaizhong/**"
+      - ".github/workflows/kaizhong.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kaizhong
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        working-directory: kaizhong
+        run: pip install -r requirements.txt
+
+      - name: 运行凯众 v4 模型
+        env:
+          FTQQ_KEY: ${{ secrets.FTQQ_KEY }}
+          KZ_DATA_DIR: kaizhong/state
+          KZ_TOP: "6"
+        working-directory: kaizhong
+        run: |
+          mkdir -p state/reports
+          python3 daily_v4.py
+
+      - name: 回写状态与台账（供次日复盘 / 跨市场匹配）
+        if: always()
+        run: |
+          git config user.name "kaizhong-bot"
+          git config user.email "kaizhong-bot@users.noreply.github.com"
+          git add kaizhong/state
+          git commit -m "kaizhong state: $(date -u +%F)" || echo "无状态变更"
+          git push || echo "推送状态失败（不影响选股）"
