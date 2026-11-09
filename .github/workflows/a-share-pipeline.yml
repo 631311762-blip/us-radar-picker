@@ -23,7 +23,11 @@ on:
   workflow_dispatch:
     inputs:
       f10_only:
-        description: "立信仅查 F10（跳过 26 年公告全量扫描，加速验证）"
+        description: "立信仅查 F10（完全跳过 26 年公告扫描，加速验证）"
+        required: false
+        default: "false"
+      ann_full:
+        description: "立信 B 通道跑 2026 全年基线（默认按日期增量扫描，约 30 秒）"
         required: false
         default: "false"
       only_model:
@@ -64,10 +68,12 @@ jobs:
         id: prefilter
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          KZ_DATA_DIR: kaizhong/state
         run: |
           set -o pipefail
           ARGS=""
           if [ "${{ github.event.inputs.f10_only }}" = "true" ]; then ARGS="$ARGS --f10-only"; fi
+          if [ "${{ github.event.inputs.ann_full }}" = "true" ]; then ARGS="$ARGS --ann-full"; fi
           if [ "${{ github.event.inputs.no_kline }}" = "true" ]; then ARGS="$ARGS --no-kline"; fi
           python3 common/prefilter.py $ARGS
           # 输出 trading_day 供后续步骤判断

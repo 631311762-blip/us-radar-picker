@@ -249,14 +249,18 @@ def check_trading_day(verbose=True):
 
 
 # ------------------------------------------------------------------ K 线抓取与缓存
-def _fetch_one_kline(code, count=KLINE_CACHE_COUNT):
-    """从东财抓取单只 K 线（前复权），返回规范 bars 或 None。"""
+def _fetch_one_kline(code, count=KLINE_CACHE_COUNT, fqt=1):
+    """从东财抓取单只 K 线，返回规范 bars 或 None。
+
+    fqt=1 前复权（共享主缓存，供 善水/低位上影/易点/领湃）；
+    fqt=0 不复权（供凯众：与新浪日线逐日一致，成交量单位为「手」）。
+    """
     beg = (datetime.now(BJT).date() - timedelta(days=count * 3)).strftime("%Y%m%d")
     params = {
         "secid": secid_of(code), "ut": EM_KUT,
         "fields1": "f1,f2,f3,f4,f5,f6",
         "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
-        "klt": 101, "fqt": 1, "beg": beg, "end": "20500101", "lmt": count,
+        "klt": 101, "fqt": fqt, "beg": beg, "end": "20500101", "lmt": count,
     }
     hosts = EM_KLINE_HOSTS[:]
     random.shuffle(hosts)
@@ -371,6 +375,103 @@ def fetch_klines_batch(universe, count=KLINE_CACHE_COUNT, workers=KLINE_WORKERS,
                       % (done, total, ok, fail))
     if verbose:
         print("[common] K线缓存完成：成功 %d，失败 %d" % (ok, fail))
+    return ok, fail
+
+
+# ------------------------------------------------------------------ 凯众专用：不复权 K 线共享缓存
+KAIZHONG_MIN_PRICE = 3.0      # 与 kaizhong/lib.py MIN_PRICE 一致
+KAIZHONG_MIN_AMOUNT = 5e7     # 与 kaizhong/lib.py MIN_AMOUNT 一致
+KAIZHONG_LOOKBACK = 180       # 与 kaizhong/lib.py LOOKBACK 一致
+
+
+def kaizhong_kline_dir():
+    """凯众 K 线缓存目录：与 kaizhong/lib.py 的 KZ_DATA_DIR 口径严格一致。"""
+    repo = os.path.dirname(BASE_DIR)
+    env = os.environ.get("KZ_DATA_DIR") or os.path.join("kaizhong", "state")
+    base = env if os.path.isabs(env) else os.path.join(repo, env)
+    return os.path.join(base, "kline")
+
+
+def _csv_last_date(path):
+    """读 CSV 最后一根 K 线的日期（不加载整表）。失败返回 None。"""
+    try:
+        last = None
+        with open(path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("date"):
+                    last = line.split(",")[0]
+        return last
+    except Exception:
+        return None
+
+
+def cache_kaizhong_klines(universe, count=KAIZHONG_LOOKBACK,
+                          workers=KLINE_WORKERS, quote_date=None, verbose=True):
+    """为凯众预填「不复权」K 线 CSV，使其 update_cache 零网络抓取。
+
+    实测依据（2026-11-10，180 根逐日比对 6 只样本）：
+      · 东财 fqt=0（不复权）与新浪日线价格 0 差异；fqt=1（前复权）在除权日
+        前后有价差，故凯众必须用 fqt=0，不能直连共享主缓存。
+      · 成交量：新浪(股)/东财(手) 恒为 100 倍，此处 ×100 还原；凯众量能判定
+        用的是相对倍数，乘常数不影响任何结果。
+      · 范围：仅凯众原本会扫描的股票（非北交所 + 价格/成交额/成交量门槛），
+        且样本池已物理剔除 ST/立信，符合全局强制条件。
+      · 格式：date,open,high,low,close,volume，与新浪 fetch_kline 完全一致。
+
+    关键：按「末日 == 最新交易日」判定是否跳过，而非「文件存在即跳过」——
+    GitHub Actions 全新 runner 会 checkout 到仓库里的旧缓存，必须重写为当日，
+    否则凯众 update_cache 判定末日过期仍会全量重抓（这正是原先慢的根源）。
+
+    返回 (成功数, 失败数)。失败个股由凯众自行回退新浪抓取，不影响正确性。
+    """
+    if quote_date is None:
+        _, quote_date, _ = check_trading_day()
+    d = kaizhong_kline_dir()
+    os.makedirs(d, exist_ok=True)
+    targets = []
+    fresh = 0
+    for x in universe or []:
+        code = str(x.get("code") or "").zfill(6)
+        # 范围 = 样本池内全部非北交所：不加凯众自己的价格/成交额门槛。
+        # 因为凯众 scan_and_matrix 遍历「目录下所有 CSV」而非仅 items，若在此
+        # 预筛会缩小扫描集合、改变选股结果。样本池已物理剔除 ST/立信/无行情，
+        # 属全局强制条件；凯众自身的门槛仍由它自己在 scan 阶段判定，逻辑不变。
+        if not code or code == "000000" or x.get("board") == "北交所":
+            continue
+        p = os.path.join(d, code + ".csv")
+        if os.path.exists(p) and os.path.getsize(p) > 0 and \
+                _csv_last_date(p) == quote_date:
+            fresh += 1
+            continue
+        targets.append(code)
+
+    if verbose:
+        print("[common] 凯众不复权K线：需预填 %d 只（已是当日 %d 只）→ %s"
+              % (len(targets), fresh, d))
+    ok = fail = 0
+
+    def work(code):
+        bars = _fetch_one_kline(code, count=count, fqt=0)
+        if not bars or len(bars) < 6:
+            return False
+        p = os.path.join(d, code + ".csv")
+        with open(p, "w", newline="", encoding="utf-8") as fh:
+            w = csv.writer(fh)
+            w.writerow(["date", "open", "high", "low", "close", "volume"])
+            for b in bars:
+                w.writerow([b["date"], b["open"], b["high"], b["low"],
+                            b["close"], b["volume"] * 100.0])
+        return True
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        for r in ex.map(work, targets):
+            if r:
+                ok += 1
+            else:
+                fail += 1
+    if verbose:
+        print("[common] 凯众不复权K线完成：成功 %d，失败 %d（失败者凯众自行回退）" % (ok, fail))
     return ok, fail
 
 

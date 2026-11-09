@@ -41,7 +41,9 @@ BJT = cm.BJT
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--f10-only", action="store_true", help="立信仅 F10 通道，跳过 26 公告扫描")
+    ap.add_argument("--ann-full", action="store_true", help="立信 B 通道跑 2026 全年基线（默认增量窗口）")
     ap.add_argument("--no-kline", action="store_true", help="跳过全市场 K 线批量缓存（调试）")
+    ap.add_argument("--no-kz", action="store_true", help="跳过凯众不复权 K 线预填（调试）")
     ap.add_argument("--no-lixin", action="store_true", help="跳过立信排除集更新，复用已有")
     args = ap.parse_args()
 
@@ -74,7 +76,8 @@ def main():
         import lixin as lx
         base_u = cm.get_universe(verbose=False, apply_lixin=False)
         codes = [x["code"] for x in base_u]
-        _, stats = lx.build(codes, do_ann=not args.f10_only)
+        _, stats = lx.build(codes, do_ann=not args.f10_only,
+                            ann_mode="full" if args.ann_full else "incremental")
         meta["lixin_count"] = stats.get("total_excluded", 0)
         meta["lixin_stats"] = stats
 
@@ -99,6 +102,19 @@ def main():
                                         workers=cm.KLINE_WORKERS)
         meta["kline_ok"] = ok
         meta["kline_fail"] = fail
+
+    # ---- 凯众专用：不复权 K 线预填（使凯众零网络抓取，口径与新浪逐日一致）----
+    if args.no_kline or args.no_kz:
+        print("[prefilter] 跳过凯众不复权 K 线预填。")
+    else:
+        try:
+            kz_ok, kz_fail = cm.cache_kaizhong_klines(universe)
+            meta["kz_kline_ok"] = kz_ok
+            meta["kz_kline_fail"] = kz_fail
+        except Exception as e:
+            # 失败不阻断：凯众会自行回退新浪抓取，仅慢一些，不影响结果与正确性
+            print("[prefilter] 凯众不复权 K 线预填失败（凯众自行回退）：%s" % e)
+            meta["kz_kline_error"] = str(e)
 
     cm.save_meta(meta)
     print("[prefilter] 完成：样本池 %d 只，立信排除 %d 只，trading_day=%s"

@@ -26,6 +26,10 @@ common/state/klines/
 common/state/universe.json
 common/state/meta.json
 
+# ===== 凯众 K 线缓存：由 prefilter 每日预填（东财 fqt=0，新浪同口径）=====
+# 可重建、体量大（4000+ CSV），绝不入库；否则每天回写会拖慢流水线并撑爆仓库。
+kaizhong/state/kline/
+
 # ===== Python =====
 __pycache__/
 *.pyc
