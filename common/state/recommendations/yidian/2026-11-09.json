@@ -110,7 +110,7 @@
         "ma5_up": true,
         "below_ma60": true,
         "high90": 48.55,
-        "audit_firm": "容诚会计师事务所",
+        "audit_firm": "天健会计师事务所",
         "score": 81.31,
         "status": "已启动",
         "startup_day": 1,
@@ -245,5 +245,5 @@
     "universe": 4605,
     "dropped": 0
   },
-  "written_at": "2026-11-09T23:26:43+08:00"
+  "written_at": "2026-11-09T23:34:59+08:00"
 }

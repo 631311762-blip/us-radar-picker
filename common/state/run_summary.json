@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-11-09T23:26:44+08:00",
+  "generated_at": "2026-11-09T23:35:00+08:00",
   "results": [
     {
       "name": "yidian",
       "label": "易点模型",
       "exit": 0,
-      "seconds": 59.9
+      "seconds": 83.0
     }
   ],
   "settlements": [
