@@ -1,0 +1,19 @@
+# ============ 大缓存(可重建, 总 >340MB) ============
+kline_cache.json
+kline_cache_*.bak
+audit_detail.json
+audit_notices.json
+audit_result.json
+universe_cache.json
+
+# ============ 敏感凭证(绝不入库) ============
+sckey.txt
+
+# ============ 日志 / 编译产物 ============
+*.log
+__pycache__/
+*.pyc
+
+# ============ 临时备份 ============
+*.bak
+*.tmp

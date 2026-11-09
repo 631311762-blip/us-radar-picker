@@ -1,0 +1,54 @@
+{
+ "id": "H1",
+ "name": "放宽可买性 + 准突破 + 分数截尾（P4+得分前30%）",
+ "registered": "2026-11-08",
+ "registered_by": "用户指令（方式2：挂观察名单，走三重验证，不手改模型）",
+ "status": "watching",
+ "status_note": "watching=影子跟踪中；await_real=影子已满60条待真实组对照；promote_ready=通过闸门可提交进化；rejected=未通过",
+ "definition": {
+  "pool": "dsc==0（放量突破日：当日涨≥5% 且 量>2×20日均量）",
+  "relax_1": "不剔除涨停（取消 buyable 规则，涨停票按收盘价记账）",
+  "relax_2": "brk20 >= -2（准突破，收盘距前20日高点2%以内即算，覆盖奥雅式启动）",
+  "trim": "模型9因子得分取当日池内前30%",
+  "note": "不设收敛（box30）要求"
+ },
+ "sim_evidence": {
+  "window": "2026-06-01 ~ 2026-10-23（98个交易日）",
+  "p1_strict": {
+   "n": 438,
+   "win5": 0.338,
+   "r5": -2.18,
+   "alpha5": -1.03
+  },
+  "p4_relaxed": {
+   "n": 2671,
+   "win5": 0.346,
+   "r5": -2.03,
+   "alpha5": -0.93
+  },
+  "p4_top30": {
+   "n": 846,
+   "win5": 0.335,
+   "r5": -1.83,
+   "alpha5": -0.74,
+   "limitup_share": 0.78
+  },
+  "conclusion": "放宽不提升胜率；P4+得分前30% 超额最优但78%样本为涨停票（收盘实际难成交），需影子实盘结算验证",
+  "caveat": "回放池为全市场4300只，实际运行时为东财粗筛池约2700只，数字会有偏移"
+ },
+ "protocol": {
+  "method": "holdout 无涨停标记与 brk20 绝对值字段，无法验证过滤类假设；改用影子实盘对照",
+  "shadow_settle_need": 60,
+  "real_settle_need": 60,
+  "gate": "影子组 g10 均值 ≥ 真实推荐组 且 命中率(g10≥20%) ≥ 真实推荐组 → promote_ready；否则 rejected",
+  "adoption": "promote_ready 后仍不自动修改任何模型文件，需在下一次进化会话中由闸门/用户最终裁定"
+ },
+ "shadow": {
+  "log": "shadow_log.jsonl",
+  "db": "shadow_db.jsonl",
+  "start_from": "2026-11-06",
+  "n_recorded": 2,
+  "n_settled": 0,
+  "stat": null
+ }
+}
