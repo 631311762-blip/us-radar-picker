@@ -1,0 +1,106 @@
+{
+  "ok": true,
+  "date": "2026-11-09",
+  "meta": {
+    "date": "2026-11-09",
+    "total": 2793,
+    "cyb_kcb": 1977,
+    "cyb": 1372,
+    "kcb": 605,
+    "bj": 816,
+    "page_fails": 0
+  },
+  "qualified_count": 41,
+  "audit_veto_count": 8,
+  "top": [
+    {
+      "name": "陇神戎发",
+      "code": "300534",
+      "board": "创业板",
+      "status": "观察",
+      "startup_day": 0,
+      "score": 85.9,
+      "close": 10.22,
+      "chg_pct": 3.44,
+      "audit_firm": "希格玛会计师事务所"
+    },
+    {
+      "name": "柏星龙",
+      "code": "920075",
+      "board": "北交所",
+      "status": "已启动",
+      "startup_day": 1,
+      "score": 81.34,
+      "close": 15.5,
+      "chg_pct": 6.31,
+      "audit_firm": "天职国际会计师事务所"
+    },
+    {
+      "name": "天溯计量",
+      "code": "301449",
+      "board": "创业板",
+      "status": "已启动",
+      "startup_day": 1,
+      "score": 81.31,
+      "close": 36.22,
+      "chg_pct": 6.22,
+      "audit_firm": "天健会计师事务所"
+    },
+    {
+      "name": "杰创智能",
+      "code": "301248",
+      "board": "创业板",
+      "status": "观察",
+      "startup_day": 0,
+      "score": 78.15,
+      "close": 46.41,
+      "chg_pct": 3.02,
+      "audit_firm": "中审众环会计师事务所"
+    },
+    {
+      "name": "天铭科技",
+      "code": "920270",
+      "board": "北交所",
+      "status": "临界",
+      "startup_day": 0,
+      "score": 77.74,
+      "close": 10.45,
+      "chg_pct": 3.47,
+      "audit_firm": "天健会计师事务所"
+    },
+    {
+      "name": "天银机电",
+      "code": "300342",
+      "board": "创业板",
+      "status": "观察",
+      "startup_day": 0,
+      "score": 76.9,
+      "close": 28.16,
+      "chg_pct": 2.96,
+      "audit_firm": "中兴华会计师事务所"
+    }
+  ],
+  "review": {
+    "samples": 0,
+    "wins": 0,
+    "losses": 0,
+    "pending": 0,
+    "win_rate": null,
+    "note": "首次运行/同日重跑，无此前归档候选，昨日复盘无样本"
+  },
+  "cum_win_rate": null,
+  "cum_settled": 0,
+  "watch_pool_count": 22,
+  "archive": {
+    "json": "yidian/state/archive/qualified_20261109.json",
+    "csv": "yidian/state/archive/qualified_20261109.csv",
+    "index": "yidian/state/index.jsonl",
+    "state": "yidian/state/state.json",
+    "push_md": "yidian/state/archive/push_20261109.md"
+  },
+  "push": {
+    "ok": true,
+    "msg": "{\"code\":200,\"data\":\"3966474a3edd4c4babc4cdcbc7961fe0\",\"msg\":\"执行成功\"}"
+  },
+  "kline_failed": 0
+}

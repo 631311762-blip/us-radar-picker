@@ -25,3 +25,5 @@ last_run*
 __pycache__/
 *.pyc
 kaizhong/data/
+# 运行期临时标记（本地资料库上传用；云端以 Git 为准）
+cloud_upload_pending.json

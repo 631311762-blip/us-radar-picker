@@ -1,0 +1,2 @@
+# 易点模型仅依赖 Python 3 标准库（urllib / json / csv / concurrent.futures 等）
+# 无需第三方包；保留本文件以兼容仓库统一的 `pip install -r requirements.txt` 步骤。
