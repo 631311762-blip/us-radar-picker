@@ -21,6 +21,11 @@ config.json
 .auto_runner.pid
 last_run*
 
+# ===== 共同前置层：当日临时产物（同一 job 内共享即可，无需入库）=====
+common/state/klines/
+common/state/universe.json
+common/state/meta.json
+
 # ===== Python =====
 __pycache__/
 *.pyc

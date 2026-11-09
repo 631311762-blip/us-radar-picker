@@ -1,0 +1,111 @@
+name: A股模型统一流水线（共同前置层）
+
+# =========================================================================
+# 合并流水线：把 5 个 A 股模型 + 4 个共同条件收口到单 runner 顺序执行。
+# 共同前置层（common/prefilter.py）只跑一次，产出：
+#   ① 全市场行情记录（K线缓存）  ② 立信审计排除集  ③ ST/退市硬剔除样本池
+#   ④ 交易日判定
+# 下游模型从这一份样本池 + K线缓存出发，各自套自己的选股逻辑，不再各自
+# 拉全市场（提速，并彻底规避独立 job 全市场扫描超时）。
+# 模型跑完由 common/run_all.py 统一做「回溯推荐 + 参数修正」（条件④）。
+#
+# 注册表 common/registry.json：新增模型只要在此加一项即自动套用四个共同条件，
+# 无需改本 workflow。
+# =========================================================================
+
+on:
+  # 定时暂不启用：正式切换（停用旧的 6 个独立 workflow）后再打开，
+  # 否则会与现有 shanshui/low_shadow/lingpei/kaizhong/yidian/us-radar-picker
+  # 的定时重复运行。当前仅通过 workflow_dispatch 手动验证。
+  # schedule:
+  #   - cron: "5 8 * * 1-5"   # UTC 08:05 = 北京时间 16:05，A 股收盘后
+  workflow_dispatch:
+    inputs:
+      f10_only:
+        description: "立信仅查 F10（跳过 26 年公告全量扫描，加速验证）"
+        required: false
+        default: "false"
+      only_model:
+        description: "只跑指定模型（逗号分隔，如 yidian,shanshui）；留空跑全部"
+        required: false
+        default: ""
+      no_kline:
+        description: "跳过全市场 K 线批量缓存（调试）"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: a-share-pipeline
+  cancel-in-progress: false
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖（全模型合并）
+        run: |
+          python3 -m pip install --quiet --upgrade pip
+          python3 -m pip install --quiet requests numpy pandas
+
+      - name: 共同前置层（交易日 + 立信 + ST + 全市场行情记录）
+        id: prefilter
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+        run: |
+          set -o pipefail
+          ARGS=""
+          if [ "${{ github.event.inputs.f10_only }}" = "true" ]; then ARGS="$ARGS --f10-only"; fi
+          if [ "${{ github.event.inputs.no_kline }}" = "true" ]; then ARGS="$ARGS --no-kline"; fi
+          python3 common/prefilter.py $ARGS
+          # 输出 trading_day 供后续步骤判断
+          TD=$(python3 -c "import json;print('true' if json.load(open('common/state/meta.json')).get('trading_day') else 'false')")
+          echo "trading_day=$TD" >> "$GITHUB_OUTPUT"
+
+      - name: 运行全部模型（共同样本池 + 统一回溯/修正）
+        if: steps.prefilter.outputs.trading_day == 'true'
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          FTQQ_KEY: ${{ secrets.FTQQ_KEY }}
+          KZ_DATA_DIR: kaizhong/state
+          STATE_DIR: ${{ github.workspace }}/state
+        run: |
+          ONLY="${{ github.event.inputs.only_model }}"
+          if [ -n "$ONLY" ]; then
+            python3 common/run_all.py --only "$ONLY"
+          else
+            python3 common/run_all.py
+          fi
+
+      - name: 回写状态（立信集 / 推荐台账 / 回溯 / 参数）
+        if: always()
+        run: |
+          git config user.name "a-share-bot"
+          git config user.email "a-share-bot@users.noreply.github.com"
+          # K线缓存 / universe.json 为当日临时产物，不入库（见 .gitignore）
+          git add common/state/lingpei*_lixin* 2>/dev/null || true
+          git add common/state/lixin_exclude.json 2>/dev/null || true
+          git add common/state/recommendations 2>/dev/null || true
+          git add common/state/reviews 2>/dev/null || true
+          git add common/state/params 2>/dev/null || true
+          git add common/state/run_summary.json 2>/dev/null || true
+          # 各模型自有台账/归档
+          git add shanshui/善水模型_推荐跟踪.csv 2>/dev/null || true
+          git add lingpei/state 2>/dev/null || true
+          git add yidian/state 2>/dev/null || true
+          git add kaizhong/state 2>/dev/null || true
+          git add low_shadow/state 2>/dev/null || true
+          git commit -m "a-share pipeline state: $(date -u +%F) [skip ci]" || echo "无状态变更"
+          git pull --rebase origin main || true
+          git push || echo "推送状态失败（不影响选股）"

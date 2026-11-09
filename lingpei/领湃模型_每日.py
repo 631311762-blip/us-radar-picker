@@ -18,6 +18,15 @@ REC_FILE = "领湃_推荐记录.json"
 
 
 def main():
+    # 共同前置层接入（强制）：patch 工具箱的取数函数到共享样本池/K线缓存。
+    _ad = None
+    try:
+        import sys as _s, os as _o
+        _s.path.insert(0, _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "..", "common"))
+        import adapter as _ad
+        _ad.install("lingpei", vars(tb))
+    except Exception:
+        _ad = None
     ap = argparse.ArgumentParser()
     ap.add_argument("--top", type=int, default=10)
     ap.add_argument("--no-gate", action="store_true", help="跳过 SW_B 广度闸门（验证/特殊用）")
@@ -73,6 +82,12 @@ def main():
     hits.sort(key=lambda x: x["score"], reverse=True)
     top = hits[: args.top]
     print("[扫描] 命中 %d 只，立信剔除 %d，ST剔除 %d，取前 %d" % (len(hits), lixin_skip, st_skip, len(top)))
+    # 共同前置层：写统一推荐台账（出口 gate + 回溯/参数修正）
+    if _ad:
+        try:
+            _ad.record("lingpei", top)
+        except Exception:
+            pass
 
     # 写入推荐记录
     recs = tb.load_records()

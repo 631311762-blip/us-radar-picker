@@ -406,6 +406,16 @@ def push(title, content):
 
 # ------------------------------------------------------------------ 主流程
 def main():
+    # 共同前置层接入（强制）：prefilter 就绪时，数据入口自动切到共享样本池/K线缓存，
+    # 样本池已剔除 ST/立信/退市，本模型即使不写剔除判断也不会选到被禁标的。
+    _ad = None
+    try:
+        import sys as _s, os as _o
+        _s.path.insert(0, _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "..", "common"))
+        import adapter as _ad
+        _ad.install("shanshui", globals())
+    except Exception:
+        _ad = None
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="v10")
     ap.add_argument("--top", type=int, default=10)
@@ -519,6 +529,13 @@ def main():
 
     # T+10 复盘回填
     stat = backfill_t10(bars_map) if bars_map else (0, None, None, None)
+
+    # 共同前置层：写统一推荐台账（出口 gate 再剔一次 ST/立信，进入回溯与参数修正）
+    if _ad:
+        try:
+            _ad.record("shanshui", final)
+        except Exception:
+            pass
 
     # 简报
     print("      原始信号 %d / 立信&缺失剔除 %d / 入选 %d" %

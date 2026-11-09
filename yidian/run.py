@@ -36,6 +36,8 @@ PRICE_MIN, PRICE_MAX = 2.0, 200.0
 VR_MIN = 1.4               # 量比 ≥1.4
 MA20_FLOOR = 0.95          # 收盘 ≥ MA20×0.95
 MA20_DIST_MAX = 0.12       # 距MA20 ≤12%
+REQUIRE_YANG = True        # 易点模型提示点必须为阳线（收盘>开盘）：
+                           # 阴线 / 十字星 / 高开低走大阴线一律剔除
 TOP_N = 6                  # 评分取前 6 推送
 BUY_LOW = 0.975            # 买点 = 收盘×0.975 ~ 收盘
 STOP_LOSS, TARGET = -0.05, 0.07
@@ -217,6 +219,12 @@ def hard_filter(rec, bars):
     if len(bars) < 61:
         return None
     c = bars[-1]["close"]
+    o = bars[-1]["open"]
+    # 易点模型核心口径：提示点必须是阳线（收盘 > 开盘）。
+    # 「相对昨收涨幅」为正 ≠ 阳线：高开低走会形成大阴线却仍显示红盘，必须单独剔除。
+    entity_pct = (c / o - 1.0) * 100 if o > 0 else 0.0
+    if REQUIRE_YANG and c <= o:
+        return None
     if not (CHG_MIN <= rec["chg_pct"] <= CHG_MAX):
         return None
     if not (TURN_MIN <= rec["turn_pct"] <= TURN_MAX):
@@ -247,7 +255,8 @@ def hard_filter(rec, bars):
     if not (ma5_up or below_ma60):
         return None
     d = dict(rec)
-    d.update({"close": c, "dd90": dd90, "r5": r5, "ma20": ma20, "ma5": ma5,
+    d.update({"close": c, "open": o, "entity_pct": round(entity_pct, 2),
+              "dd90": dd90, "r5": r5, "ma20": ma20, "ma5": ma5,
               "ma5_prev": ma5_prev, "ma60": ma60, "dist_ma20": dist,
               "ma5_up": ma5_up, "below_ma60": below_ma60,
               "high90": hi, "bars": bars})
@@ -431,7 +440,8 @@ def archive(all_q, top, meta, audit_removed, watch_pool, review_res, state):
         "review": review_res,
     }
     json.dump(payload, open(jf, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-    cols = ["code", "name", "board", "close", "chg_pct", "turn_pct", "vr", "price",
+    cols = ["code", "name", "board", "close", "open", "entity_pct", "chg_pct",
+            "turn_pct", "vr", "price",
             "dd90", "r5", "ma20", "dist_ma20", "ma5_up", "below_ma60",
             "mktcap", "float_mktcap", "audit_firm", "score", "status",
             "startup_day", "buy_low", "buy_high", "stop_loss", "target"]
@@ -503,12 +513,13 @@ def build_markdown(top, meta, audit_removed, review_res, cum_rate, qualified_cou
                  (("%.1f%%" % (cum_rate * 100)) if cum_rate is not None else "—"))
     L += ["", "### 前 %d 只" % len(top), ""]
     for i, t in enumerate(top, 1):
-        L.append("%d. **%s** `%s` %s｜%s｜启动第%d天｜%.1f分" %
+        L.append("%d. **%s** `%s` %s｜%s｜启动第%d天｜%.1f分｜阳线%+.2f%%" %
                  (i, t["name"], t["code"], t["board"], t["status"],
-                  t["startup_day"], t["score"]))
+                  t["startup_day"], t["score"], t.get("entity_pct", 0)))
         L.append("   买点 %.2f~%.2f｜止损 %.2f｜目标 %.2f｜审计 %s" %
                  (t["buy_low"], t["buy_high"], t["stop_loss"], t["target"], t["audit_firm"]))
     L += ["", "买点=收盘×0.975~收盘，止损 -5%，目标 +7%。",
+          "提示点均为阳线（收盘>开盘），已剔除阴线/十字星/高开低走大阴线。",
           "状态：已启动/临界/筑底/观察；观察池含下轨缩量、上影试盘。",
           "", "*统计研究，不构成投资建议。*"]
     txt = "\n".join(L)
@@ -519,6 +530,16 @@ def build_markdown(top, meta, audit_removed, review_res, cum_rate, qualified_cou
 
 # ---------- 主流程 ----------
 def main():
+    # 共同前置层接入（强制）：数据入口自动切到共享样本池/K线缓存。
+    _ad = None
+    try:
+        import sys as _s, os as _o
+        _s.path.insert(0, _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "..", "common"))
+        import adapter as _ad
+        _ad.install("yidian", globals())
+    except Exception:
+        _ad = None
+    globals()["_COMMON_ADAPTER"] = _ad
     log("=" * 60)
     log("易点模型推荐 启动 | 基准日 %s" % TODAY)
     token = (os.environ.get("PUSHPLUS_TOKEN") or "").strip()
@@ -560,19 +581,22 @@ def main():
               and r["vr"] >= VR_MIN]
     log("批量行情粗筛：%d 只进入K线精算" % len(coarse))
 
-    passed, failed = [], 0
+    passed, failed, yin_removed = [], 0, 0
     with ThreadPoolExecutor(max_workers=10) as ex:
         fut = {ex.submit(kline, r["code"], r["board"]): r for r in coarse}
         for f in as_completed(fut):
             r = fut[f]
             try:
                 bars = f.result()
+                if bars and bars[-1]["close"] <= bars[-1]["open"]:
+                    yin_removed += 1        # 阴线 / 十字星 / 高开低走大阴线
                 d = hard_filter(r, bars) if bars else None
                 if d:
                     passed.append(d)
             except Exception:
                 failed += 1
-    log("K线精算完成：通过硬性条件 %d 只，K线失败 %d 只" % (len(passed), failed))
+    log("K线精算完成：通过硬性条件 %d 只（其中阳线口径剔除阴线 %d 只），K线失败 %d 只"
+        % (len(passed), yin_removed, failed))
     if coarse and failed / len(coarse) > 0.30:
         log("[FAIL] K线失败率 %.1f%% 过高，判为数据源异常，不推送" % (100 * failed / len(coarse)))
         pushplus("易点模型 · 数据获取告警", "K线失败率过高 %.1f%%" % (100 * failed / len(coarse)), token)
@@ -613,6 +637,14 @@ def main():
                   for q in qualified if q["signals"]]
     top = qualified[:TOP_N]
 
+    # 共同前置层：写统一推荐台账（出口 gate + 回溯/参数修正）
+    _ad = globals().get("_COMMON_ADAPTER")
+    if _ad:
+        try:
+            _ad.record("yidian", top)
+        except Exception:
+            pass
+
     state = load_state()
     review_res = review(state, quote_map)
     w, l = review_res["wins"], review_res["losses"]
@@ -639,10 +671,11 @@ def main():
     summary = {
         "ok": True, "date": TODAY, "meta": meta,
         "qualified_count": len(qualified), "audit_veto_count": audit_removed,
+        "yin_removed": yin_removed, "require_yang": REQUIRE_YANG,
         "top": [{"name": t["name"], "code": t["code"], "board": t["board"],
                  "status": t["status"], "startup_day": t["startup_day"],
                  "score": t["score"], "close": t["close"], "chg_pct": t["chg_pct"],
-                 "audit_firm": t["audit_firm"]} for t in top],
+                 "entity_pct": t.get("entity_pct"), "audit_firm": t["audit_firm"]} for t in top],
         "review": review_res, "cum_win_rate": state["cum_win_rate"],
         "cum_settled": state["cum_settled"],
         "watch_pool_count": len(watch_pool),

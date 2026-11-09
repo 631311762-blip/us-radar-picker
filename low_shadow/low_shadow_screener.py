@@ -32,9 +32,11 @@
 立信剔除说明
 ------------
     真实行情无法便捷拿到审计机构名称，故立信一票否决改为复用仓库内
-    领湃模型维护的排除集（../lingpei/state/领湃_立信排除.json）。
-    该文件由 lingpei/_lixin_update.py 增量更新，首次运行前若尚未生成，
-    当日立信剔除为 0（仅告警，不阻断）。
+    领湃模型维护的排除集（领湃_立信排除.json）。领湃在 CI 中把它写到
+    lingpei/lingpei/state/ 下；load_lixin_exclude() 会按多候选路径兼容
+    lingpei/state/ 与 lingpei/lingpei/state/ 两种布局。该文件由
+    lingpei/_lixin_update.py 增量更新，若确实尚未生成，当日立信剔除为 0
+    （仅告警，不阻断）——此时应检查路径，而非误判为「今日无立信股」。
 """
 
 import argparse
@@ -247,19 +249,30 @@ def get_auditor(symbol):
 
 
 # ----------------------------------------------------------------------------
-# 立信排除集（复用领湃维护的 ../lingpei/state/领湃_立信排除.json）
+# 立信排除集（复用领湃维护的 领湃_立信排除.json）
+# 领湃在 CI 中以 working-directory=lingpei、STATE_DIR=lingpei/state 运行，
+# 排除集实际落在 仓库根/lingpei/lingpei/state/；历史/其它布局可能落在
+# 仓库根/lingpei/state/。下面按多候选路径依次查找，兼容两种布局，避免
+# 「找不到文件 → 立信剔除静默为 0」。
 # ----------------------------------------------------------------------------
 def load_lixin_exclude():
     """返回 (排除代码集合, 是否成功加载)。失败返回 (空集合, False)。"""
-    p = os.path.abspath(os.path.join(BASE_DIR, "..", "lingpei", "state", "领湃_立信排除.json"))
-    if not os.path.exists(p):
-        return set(), False
-    try:
-        d = json.load(open(p, encoding="utf-8"))
-        return set(d.get("codes", [])), True
-    except Exception as e:  # noqa: BLE001
-        log.warning("立信排除集读取失败：%s", e)
-        return set(), False
+    candidates = [
+        os.path.abspath(os.path.join(BASE_DIR, "..", "lingpei", "state", "领湃_立信排除.json")),
+        os.path.abspath(os.path.join(BASE_DIR, "..", "lingpei", "lingpei", "state", "领湃_立信排除.json")),
+    ]
+    for p in candidates:
+        if not os.path.exists(p):
+            continue
+        try:
+            with open(p, encoding="utf-8") as f:
+                d = json.load(f)
+            codes = set(d.get("codes", []))
+            log.info("立信排除集已加载：%d 只（来源 %s）", len(codes), p)
+            return codes, True
+        except Exception as e:  # noqa: BLE001
+            log.warning("立信排除集读取失败 %s：%s", p, e)
+    return set(), False
 
 
 # ----------------------------------------------------------------------------
@@ -661,6 +674,14 @@ def run_review(params, top_n=None):
     archive_path = cloud_archive(payload)
     save_pending(qualified[:top_n], run_date)
 
+    # 共同前置层：写统一推荐台账（出口 gate + 回溯/参数修正）
+    _ad = globals().get("_COMMON_ADAPTER")
+    if _ad:
+        try:
+            _ad.record("low_shadow", qualified[:top_n])
+        except Exception:
+            pass
+
     # ---- 中文简报（同时打印与推送） ----
     L = []
     L.append("## 低位上影线样本 · 收盘后模型简报")
@@ -704,6 +725,16 @@ def run_review(params, top_n=None):
 def main():
     global DEMO
     DEMO = False
+    # 共同前置层接入（强制）：数据入口自动切到共享样本池/K线缓存。
+    _ad = None
+    try:
+        import sys as _s, os as _o
+        _s.path.insert(0, _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "..", "common"))
+        import adapter as _ad
+        _ad.install("low_shadow", globals())
+    except Exception:
+        _ad = None
+    globals()["_COMMON_ADAPTER"] = _ad
     parser = argparse.ArgumentParser(description="低位上影线样本 收盘后模型")
     parser.add_argument("--mode", default="review",
                         choices=["review", "afterclose", "backtest"],
