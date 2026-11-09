@@ -1,0 +1,56 @@
+name: 易点模型每日流程
+
+on:
+  schedule:
+    # UTC 08:45 = 北京时间 16:45，周一至周五收盘后（错开善水16:10/低位上影16:30/领湃16:35）
+    - cron: "45 8 * * 1-5"
+  workflow_dispatch:
+  push:
+    # 后续对脚本 / 依赖 / 本工作流的任何更改，push 即自动生效并验证一次；
+    # 只监听代码文件，不含 yidian/state/**，且 GITHUB_TOKEN 的回写 push 不会再触发，杜绝循环。
+    paths:
+      - "yidian/run.py"
+      - "yidian/requirements.txt"
+      - ".github/workflows/yidian.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: yidian
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        working-directory: yidian
+        run: pip install -r requirements.txt
+
+      - name: 运行易点模型选股
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          STATE_DIR: yidian/state
+          # 时区固定，日志与计时更易读（脚本内部已按北京时间计日，双重保险）
+          TZ: Asia/Shanghai
+        run: |
+          mkdir -p yidian/state/archive
+          python3 yidian/run.py
+
+      - name: 回写状态与归档（供次日复盘）
+        if: always()
+        run: |
+          git config user.name "yidian-bot"
+          git config user.email "yidian-bot@users.noreply.github.com"
+          git add yidian/state
+          git commit -m "yidian state: $(date -u +%F)" || echo "无状态变更"
+          git pull --rebase origin main || true
+          git push || echo "推送状态失败（不影响选股）"
