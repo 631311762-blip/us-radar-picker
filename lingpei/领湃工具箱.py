@@ -300,6 +300,10 @@ def sw_b_breadth_ok(window=20):
     rows = rows[-90:]
     open(state_path(SWB_FILE), "w", encoding="utf-8").write("\n".join(rows) + "\n")
     vals = [float(r.split(",")[1]) for r in rows]
-    recent = vals[-window:] if len(vals) >= window else vals
-    ma = sum(recent) / len(recent) if recent else b
+    if len(vals) < window:
+        # 历史样本不足，无法判断广度趋势，放行不拦截（避免新环境首次运行必被拦截）
+        ma = sum(vals) / len(vals) if vals else b
+        return True, b, ma
+    recent = vals[-window:]
+    ma = sum(recent) / len(recent)
     return (b > ma), b, ma
