@@ -1,0 +1,103 @@
+# 凯众形态相似股模型 v4（横盘突破提示）
+
+A 股全市场横盘突破选股 + 每日自动推送 + 台账自动回写。
+
+## 模型口径
+
+**横盘 → 站上 MA5 → 放量突破当天提示，提示即买点。**
+
+| 环节 | 规则 |
+|---|---|
+| 横盘前置 | 提示日前 40 个交易日收盘 `max/min ≤ 1.20` 且 `std/mean ≤ 0.045`；前后各 20 日分别横盘 |
+| 站稳 MA5 | 连续 2 日收盘 > MA5，且 MA5 上行 |
+| 突破 | 当天收盘 ≥ 平台高点（触发价），成交量 ≥ 所需量（放量倍数 × 均量） |
+| 买点 | **提示日收盘价**（唯一可执行口径），收盘 ≥ 触发价 且 量 ≥ 所需量同时满足才成立 |
+| 止损 | 买入价 × 0.95（约 5% 单笔风险上限） |
+| 等待期 | 无。提示即买点，回踩不买 |
+| 去重 | 同一标的按 6 位代码归口，台账最早出现日 = 首推日；5 个交易日内重复提示不新增记录，只标「推荐第 N 天」 |
+
+## 文件结构
+
+```
+kaizhong/
+├── daily_v4.py          # 每日入口（v4 生产模型）：抓行情 → 扫描 → 去重 → 台账 → 推送
+├── stance_hint.py       # v4 选股核心（STANCE 参数在此，勿随意改动）
+├── recommend.py         # 推荐归口 / 台账同步 / 复盘统计
+├── lib.py               # 行情抓取、日线缓存、推送、通用工具（SCHEME='breakout' / BUY_P 在此）
+├── daily.py             # 旧版 v3 入口（保留可回退，日常不运行）
+├── backtest_stance.py   # v4 回测
+├── strategy_mining.py   # 策略挖掘 / 参数探索
+├── next_day_gap.py      # 次日跳空分析
+├── next_day_limit.py    # 次日涨停分析
+├── requirements.txt
+└── state/               # 运行期数据（workflow 自动回写，勿手动清空）
+    ├── kline/           #   全市场日线缓存
+    ├── f10.json         #   题材 / 基础信息
+    ├── history.json     #   v3 台账
+    ├── v4_history.json  #   v4 台账（推荐归口的唯一真相源）
+    └── reports/          #   每日报告、推送文本、凯众台账_<日期>.md
+```
+
+数据目录由环境变量 `KZ_DATA_DIR` 指定，默认 `kaizhong/data`；Actions 里固定为 `kaizhong/state`，便于 commit 回写。
+
+## 定时运行
+
+`.github/workflows/kaizhong.yml`：
+
+| 触发 | 说明 |
+|---|---|
+| `cron: 40 8 * * 1-5` | UTC 08:40 = 北京时间 16:40，A 股收盘后 |
+| `workflow_dispatch` | Actions 页面手动 Run workflow |
+| `push`（`kaizhong/**` 或本 workflow 改动） | 改完脚本即自动跑一次验证，无需手动触发 |
+
+跑完自动 `git commit` 回写 `kaizhong/state`，次日直接接着用同一份台账，不依赖本地文件。
+
+## 必配密钥
+
+Repository → Settings → Secrets and variables → Actions → New repository secret：
+
+- `FTQQ_KEY`：方糖 SendKey。未配置时脚本照常运行，仅跳过推送。
+
+`GITHUB_TOKEN` 由 Actions 自动提供（已声明 `permissions: contents: write`），不需要额外配置。
+
+## 本地运行
+
+```bash
+pip install -r requirements.txt
+export FTQQ_KEY=你的SendKey        # 或写 config.json: {"FTQQ_KEY": "..."}
+
+KZ_TOP=6 python3 daily_v4.py                          # 正式
+KZ_SKIP_UPDATE=1 KZ_TOP=6 python3 daily_v4.py         # 复跑，用缓存
+KZ_AS_OF=2026-11-06 KZ_SKIP_UPDATE=1 KZ_NO_PUSH=1 python3 daily_v4.py   # 离线验证
+```
+
+可选环境变量：
+
+| 变量 | 说明 |
+|---|---|
+| `KZ_DATA_DIR` | 数据目录，默认 `./data` |
+| `KZ_TOP` | 推送条数，默认 6 |
+| `KZ_SKIP_UPDATE` | `1` = 跳过行情更新，用现有缓存 |
+| `KZ_NO_PUSH` | `1` = 不推送，只生成报告 |
+| `KZ_AS_OF` | 指定基准日，`YYYY-MM-DD` |
+| `KZ_DEDUP_DAYS` | 首次突破去重窗口，默认 5 个交易日 |
+
+## 输出
+
+- `state/reports/v4_<日期>.md` — 完整报告
+- `state/reports/推送样例_v4_<日期>.md` — 推送正文
+- `state/reports/凯众台账_<日期>.md` — 当日台账，供「美股行业异动雷达」做跨市场双模型匹配（基准日、模型名、候选池数量、今日最优标的全字段、在跟踪清单、浮亏止损、前期复盘）
+- `state/v4_history.json` — 独立台账，与 v3 的 `history.json` 隔离
+
+推送固定三部分：今日突破提示（含首日/第 N 天标注与首推日）、前期推荐复盘（1/3/5/10 日平均涨幅、胜率、超额、跑赢率、止损率）、交易纪律。只在有突破提示的交易日推送。
+
+## 已知行为
+
+- 非交易日（最新 K 线日期 ≠ 今日）自动跳过，不推送、不改台账。
+- 行情快照收盘后才落库，定时放在 16:40；过早运行会被判为非交易日。
+- 全市场日线首次抓取约 3500 只，耗时数分钟；之后增量更新。
+- 行情抓取偶发超时会导致候选池偏小，可手动触发重跑。
+
+## 免责
+
+仅用于策略研究与个人记录，不构成投资建议。
