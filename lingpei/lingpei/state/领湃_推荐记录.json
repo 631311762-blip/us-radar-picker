@@ -1,0 +1,97 @@
+[
+  {
+    "date": "2026-11-09",
+    "stocks": [
+      {
+        "code": "000869",
+        "name": "张  裕Ａ",
+        "score": 86.71,
+        "gap_days": 22,
+        "drop": 0.1462,
+        "near_ma": "MA30",
+        "trial_date": "2026-10-08"
+      },
+      {
+        "code": "002298",
+        "name": "中电鑫龙",
+        "score": 85.72,
+        "gap_days": 24,
+        "drop": 0.1228,
+        "near_ma": "MA30",
+        "trial_date": "2026-09-29"
+      },
+      {
+        "code": "600699",
+        "name": "均胜电子",
+        "score": 85.41,
+        "gap_days": 25,
+        "drop": 0.1327,
+        "near_ma": "MA30",
+        "trial_date": "2026-09-28"
+      },
+      {
+        "code": "000715",
+        "name": "中兴商业",
+        "score": 80.3,
+        "gap_days": 19,
+        "drop": 0.1225,
+        "near_ma": "MA30",
+        "trial_date": "2026-10-13"
+      },
+      {
+        "code": "002728",
+        "name": "特一药业",
+        "score": 79.1,
+        "gap_days": 21,
+        "drop": 0.0898,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-09"
+      },
+      {
+        "code": "300332",
+        "name": "天壕能源",
+        "score": 76.42,
+        "gap_days": 22,
+        "drop": 0.0889,
+        "near_ma": "MA30",
+        "trial_date": "2026-10-08"
+      },
+      {
+        "code": "002317",
+        "name": "众生药业",
+        "score": 76.29,
+        "gap_days": 18,
+        "drop": 0.1123,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-14"
+      },
+      {
+        "code": "002035",
+        "name": "华帝股份",
+        "score": 73.89,
+        "gap_days": 26,
+        "drop": 0.1168,
+        "near_ma": "MA30",
+        "trial_date": "2026-09-24"
+      },
+      {
+        "code": "301303",
+        "name": "真兰仪表",
+        "score": 73.14,
+        "gap_days": 26,
+        "drop": 0.1029,
+        "near_ma": "MA30",
+        "trial_date": "2026-09-24"
+      },
+      {
+        "code": "920961",
+        "name": "创远信科",
+        "score": 72.66,
+        "gap_days": 27,
+        "drop": 0.2915,
+        "near_ma": "MA60",
+        "trial_date": "2026-09-23"
+      }
+    ]
+  }
+]
