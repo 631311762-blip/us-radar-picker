@@ -17,6 +17,10 @@ DROP_MIN, DROP_MAX = 0.08, 0.35  # 距前高（试盘段峰值）回撤幅度范
 PEAK_ABOVE_MA_MIN = 1.10   # 近段峰值至少高出 MA60 10%（排除低位刚爬升、峰值≈现价的形态）
 TRIAL_ABOVE_MA = True      # 试盘日收盘须站上当时 MA60（冲高前已在均线上方，排除突破回踩）
 MA60_MAX_BREAK = 0.015     # 现价最多低于 MA60 1.5%（回踩允许轻微毛刺，排除从下往上反弹贴线）
+# 5e 轨迹约束：回踩的前提是"近期在均线上方运行、回落贴线"，而非"在均线下方爬上来"
+DIP_WINDOW = 10            # 轨迹检查窗口（交易日）
+TREND_ABOVE_MIN = 0.015    # 窗口内须有收盘高出当时 MA60 至少 1.5%
+DIP_MAX_BELOW = 0.03       # 窗口内收盘不得低于当时 MA60 达 3%（触线毛刺容忍度）
 
 
 def detect_coil_v2(bars):
@@ -80,6 +84,20 @@ def detect_coil_v2(bars):
     # 5d) 方向约束：现价不得有效跌破 MA60（排除均线之下反弹上来的形态）
     if cur["c"] < ma60 * (1 - MA60_MAX_BREAK):
         return None
+
+    # 5e) 方向约束：近 DIP_WINDOW 日轨迹须"上方运行→回落贴线"，
+    #     排除在均线下方徘徊/深V反弹后爬上来的形态
+    if n >= DIP_WINDOW + 60:
+        devs = []
+        for i in range(n - DIP_WINDOW, n):
+            ma_i = sum(b["c"] for b in bars[i - 59:i + 1]) / 60
+            if ma_i:
+                devs.append(bars[i]["c"] / ma_i - 1)
+        if devs:
+            if max(devs) < TREND_ABOVE_MIN:   # 近期须在均线上方运行过
+                return None
+            if min(devs) < -DIP_MAX_BELOW:    # 期间未有效跌破均线
+                return None
 
     # 评分：贴线越紧、间距越居中、回撤越合理，分越高
     score = 100 - min(dev60, dev30) * 1000 - abs(gap - 24) * 1.5 - abs(drop - 0.20) * 120
