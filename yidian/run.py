@@ -537,6 +537,11 @@ def main():
         _s.path.insert(0, _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "..", "common"))
         import adapter as _ad
         _ad.install("yidian", globals())
+        # 共同层已做 ST/立信剔除，创/科/北交样本会比原始枚举略小（如剔除 773 只
+        # 立信后 2000→1960），这是正确的合规结果，不应触发「样本偏小=数据源异常」。
+        # 且共同层 prefilter 已分页拉到 total、空池会终止，全量由它保证，
+        # 故就绪时关闭易点自身的样本下限自保护（仅共同层就绪时生效）。
+        globals()["MIN_UNIVERSE"] = 0
     except Exception:
         _ad = None
     globals()["_COMMON_ADAPTER"] = _ad

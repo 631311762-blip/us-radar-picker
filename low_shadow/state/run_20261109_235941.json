@@ -1,0 +1,57 @@
+{
+  "run_date": "2026-11-09",
+  "mode": "review",
+  "total_scanned": 5575,
+  "data_ok_count": 5565,
+  "audit_veto_count": 783,
+  "qualified_count": 1,
+  "candidate_pool": 60,
+  "position": "正常推个股",
+  "funnel": {
+    "上影幅度": 4730,
+    "量比": 30,
+    "低位": 11,
+    "上影实体比": 9,
+    "MA20": 1
+  },
+  "params": {
+    "upper_amp_min": 0.08,
+    "upper_to_body_min": 2.0,
+    "body_abs_max_pct": 0.07,
+    "vol_ratio_min": 1.5,
+    "low_pos_max_pct": 0.15,
+    "below_ma20": true,
+    "min_amount": 50000000.0,
+    "shadow_comp_enabled": true,
+    "comp_shadow_min": 0.06,
+    "comp_upper_to_body_min": 3.5,
+    "comp_low_pos_max_pct": 0.05,
+    "lookback": 120,
+    "top_n": 6,
+    "candidate_pool": 60,
+    "env_threshold": 60,
+    "vol_mult": 1.2
+  },
+  "top_samples": [
+    {
+      "symbol": "600793",
+      "name": "宜宾纸业",
+      "date": "2026-11-09",
+      "close": 13.95,
+      "upper_amp": 0.0877,
+      "upper_to_body": 30.5,
+      "vol_ratio": 2.223,
+      "pos_pct": 0.1089,
+      "amount": 179814038.0,
+      "pct_chg": 1.16,
+      "ma20": 14.35,
+      "low_20": 12.58,
+      "comp_path": false,
+      "auditor": "未知",
+      "score": 100.0
+    }
+  ],
+  "backtest": null,
+  "full_list_json": "/workspace/us-radar-picker/low_shadow/state/qualified_20261109_235941.json",
+  "full_list_csv": "/workspace/us-radar-picker/low_shadow/state/qualified_20261109_235941.csv"
+}

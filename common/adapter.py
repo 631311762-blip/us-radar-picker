@@ -170,10 +170,12 @@ def install(model, *namespaces):
     也只能拿到「已剔除 + 共享缓存」的数据，无法绕过共同条件。
 
     namespaces: 传 globals()（取数函数在本模块）或 vars(工具箱模块)。
-    共同层未就绪时返回 []（模型保持原逻辑，完全向后兼容）。
+    共同层未就绪时抛出 RuntimeError —— 各模型入口用 try/except 包住本调用，
+    因此旧 workflow（未跑 prefilter）会完全走原来的取数/剔除/推送逻辑，
+    不产生任何台账副作用，实现严格向后兼容（切换前旧自动化行为不变）。
     """
     if not ready():
-        return []
+        raise RuntimeError("common prefilter not ready (meta.json missing / non-trading-day)")
     m = (model or "").lower()
     kline_funcs = () if m == "kaizhong" else _KLINE_FUNCS  # 凯众保留自有新浪K线缓存
     patched = []
