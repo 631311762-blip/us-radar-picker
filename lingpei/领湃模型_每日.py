@@ -20,6 +20,7 @@ REC_FILE = "领湃_推荐记录.json"
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--top", type=int, default=10)
+    ap.add_argument("--no-gate", action="store_true", help="跳过 SW_B 广度闸门（验证/特殊用）")
     args = ap.parse_args()
 
     today = tb.today_str()
@@ -37,8 +38,9 @@ def main():
 
     # SW_B 广度闸门
     ok, b, ma = tb.sw_b_breadth_ok()
-    print("[SW_B] 今日广度 %.3f / 20日均 %.3f / 闸门=%s" % (b if b is not None else 0, ma if ma is not None else 0, ok))
-    if not ok:
+    gate = "跳过(--no-gate)" if args.no_gate else ("通过" if ok else "未过")
+    print("[SW_B] 今日广度 %.3f / 20日均 %.3f / 闸门=%s" % (b if b is not None else 0, ma if ma is not None else 0, gate))
+    if not args.no_gate and not ok:
         tb.push("领湃模型 %s 闸门未过" % today,
                 "SW_B 广度 %.1f%% <= 20日均 %.1f%%，今日不出股。" % ((b or 0) * 100, (ma or 0) * 100),
                 template="html")

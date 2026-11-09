@@ -280,16 +280,23 @@ def save_records(recs):
 def _breadth_now():
     u = get_universe()
     if not u:
-        return None
+        return None, 0, 0
+    n = len(u)
+    nz = sum(1 for x in u if x["pct"] != 0)
     up = sum(1 for x in u if x["pct"] > 0)
-    return up / len(u)
+    return (up / n if n else 0.0), n, nz
 
 
 def sw_b_breadth_ok(window=20):
-    """今日上涨广度 > 近 window 日均值，则闸门通过。返回 (ok, 今日, 均值)。"""
-    b = _breadth_now()
+    """今日上涨广度 > 近 window 日均值，则闸门通过。返回 (ok, 今日, 均值)。
+    数据源异常防护：股票池样本过少或涨跌数据大量缺失时放行不拦截，避免东财接口异常误杀。
+    历史样本不足时也放行，避免新环境首次运行必被拦截。"""
+    b, n, nz = _breadth_now()
     if b is None:
         return False, None, None
+    if n < 200 or nz < n * 0.5:
+        print("[SW_B] 数据源异常（样本%d / 有效涨跌%d），放行不拦截" % (n, nz))
+        return True, b, None
     ensure_state()
     rows = []
     if os.path.exists(state_path(SWB_FILE)):
@@ -301,7 +308,6 @@ def sw_b_breadth_ok(window=20):
     open(state_path(SWB_FILE), "w", encoding="utf-8").write("\n".join(rows) + "\n")
     vals = [float(r.split(",")[1]) for r in rows]
     if len(vals) < window:
-        # 历史样本不足，无法判断广度趋势，放行不拦截（避免新环境首次运行必被拦截）
         ma = sum(vals) / len(vals) if vals else b
         return True, b, ma
     recent = vals[-window:]
