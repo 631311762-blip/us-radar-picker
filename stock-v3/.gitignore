@@ -1,19 +1,24 @@
-# ============ 大缓存(可重建, 总 >340MB) ============
-kline_cache.json
-kline_cache_*.bak
+# 缓存与大文件（可重建，绝不可入库）
+kline_cache*.json
+kline_cache*.bak
 audit_detail.json
 audit_notices.json
 audit_result.json
 universe_cache.json
-
-# ============ 敏感凭证(绝不入库) ============
+warm_cache*.json
+# 凭证与本地配置
 sckey.txt
-
-# ============ 日志 / 编译产物 ============
+config.json
+.env
+*.env
+# 运行产物与日志
 *.log
+*.out
+*.bak
+.last_run_date
+.auto_runner.pid
+last_run*
+# Python
 __pycache__/
 *.pyc
-
-# ============ 临时备份 ============
-*.bak
-*.tmp
+kaizhong/data/

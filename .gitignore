@@ -1,6 +1,27 @@
-__pycache__/
-*.pyc
-*.log
+# ===== 缓存与大文件（可重建，绝不可入库）=====
+kline_cache*.json
+kline_cache*.bak
+audit_detail.json
+audit_notices.json
+audit_result.json
+universe_cache.json
+warm_cache*.json
+
+# ===== 凭证与本地配置 =====
+sckey.txt
 config.json
 .env
+*.env
+
+# ===== 运行产物与日志 =====
+*.log
+*.out
+*.bak
+.last_run_date
+.auto_runner.pid
+last_run*
+
+# ===== Python =====
+__pycache__/
+*.pyc
 kaizhong/data/
