@@ -1,0 +1,4 @@
+requests>=2.31
+pandas>=2.0
+numpy>=1.24
+# 若脚本还用到其它库（如 akshare / tushare / lxml 等），请在此追加
