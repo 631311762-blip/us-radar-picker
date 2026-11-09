@@ -88,56 +88,73 @@ SEED_STOCKS = [
 ]
 
 # ----------------------------------------------------------------------------
-# 东方财富行情层（与善水/领湃一致，requests 直连，无需 akshare）
+# 东方财富行情层（与领湃/善水一致，requests 直连，已验证可全市场扫描）
+# 注意：列表接口 EM_UT 令牌敏感，错误令牌会返回空 data；此处使用领湃验证过的有效值。
 # ----------------------------------------------------------------------------
-EM_UT = "fa5fd1943c7b386f172d6893dbfba10b"
-EM_KUT = "fa5fd1943c7b386f172d6893dbfba10b"
-EM_BOARDS = [
-    ("沪A", "m:1+t:2"),
-    ("深A", "m:0+t:2"),
-    ("创业板", "m:0+t:23"),
-    ("科创板", "m:1+t:23"),
-    ("北交所", "m:0+t:81"),
+SESSION = requests.Session()
+SESSION.headers.update({"User-Agent": "Mozilla/5.0"})
+
+EM_KLINE_HOSTS = [
+    "push2his.eastmoney.com", "88.push2his.eastmoney.com", "22.push2his.eastmoney.com",
+    "33.push2his.eastmoney.com", "48.push2his.eastmoney.com", "72.push2his.eastmoney.com",
+    "1.push2his.eastmoney.com", "7.push2his.eastmoney.com",
 ]
-EM_LIST_HOSTS = ["push2.eastmoney.com", "push2his.eastmoney.com"]
-EM_KLINE_HOSTS = ["push2his.eastmoney.com", "push2.eastmoney.com"]
+EM_LIST_HOSTS = [
+    "push2.eastmoney.com", "82.push2.eastmoney.com", "22.push2.eastmoney.com",
+    "33.push2his.eastmoney.com", "48.push2.eastmoney.com", "72.push2.eastmoney.com",
+    "1.push2.eastmoney.com",
+]
+EM_UT = "bd1d9ddb04089700cf9c27f6f7426281"   # 列表接口专用 ut（错误令牌会返回空数据）
+EM_KUT = "fa5fd1943c7b386f172d6893dbfba10b"   # K线接口 ut
+EM_BOARDS = [
+    ("沪市主板", "m:1+t:2"),
+    ("深市主板", "m:0+t:6"),
+    ("创业板", "m:0+t:80"),
+    ("科创板", "m:1+t:23"),
+    ("北交所", "m:0+t:81+s:2048"),
+]
 
 
-def _to_float(v):
+def _to_float(v, default=0.0):
     try:
+        if v in ("-", "", None):
+            return default
         return float(v)
-    except Exception:  # noqa: BLE001
-        return 0.0
+    except (TypeError, ValueError):
+        return default
 
 
-def _http_json(url, params=None, timeout=15):
-    try:
-        r = requests.get(url, params=params, timeout=timeout,
-                         headers={"User-Agent": "Mozilla/5.0"}, verify=False)
-        return r.json()
-    except Exception as e:  # noqa: BLE001
-        log.debug("http_json 失败 %s: %s", url, e)
-        return None
+def _http_json(url, params=None, timeout=15, retry=2):
+    for attempt in range(retry + 1):
+        try:
+            r = SESSION.get(url, params=params, timeout=timeout, verify=False)
+            if r.status_code != 200:
+                raise RuntimeError("HTTP %s" % r.status_code)
+            return r.json()
+        except Exception:  # noqa: BLE001
+            if attempt < retry:
+                time.sleep(0.4 * (attempt + 1))
+    return None
 
 
 def szsh_of(code):
     """东财 secid 前缀：沪市 1，深市/创业板/北交所 0。"""
-    if code.startswith("60"):
+    code = str(code).zfill(6)
+    if code.startswith("6"):
         return "1"
-    if code.startswith(("00", "30", "20", "15", "8", "4", "92")):
-        return "0"
-    return "1"
+    return "0"
 
 
 def secid_of(code):
-    return "%s.%s" % (szsh_of(code), code)
+    code = str(code).zfill(6)
+    return ("1." if code.startswith("6") else "0.") + code
 
 
 def get_universe():
-    """东方财富行情列表：全市场 A 股（含创业板/科创板/北交所），一次拿齐代码/名称/涨跌幅。"""
+    """东方财富行情列表：全市场 A 股（沪深主板/创业板/科创板/北交所），一次拿齐代码/名称/涨跌幅。"""
     if DEMO:
         return _demo_universe()
-    fields = "f2,f3,f12,f14"
+    fields = "f2,f3,f5,f6,f8,f12,f13,f14,f15,f16,f17,f18,f20,f21"
     rows = []
     for name, fs in EM_BOARDS:
         pn = 1
@@ -146,14 +163,21 @@ def get_universe():
                 "pn": pn, "pz": 100, "po": 1, "np": 1, "fid": "f3",
                 "fs": fs, "fields": fields, "ut": EM_UT, "fltt": 2, "invt": 2,
             }
-            j = _http_json("https://push2.eastmoney.com/api/qt/clist/get",
-                           params=params, timeout=15)
-            data = (j or {}).get("data") or {}
+            data = {}
+            hosts = EM_LIST_HOSTS[:]
+            random.shuffle(hosts)
+            for host in hosts:
+                j = _http_json("https://%s/api/qt/clist/get" % host, params=params, timeout=15, retry=0)
+                data = (j or {}).get("data") or {}
+                if data.get("diff"):
+                    break
+                time.sleep(0.2)
             diff = data.get("diff") or []
             if isinstance(diff, dict):
                 diff = list(diff.values())
             if not diff:
                 break
+            total = int(_to_float(data.get("total")))
             for x in diff:
                 code = str(x.get("f12", "")).zfill(6)
                 price = _to_float(x.get("f2"))
@@ -161,12 +185,10 @@ def get_universe():
                     continue
                 rows.append({"symbol": code, "name": x.get("f14", ""),
                              "pct": _to_float(x.get("f3"))})
-            if len(diff) < 100:
-                break
-            total = int(_to_float(data.get("total")))
-            if total and pn * 100 >= total:
+            if len(diff) < 100 or (total and pn * 100 >= total):
                 break
             pn += 1
+            time.sleep(0.2)
     seen, uniq = set(), []
     for r in rows:
         if r["symbol"] in seen:
@@ -178,7 +200,7 @@ def get_universe():
 
 
 def em_hist(code, count=150):
-    """东财日 K（前复权）。分片域名轮询规避限流。返回 [{date,open,high,low,close,vol}]。"""
+    """东财日 K（前复权）。分片域名轮询 + 重试规避限流。返回 [{date,open,high,low,close,vol}]。"""
     beg = (datetime.now() - timedelta(days=count * 3)).strftime("%Y%m%d")
     params = {
         "secid": secid_of(code), "ut": EM_KUT,
@@ -187,8 +209,9 @@ def em_hist(code, count=150):
         "klt": 101, "fqt": 1, "beg": beg, "end": "20500101", "lmt": count,
     }
     hosts = EM_KLINE_HOSTS[:]
+    random.shuffle(hosts)
     for host in hosts:
-        j = _http_json("https://%s/api/qt/stock/kline/get" % host, params=params, timeout=12)
+        j = _http_json("https://%s/api/qt/stock/kline/get" % host, params=params, timeout=12, retry=1)
         rows = ((j or {}).get("data") or {}).get("klines") or []
         bars = []
         for s in rows:
