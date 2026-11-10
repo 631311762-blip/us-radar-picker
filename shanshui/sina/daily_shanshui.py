@@ -444,7 +444,11 @@ def main():
     for r in old_rows:
         d = r.get("信号日")
         if d in cal:
-            days_ago = len(cal) - 1 - cal.index(d)   # 距最新行情日的交易日数
+            # 与本次运行信号日同日的记录视为覆盖更新，不参与去重
+            # （否则回放/重跑同一天时会把上一次的同日结果误去重）
+            if d == today:
+                continue
+            days_ago = cal_days.index(today) - cal_days.index(d)  # 早于信号日的交易日数
             if 0 < days_ago < DEDUP_DAYS:
                 recent.add(r["代码"])
     dedup_cnt = 0
