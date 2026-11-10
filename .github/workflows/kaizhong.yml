@@ -1,9 +1,8 @@
 name: 凯众模型 v4 每日流程
 
 on:
-  schedule:
-    # UTC 08:40 = 北京时间 16:40，A 股收盘后（行情快照已落库）
-    - cron: "40 8 * * 1-5"
+  # 2026-11-10：已并入 a-share-pipeline（同一 cron 16:05、共享前置层），
+  # 本 workflow 取消 schedule，仅保留手动触发兜底，避免同日重复运行/重复推送。
   workflow_dispatch:
   push:
     # 只要 kaizhong/ 下的脚本或本 workflow 有改动，就自动跑一遍验证
