@@ -1,14 +1,14 @@
 {
   "model": "yidian",
-  "generated_at": "2026-11-09T23:35:00+08:00",
-  "batches": 0,
-  "samples": 0,
-  "win_rate": null,
+  "generated_at": "2026-11-10T17:04:29+08:00",
+  "batches": 1,
+  "samples": 6,
+  "win_rate": 0.3333,
   "by_horizon": {
     "t1": {
-      "samples": 0,
-      "win_rate": null,
-      "avg_return": null
+      "samples": 6,
+      "win_rate": 0.3333,
+      "avg_return": 0.0133
     },
     "t5": {
       "samples": 0,
@@ -21,5 +21,42 @@
       "avg_return": null
     }
   },
-  "details": []
+  "details": [
+    {
+      "code": "300534",
+      "name": "陇神戎发",
+      "date": "2026-11-09",
+      "t1": 0.1018
+    },
+    {
+      "code": "920075",
+      "name": "柏星龙",
+      "date": "2026-11-09",
+      "t1": -0.0161
+    },
+    {
+      "code": "301449",
+      "name": "天溯计量",
+      "date": "2026-11-09",
+      "t1": -0.0138
+    },
+    {
+      "code": "300822",
+      "name": "贝仕达克",
+      "date": "2026-11-09",
+      "t1": 0.0637
+    },
+    {
+      "code": "300313",
+      "name": "天山生物",
+      "date": "2026-11-09",
+      "t1": -0.0374
+    },
+    {
+      "code": "920564",
+      "name": "天润科技",
+      "date": "2026-11-09",
+      "t1": -0.0183
+    }
+  ]
 }

@@ -1,0 +1,195 @@
+{
+  "date": "2026-11-10",
+  "model": "lingpei",
+  "count": 10,
+  "picks": [
+    {
+      "code": "002244",
+      "name": "滨江集团",
+      "close": null,
+      "score": 81.51,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 81.51,
+        "gap_days": 24,
+        "drop_from_peak": 0.1517,
+        "dev60": 0.0127,
+        "near_ma": "MA60",
+        "trial_date": "2026-09-30",
+        "code": "002244",
+        "name": "滨江集团"
+      }
+    },
+    {
+      "code": "601956",
+      "name": "东贝集团",
+      "close": null,
+      "score": 79.42,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 79.42,
+        "gap_days": 23,
+        "drop_from_peak": 0.2269,
+        "dev60": 0.0159,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-08",
+        "code": "601956",
+        "name": "东贝集团"
+      }
+    },
+    {
+      "code": "600358",
+      "name": "国旅联合",
+      "close": null,
+      "score": 78.39,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 78.39,
+        "gap_days": 27,
+        "drop_from_peak": 0.1039,
+        "dev60": 0.0056,
+        "near_ma": "MA60",
+        "trial_date": "2026-09-24",
+        "code": "600358",
+        "name": "国旅联合"
+      }
+    },
+    {
+      "code": "920748",
+      "name": "路桥信息",
+      "close": null,
+      "score": 70.24,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 70.24,
+        "gap_days": 24,
+        "drop_from_peak": 0.2199,
+        "dev60": 0.0274,
+        "near_ma": "MA60",
+        "trial_date": "2026-09-30",
+        "code": "920748",
+        "name": "路桥信息"
+      }
+    },
+    {
+      "code": "300584",
+      "name": "海辰药业",
+      "close": null,
+      "score": 65.52,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 65.52,
+        "gap_days": 23,
+        "drop_from_peak": 0.1152,
+        "dev60": 0.0228,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-08",
+        "code": "300584",
+        "name": "海辰药业"
+      }
+    },
+    {
+      "code": "301286",
+      "name": "侨源股份",
+      "close": null,
+      "score": 58.95,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 58.95,
+        "gap_days": 20,
+        "drop_from_peak": 0.151,
+        "dev60": 0.0292,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-13",
+        "code": "301286",
+        "name": "侨源股份"
+      }
+    },
+    {
+      "code": "300817",
+      "name": "双飞集团",
+      "close": null,
+      "score": 53.87,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 53.87,
+        "gap_days": 26,
+        "drop_from_peak": 0.1011,
+        "dev60": 0.0313,
+        "near_ma": "MA60",
+        "trial_date": "2026-09-28",
+        "code": "300817",
+        "name": "双飞集团"
+      }
+    },
+    {
+      "code": "300787",
+      "name": "海能实业",
+      "close": null,
+      "score": 51.34,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 51.34,
+        "gap_days": 30,
+        "drop_from_peak": 0.1093,
+        "dev60": 0.0288,
+        "near_ma": "MA60",
+        "trial_date": "2026-09-21",
+        "code": "300787",
+        "name": "海能实业"
+      }
+    },
+    {
+      "code": "002093",
+      "name": "国脉科技",
+      "close": null,
+      "score": 47.35,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 47.35,
+        "gap_days": 26,
+        "drop_from_peak": 0.1253,
+        "dev60": 0.0407,
+        "near_ma": "MA60",
+        "trial_date": "2026-09-28",
+        "code": "002093",
+        "name": "国脉科技"
+      }
+    },
+    {
+      "code": "002912",
+      "name": "中新赛克",
+      "close": null,
+      "score": 45.72,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 45.72,
+        "gap_days": 22,
+        "drop_from_peak": 0.2117,
+        "dev60": 0.0499,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-09",
+        "code": "002912",
+        "name": "中新赛克"
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 774,
+    "universe": 4605,
+    "dropped": 0
+  },
+  "written_at": "2026-11-10T17:02:59+08:00"
+}

@@ -1,0 +1,40 @@
+{
+  "date": "2026-11-10",
+  "model": "shanshui",
+  "count": 1,
+  "picks": [
+    {
+      "code": "600609",
+      "name": "金杯汽车",
+      "close": 3.83,
+      "score": 52.5,
+      "board": "沪市主板",
+      "raw": {
+        "code": "600609",
+        "name": "金杯汽车",
+        "board": "沪市主板",
+        "price": 3.83,
+        "pct": 10.06,
+        "turnover": 7.88,
+        "market_cap_yi": 49.96459277,
+        "prev_close": 3.48,
+        "trial_high": 3.89,
+        "trial_idx": 29,
+        "span": 30,
+        "drawdown": 18.8,
+        "close_gap": -1.54,
+        "vol_ratio_pull": 0.338,
+        "vr20_now": 3.65,
+        "score": 52.5
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 774,
+    "universe": 4605,
+    "dropped": 0
+  },
+  "written_at": "2026-11-10T17:00:26+08:00"
+}

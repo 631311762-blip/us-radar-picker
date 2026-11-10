@@ -1,0 +1,43 @@
+{
+  "run_date": "2026-11-10",
+  "mode": "review",
+  "total_scanned": 4605,
+  "data_ok_count": 4597,
+  "audit_veto_count": 2,
+  "qualified_count": 0,
+  "candidate_pool": 0,
+  "position": "空仓（全市场无符合 8 道硬条件的信号）",
+  "funnel": {
+    "上影幅度": 4585,
+    "量比": 4,
+    "上影实体比": 4,
+    "成交额": 1,
+    "低位": 1
+  },
+  "params": {
+    "upper_amp_min": 0.08,
+    "upper_to_body_min": 2.0,
+    "body_abs_max_pct": 0.07,
+    "vol_ratio_min": 1.5,
+    "low_pos_max_pct": 0.15,
+    "below_ma20": true,
+    "min_amount": 50000000.0,
+    "shadow_comp_enabled": true,
+    "comp_shadow_min": 0.06,
+    "comp_upper_to_body_min": 3.5,
+    "comp_low_pos_max_pct": 0.05,
+    "lookback": 120,
+    "top_n": 6,
+    "candidate_pool": 0,
+    "env_threshold": 60,
+    "vol_mult": 1.2
+  },
+  "top_samples": [],
+  "backtest": {
+    "backtest_samples": 0,
+    "win_rate": null,
+    "action": "无历史数据"
+  },
+  "full_list_json": "/home/runner/work/us-radar-picker/us-radar-picker/low_shadow/state/qualified_20261110_170030.json",
+  "full_list_csv": "/home/runner/work/us-radar-picker/us-radar-picker/low_shadow/state/qualified_20261110_170030.csv"
+}

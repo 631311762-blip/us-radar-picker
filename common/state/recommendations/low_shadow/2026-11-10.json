@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-10",
+  "model": "low_shadow",
+  "count": 0,
+  "picks": [],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 774,
+    "universe": 4605,
+    "dropped": 0
+  },
+  "written_at": "2026-11-10T17:00:30+08:00"
+}

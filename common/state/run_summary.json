@@ -1,11 +1,35 @@
 {
-  "generated_at": "2026-11-09T23:35:00+08:00",
+  "generated_at": "2026-11-10T17:04:29+08:00",
   "results": [
+    {
+      "name": "shanshui",
+      "label": "善水模型 v10",
+      "exit": 0,
+      "seconds": 116.0
+    },
+    {
+      "name": "low_shadow",
+      "label": "低位上影线模型",
+      "exit": 0,
+      "seconds": 4.2
+    },
+    {
+      "name": "lingpei",
+      "label": "领湃模型 B_V2",
+      "exit": 0,
+      "seconds": 156.8
+    },
+    {
+      "name": "kaizhong",
+      "label": "凯众模型 v4",
+      "exit": 0,
+      "seconds": 8.3
+    },
     {
       "name": "yidian",
       "label": "易点模型",
       "exit": 0,
-      "seconds": 83.0
+      "seconds": 72.7
     }
   ],
   "settlements": [
@@ -35,9 +59,9 @@
     },
     {
       "model": "yidian",
-      "batches": 0,
-      "samples": 0,
-      "win_rate": null
+      "batches": 1,
+      "samples": 6,
+      "win_rate": 0.3333
     }
   ]
 }
