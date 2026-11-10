@@ -13,8 +13,26 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-# 数据目录可用 KZ_DATA_DIR 覆盖（GitHub Actions 中指向 kaizhong/state 以便回写）
-DATA = os.path.abspath(os.environ.get("KZ_DATA_DIR") or os.path.join(BASE, "data"))
+_REPO = os.path.dirname(BASE)   # 仓库根目录
+# 数据目录可用 KZ_DATA_DIR 覆盖（GitHub Actions 中指向 kaizhong/state 以便回写）。
+# 解析顺序：绝对路径 → 相对 cwd 存在 → 相对仓库根存在 → 相对脚本目录存在。
+# 之所以不只按 cwd 解析：当 workflow 设了 working-directory: kaizhong、
+# 同时又传相对路径 kaizhong/state 时，会被拼成 kaizhong/kaizhong/state，
+# 静默读到一个空目录（历史台账「凭空消失」）。这里做多级回退，消除该歧义。
+def _resolve_data_dir():
+    raw = os.environ.get("KZ_DATA_DIR")
+    if not raw:
+        return os.path.join(BASE, "data")
+    if os.path.isabs(raw):
+        return os.path.abspath(raw)
+    for base in (os.getcwd(), _REPO, BASE):
+        cand = os.path.abspath(os.path.join(base, raw))
+        if os.path.isdir(cand):
+            return cand
+    return os.path.abspath(os.path.join(_REPO, raw))
+
+
+DATA = _resolve_data_dir()
 KLINE_DIR = os.path.join(DATA, "kline")
 REPORT_DIR = os.path.join(DATA, "reports")
 F10_CACHE = os.path.join(DATA, "f10.json")

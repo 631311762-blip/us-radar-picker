@@ -35,7 +35,10 @@ jobs:
       - name: 运行凯众 v4 模型
         env:
           FTQQ_KEY: ${{ secrets.FTQQ_KEY }}
-          KZ_DATA_DIR: kaizhong/state
+          # 【必须绝对路径】working-directory 已是 kaizhong/，若写相对路径 kaizhong/state
+          # 会被 lib.py 的 abspath 拼成 kaizhong/kaizhong/state，
+          # 导致读不到已入库的历史台账（表现为「台账共 6 笔」而非 400+ 笔）。
+          KZ_DATA_DIR: ${{ github.workspace }}/kaizhong/state
           KZ_TOP: "6"
         working-directory: kaizhong
         run: |
