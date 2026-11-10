@@ -288,7 +288,7 @@ def load_lixin_exclude():
 # 原型 us_radar_picker.py::SHADOW 的 8 道硬条件（逐字对齐，勿随意放宽）
 DEFAULT_PARAMS = {
     # --- 形态硬条件（原型 SHADOW）---
-    "upper_amp_min": 0.08,          # 上影/开盘 >= 8%
+    "upper_amp_min": 0.045,         # 上影/开盘 >= 4.5%（放宽：让凌志软件0.0488类低位票纳入）
     "upper_to_body_min": 2.0,       # 上影/实体 >= 2 倍
     "body_abs_max_pct": 0.07,       # 当日涨跌幅绝对值 <= 7%
     "vol_ratio_min": 1.5,           # 量比(对前5日均量) >= 1.5
@@ -688,7 +688,7 @@ def correct_params(params, win_rate):
         params["vol_ratio_min"] = min(2.5, round(params["vol_ratio_min"] + 0.1, 2))
         action = "收紧阈值（胜率偏低）"
     elif win_rate > 0.60:
-        params["upper_amp_min"] = max(0.05, round(params["upper_amp_min"] - 0.01, 3))
+        params["upper_amp_min"] = max(0.045, round(params["upper_amp_min"] - 0.01, 3))
         params["low_pos_max_pct"] = min(0.30, round(params["low_pos_max_pct"] + 0.02, 3))
         params["vol_ratio_min"] = max(1.0, round(params["vol_ratio_min"] - 0.1, 2))
         action = "放宽阈值（胜率偏高）"
