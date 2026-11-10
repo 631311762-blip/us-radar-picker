@@ -381,6 +381,49 @@ NOTE = ("收盘 ≥ 触发价 **且** 成交量 ≥ 所需量同时满足才是�
         "回踩不买；止损按买入价 -5%；提示即买点、无等待期。")
 
 
+# ---------------- 超额倾向标注（纯提示，不参与选股/排序/阈值） ----------------
+# 依据：2026-11-10 对台账 324 只完整走完 10 个交易日的样本分组统计——
+#   全样本平均 10 日超额 -1.36%（正超额率 36.7%）
+#   横盘收盘比 ≤ 1.10：             +1.63%（58.5%）
+#   横盘收盘比 ≤ 1.10 且首日 ≥7%：   +3.69%（54.5%）
+#   首日 <4%：                      -2.40%
+#   score 与 10 日超额相关系数仅 0.064（排序几乎无预测力）
+# 因此按「横盘够紧 + 突破够狠但不失控」叠加三星/两星/一星，仅作研究参考。
+EXCESS_TIGHT, EXCESS_HIT = 1.10, 7.0     # 分组阈值（统计口径，非模型参数）
+EXCESS_HOT = 12.0                        # 首日涨幅过高：追高风险，降一档
+
+
+def excess_tag(h):
+    """返回 (星级标注, 依据说明, 排序权重)。仅用于展示与并列时的参考排序。"""
+    rng = float(h.get("sw_range") or 9)
+    chg = float(h.get("chg") or 0)
+    vol_x = float(h.get("vol_x") or 0)
+    tight = rng <= EXCESS_TIGHT
+    hit = chg >= EXCESS_HIT
+    hot = chg >= EXCESS_HOT
+    if tight and hit and not hot:
+        return "★★★ 强", f"横盘比 {rng:.3f}≤1.10 + 首日 {chg:+.1f}%", 3
+    if tight and hit and hot:
+        return "★★ 中", f"横盘紧但首日 {chg:+.1f}% 偏猛，防冲高回落", 2
+    if tight:
+        return "★★ 中", f"横盘比 {rng:.3f}≤1.10（最有效特征），首日 {chg:+.1f}% 偏温和", 2
+    if rng <= 1.15 and hit and not hot and vol_x <= 6:
+        return "★★ 中", f"横盘比 {rng:.3f} 尚可 + 首日 {chg:+.1f}%，量比 {vol_x}", 2
+    if hit and not hot:
+        return "★ 弱", f"首日 {chg:+.1f}% 够狠，但横盘比 {rng:.3f}>1.15 偏松", 1
+    if chg < 4:
+        return "★ 弱", f"首日仅 {chg:+.1f}%，突破力度偏弱（该组历史超额 -2.40%）", 1
+    return "★ 弱", f"横盘比 {rng:.3f}、首日 {chg:+.1f}%，特征中性偏弱", 1
+
+
+def excess_note():
+    return ("超额倾向（研究参考，不影响选股）：依据台账 324 只完整 10 日样本，"
+            "**横盘收盘比 ≤ 1.10 是唯一能把平均超额拉正的分组**（+1.63% vs 全样本 -1.36%，"
+            "正超额率 58.5% vs 36.7%）；紧横盘 + 首日涨幅 ≥7% 可达 +3.69%；"
+            "首日 <4% 仅 -2.40%；模型 score 与超额相关性仅 0.064，排序基本无预测力。")
+
+
+
 # ---------------- 输出 ----------------
 def build_push(hits, last_date, tracked_n, fmap, cal, rv, new_n, dup_n):
     L = [f"# 凯众横盘突破 · {last_date}", ""]
@@ -391,16 +434,19 @@ def build_push(hits, last_date, tracked_n, fmap, cal, rv, new_n, dup_n):
              f"5 日内重复去重 {dup_n} 笔；取评分前 {min(TOP, len(hits))} 只推送）")
     L.append("")
     if hits:
-        L.append("| 标的 | 推荐标注 | 首推日 | 触发价 | 所需量(万手) | 止损 | 收盘 | 涨幅 | 量比 | 题材 |")
-        L.append("|---|---|---|---|---|---|---|---|---|---|")
+        L.append("| 标的 | 推荐标注 | 首推日 | 触发价 | 所需量(万手) | 止损 | 收盘 | 涨幅 | 量比 | 题材 | 超额倾向 |")
+        L.append("|---|---|---|---|---|---|---|---|---|---|---|")
         for h in hits[:TOP]:
             tg, fd = rec.tag_of(h["code"], last_date, fmap, cal)
             theme = (h.get("concepts", "").split(",")[0] if h.get("concepts") else "") \
                     or h.get("industry", "") or "—"
             stop = round(float(h["last_close"]) * (1 - sh.STANCE["stop_loss"]), 2)
+            star, _, _ = excess_tag(h)
             L.append(f"| {h['name']}({z6(h['code'])}) | **{tg}** | {fd} | {h['trigger']} | "
                      f"{h['req_vol_wan']} | {stop} | {h['last_close']} | {h['chg']}% | "
-                     f"{h['vol_x']} | {theme} |")
+                     f"{h['vol_x']} | {theme} | {star} |")
+        L.append("")
+        L.append("> " + excess_note())
     else:
         L.append("- 今日无样本放量突破，不推送。")
     L.append("")
@@ -422,15 +468,18 @@ def build_report(hits, last_date, tracked_n, fmap, cal, rv, new_n, dup_n, candid
     L.append("")
     L.append("## 一、今日突破提示")
     L.append("")
-    L.append("| 名称 | 代码 | 推荐标注 | 首推日 | 横盘区间 | 收盘振幅/std | 平台上沿 | 触发价 | 所需量(万手) | 止损 | 收盘 | 涨幅 | 量比 | 评分 |")
-    L.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    L.append("| 名称 | 代码 | 推荐标注 | 首推日 | 横盘区间 | 收盘振幅/std | 平台上沿 | 触发价 | 所需量(万手) | 止损 | 收盘 | 涨幅 | 量比 | 评分 | 超额倾向 |")
+    L.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for h in hits:
         tg, fd = rec.tag_of(h["code"], last_date, fmap, cal)
         stop = round(float(h["last_close"]) * (1 - sh.STANCE["stop_loss"]), 2)
+        star, why_x, _ = excess_tag(h)
         L.append(f"| {h['name']} | {z6(h['code'])} | {tg} | {fd} | {h['sw_win']} | "
                  f"{h['sw_range']}/{h['sw_std']} | {h['platform_top']} | {h['trigger']} | "
                  f"{h['req_vol_wan']} | {stop} | {h['last_close']} | {h['chg']}% | "
-                 f"{h['vol_x']} | {h['score']} |")
+                 f"{h['vol_x']} | {h['score']} | {star}（{why_x}） |")
+    L.append("")
+    L.append("> " + excess_note())
     L.append("")
     L.append("## 二、前期推荐复盘")
     L.append("")
@@ -449,8 +498,8 @@ def build_ledger(hits, hist, last_date, fmap, cal, rv, candidate_n):
     L.append("")
     L.append(f"## 今日最优 {min(TOP, len(hits))} 只")
     L.append("")
-    L.append("| 名称 | 6位代码 | 推荐标注 | 首推日 | 题材 | 一句话原因 | 触发价 | 所需量(万手) | 止损 | 当日收盘 | 当日涨跌幅 |")
-    L.append("|---|---|---|---|---|---|---|---|---|---|---|")
+    L.append("| 名称 | 6位代码 | 推荐标注 | 首推日 | 题材 | 一句话原因 | 触发价 | 所需量(万手) | 止损 | 当日收盘 | 当日涨跌幅 | 超额倾向 |")
+    L.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
     for h in hits[:TOP]:
         tg, fd = rec.tag_of(h["code"], last_date, fmap, cal)
         theme = (h.get("concepts", "").split(",")[0] if h.get("concepts") else "") \
@@ -458,10 +507,12 @@ def build_ledger(hits, hist, last_date, fmap, cal, rv, candidate_n):
         stop = round(float(h["last_close"]) * (1 - sh.STANCE["stop_loss"]), 2)
         why = (f"横盘 {h['sw_win']}（收盘比 {h['sw_range']}/std {h['sw_std']}），"
                f"放量 {h['vol_x']} 倍突破平台 {h['platform_top']}")
+        star, why_x, _ = excess_tag(h)
         L.append(f"| {h['name']} | {z6(h['code'])} | {tg} | {fd} | {theme} | {why} | "
                  f"{h['trigger']} | {h['req_vol_wan']} | {stop} | "
-                 f"{h['last_close']} | {h['chg']:+.2f}% |")
+                 f"{h['last_close']} | {h['chg']:+.2f}% | {star}（{why_x}） |")
     L.append("")
+    L.append("> " + excess_note())
     L.append("## 在跟踪清单")
     L.append("")
     latest = rec.latest_per_code(hist)
