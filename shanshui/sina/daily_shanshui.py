@@ -4,7 +4,7 @@
 善水模型 v10 收盘后选股（沙箱重建版）
 - 数据源：新浪不复权日线（全 A 扫描），巨潮资讯全文检索（审计一票否决）
 - 选股条件：试盘线前高（仅取 vr20>=1.2 放量日中的最高价）、收盘距前高 -3%~0%、
-  回调段均量/试盘日量<=0.70；沿用 vr20>=1.05、非涨停、跨度 20-35 交易日、
+  回调段均量/试盘日量<=0.70；回调段内前高不可被突破（2026-11-10 修正）；沿用 vr20>=1.05、非涨停、跨度 20-35 交易日、
   回调 10-30%、同股 20 日去重
 - 一票否决：ST/*ST/退市；2025 年度审计涉立信（含改聘）、审计查询缺失
 - 排序：与善水科技(301190) 2026-09-23 原型形态贴合度
@@ -185,6 +185,12 @@ def stock_metrics(bars, sig_idx, code):
     seg = bars[t_i + 1: sig_idx + 1]
     if not seg:
         return None
+    # 前高不可被突破（v10 修正 2026-11-10）：回调段内（含信号日）任何一日
+    # 最高价不得超过试盘前高 H。否则前高已失效，信号日收盘只是突破失败后
+    # 的回落低位（如华昌达 2026-11-09），不符合"回踩后重新逼近试盘线前高"
+    # 的原型形态（善水科技 2026-09-23：回调段最高 21.58 < 前高 21.80）。
+    if max(b["high"] for b in seg) > H + 1e-9:
+        return None
     min_low = min(b["low"] for b in seg)
     dd = (H - min_low) / H
     if not (DD_LO <= dd <= DD_HI):
@@ -328,8 +334,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="v10")
     ap.add_argument("--top", type=int, default=TOP_N)
+    ap.add_argument("--date", default=None,
+                    help="回放模式：强制指定信号日（须为最新已收盘行情日），如 2026-11-09")
     args = ap.parse_args()
-    today = dt.date.today().strftime("%Y-%m-%d")
+    today = args.date or dt.date.today().strftime("%Y-%m-%d")
 
     # 0) git 自动同步（配置 .git_sync.json 后生效；结果与脚本持久化到仓库 shanshui/sina/）
     repo_dir = sync_pull()
@@ -403,8 +411,13 @@ def main():
     old_rows = read_csv()
     # 同股20日去重：只对早于今日的历史信号去重（当日重复运行视为覆盖更新）
     cal = [b["day"] for b in get_kline("sh000001", 80)]
-    recent = {r["代码"] for r in old_rows
-              if r.get("信号日") in cal and 0 < cal.index(r["信号日"]) < DEDUP_DAYS}
+    recent = set()
+    for r in old_rows:
+        d = r.get("信号日")
+        if d in cal:
+            days_ago = len(cal) - 1 - cal.index(d)   # 距最新行情日的交易日数
+            if 0 < days_ago < DEDUP_DAYS:
+                recent.add(r["代码"])
     dedup_cnt = 0
     cands = []
     for sym, name, code, m in raw:
