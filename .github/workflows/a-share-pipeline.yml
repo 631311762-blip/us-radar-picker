@@ -18,6 +18,9 @@ on:
   # 已停用 5 个被本流水线取代的独立 A 股 workflow
   #（shanshui/low_shadow/lingpei/kaizhong/yidian），避免重复运行。
   # 美股 us-radar-picker.yml 与 主升浪 stock-v3-daily.yml 不在本流水线内，保持独立运行。
+  # 【重要】本 schedule 必须经「git push 到 main」才会被 GitHub 注册/重新同步；
+  # 仅用 API 构造 commit 不会激活定时（GitHub schedule 依赖 push 事件 resync）。
+  # 若某日发现未自动触发，先用 `gh` 或 git push 一次本文件即可恢复。
   schedule:
     - cron: "5 8 * * 1-5"
   workflow_dispatch:
