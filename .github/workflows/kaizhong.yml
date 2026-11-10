@@ -35,6 +35,10 @@ jobs:
       - name: 运行凯众 v4 模型
         env:
           FTQQ_KEY: ${{ secrets.FTQQ_KEY }}
+          # 仓库实际只配置了 SERVERCHAN_SENDKEY（无 FTQQ_KEY），必须一并透传，
+          # 否则模型日志会「未配置 SENDKEY，跳过推送」，微信收不到。
+          SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+          SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
           # 【必须绝对路径】working-directory 已是 kaizhong/，若写相对路径 kaizhong/state
           # 会被 lib.py 的 abspath 拼成 kaizhong/kaizhong/state，
           # 导致读不到已入库的历史台账（表现为「台账共 6 笔」而非 400+ 笔）。

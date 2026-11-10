@@ -496,16 +496,22 @@ def detect_today_triggers(hist, last_date):
 
 # ---------------- 方糖（Server酱）推送 ----------------
 def push_ftqq(title, md):
+    # 兼容多种环境变量命名：仓库 Actions secret 实际叫 SERVERCHAN_SENDKEY，
+    # 早期版本只认 SERVERCHAN_KEY，导致云端「静默不推送」（日志显示未配置 SENDKEY）。
     key = (os.environ.get("FTQQ_KEY") or os.environ.get("SENDKEY")
+           or os.environ.get("SERVERCHAN_SENDKEY")
            or os.environ.get("SERVERCHAN_KEY") or "").strip()
     cfg = os.path.join(BASE, "config.json")
     if not key and os.path.exists(cfg):
         try:
-            key = (json.load(open(cfg, encoding="utf-8")).get("FTQQ_KEY") or "").strip()
+            _c = json.load(open(cfg, encoding="utf-8"))
+            key = (_c.get("FTQQ_KEY") or _c.get("SENDKEY")
+                   or _c.get("SERVERCHAN_SENDKEY") or _c.get("SERVERCHAN_KEY") or "").strip()
         except Exception:
             key = ""
     if not key:
-        print("[push] 未配置方糖 SENDKEY（环境变量 FTQQ_KEY 或 config.json），跳过推送")
+        print("[push] 未配置方糖 SENDKEY"
+              "（支持 FTQQ_KEY / SENDKEY / SERVERCHAN_SENDKEY / SERVERCHAN_KEY 或 config.json），跳过推送")
         return False
     url = f"https://sctapi.ftqq.com/{key}.send"
     try:
