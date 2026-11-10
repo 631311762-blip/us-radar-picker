@@ -350,11 +350,18 @@ def main():
         CSV_PATH = os.path.join(sub, "善水模型_推荐跟踪.csv")
 
     # 1) 交易日/数据更新校验
-    ref = get_kline("sh000001", 5)
-    if not ref or ref[-1]["day"] != today:
-        last = ref[-1]["day"] if ref else "无数据"
+    ref = get_kline("sh000001", 80)
+    cal_days = [b["day"] for b in ref]
+    if today not in cal_days:
+        log(f"指定日({today})非交易日，自动退出不推送")
+        sys.exit(2)
+    replay_off = len(cal_days) - 1 - cal_days.index(today)  # 信号日距最新行情日的交易日偏移
+    if args.date is None and replay_off != 0:
+        last = cal_days[-1]
         log(f"最新行情日({last}) != 今日({today})：非交易日或收盘数据未更新，自动退出不推送")
         sys.exit(2)
+    if replay_off:
+        log(f"回放模式: 以 {today} 为信号日复算（距今 {replay_off} 个交易日）")
 
     # 2) 原型指标
     p_bars = get_kline(PROTO_SYM, 120)
@@ -389,10 +396,16 @@ def main():
     raw, errs = [], 0
     def work(item):
         sym, name, code = item
-        bars = get_kline(sym, 160)
-        if len(bars) < 50 or bars[-1]["day"] != today:
+        bars = get_kline(sym, 160 + replay_off)
+        if len(bars) < 50:
             return None
-        return (sym, name, code, stock_metrics(bars, len(bars) - 1, code))
+        days = [b["day"] for b in bars]
+        if today not in days:
+            return None
+        si = days.index(today)
+        if replay_off == 0 and si != len(bars) - 1:
+            return None   # 实时模式要求数据最新
+        return (sym, name, code, stock_metrics(bars[:si + 1], si, code))
     with ThreadPoolExecutor(max_workers=12) as ex:
         futs = [ex.submit(work, it) for it in stocks]
         done = 0
