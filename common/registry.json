@@ -31,6 +31,14 @@
       "label": "易点模型",
       "cmd": "python3 yidian/run.py",
       "enabled": true
+    },
+    {
+      "name": "zhushanglang",
+      "label": "主升浪 V4",
+      "cmd": "python3 stock-v3/daily_v3.py",
+      "enabled": true,
+      "settle": false,
+      "_note": "自带 回溯/进化/选股/推送/云端备份 的独立子系统，不消费共同前置层 universe/K线缓存；settle=false 跳过公共回溯（它有自己的 feedback 闭环）。"
     }
   ]
 }

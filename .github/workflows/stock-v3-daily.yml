@@ -1,11 +1,9 @@
 name: stock-v3 每日选股闭环
 
 on:
-  schedule:
-    # 北京时间 17:30 收盘后（A股收盘 15:00，留出新浪数据滚动时间）；GitHub cron 用 UTC → 09:30
-    # 周一至周五运行；中国节假日行情不更新时，脚本会自身安全 ABORT，不推送、不污染
-    - cron: '30 9 * * 1-5'
-  workflow_dispatch: {}   # 允许在 Actions 页面手动触发（调试用）
+  # 2026-11-10：主升浪已并入统一流水线 a-share-pipeline.yml（同 runner、同 cron 16:05），
+  # 本文件不再需要定时自动跑；保留 workflow_dispatch 仅作手动触发兜底（紧急补跑用）。
+  workflow_dispatch: {}   # 允许在 Actions 页面手动触发（调试/兜底用）
 
 permissions:
   contents: write        # 允许本 workflow 把每日选股结果推回仓库

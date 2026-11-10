@@ -11,13 +11,19 @@ name: A股模型统一流水线（共同前置层）
 #
 # 注册表 common/registry.json：新增模型只要在此加一项即自动套用四个共同条件，
 # 无需改本 workflow。
+#
+# 2026-11-10：主升浪 V4（stock-v3/daily_v3.py）已登记进 registry.json，
+# 由本流水线同一 runner、同一 cron（16:05）顺序跑，并纳入统一结论表
+# run_summary.json；其独立定时 workflow（stock-v3-daily.yml）已取消 schedule、
+# 仅保留手动触发兜底，不再单独自动运行。
 # =========================================================================
 
 on:
   # 正式切换后启用定时：UTC 08:05 = 北京时间 16:05（周一~五，A 股收盘后）。
   # 已停用 5 个被本流水线取代的独立 A 股 workflow
   #（shanshui/low_shadow/lingpei/kaizhong/yidian），避免重复运行。
-  # 美股 us-radar-picker.yml 与 主升浪 stock-v3-daily.yml 不在本流水线内，保持独立运行。
+  # 美股 us-radar-picker.yml 仍保持独立运行（不同市场，不共享前置层）。
+  # 主升浪 V4 已于 2026-11-10 并入本流水线（见 registry.json 的 zhushanglang 项）。
   # 【重要】本 schedule 必须经「git push 到 main」才会被 GitHub 注册/重新同步；
   # 仅用 API 构造 commit 不会激活定时（GitHub schedule 依赖 push 事件 resync）。
   # 若某日发现未自动触发，先用 `gh` 或 git push 一次本文件即可恢复。
@@ -88,6 +94,7 @@ jobs:
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           FTQQ_KEY: ${{ secrets.FTQQ_KEY }}
+          SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
           KZ_DATA_DIR: kaizhong/state
           STATE_DIR: ${{ github.workspace }}/state
         run: |
@@ -116,6 +123,8 @@ jobs:
           git add yidian/state 2>/dev/null || true
           git add kaizhong/state 2>/dev/null || true
           git add low_shadow/state 2>/dev/null || true
+          # 主升浪子系统（kline_cache*.json 已在 .gitignore，不会入库）
+          git add stock-v3/ 2>/dev/null || true
           git commit -m "a-share pipeline state: $(date -u +%F) [skip ci]" || echo "无状态变更"
           git pull --rebase origin main || true
           git push || echo "推送状态失败（不影响选股）"

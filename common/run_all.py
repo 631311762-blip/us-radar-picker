@@ -105,8 +105,11 @@ def main():
     print("[run_all] 注册模型 %d 个，本次执行 %d 个" % (len(reg["models"]), len(models)))
     results = [run_model(m) for m in models]
 
-    # 条件④：回溯 + 参数修正，对所有已登记模型生效（即使模型自身没实现）
-    settle = settle_all([m["name"] for m in reg["models"] if m.get("enabled", True)])
+    # 条件④：回溯 + 参数修正，对所有已登记模型生效（即使模型自身没实现）。
+    # settle=false 的模型（如主升浪，自带 feedback 闭环）跳过公共回溯，避免无谓报错。
+    settle_names = [m["name"] for m in reg["models"]
+                    if m.get("enabled", True) and m.get("settle", True)]
+    settle = settle_all(settle_names)
 
     print("\n" + "=" * 64)
     print("[run_all] 汇总")
