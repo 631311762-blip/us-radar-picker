@@ -1,26 +1,29 @@
 # -*- coding: utf-8 -*-
 """回踩长期均线企稳模型 B_V2 核心检测 detect_coil_v2。
-要素（来自原 prompt）：回踩 MA60/MA30 + 小阳线 + 试盘量能间距 18-30 天 + 距前高跌幅。
-重建版：阈值按合理推断实现，需在真实标的上核对后再用于实盘。
+要素：回踩 MA60 企稳（连续小阳）+ 试盘量能间距 18-30 天 + 距前高回撤。
+阈值校准基准：领湃科技(300306) 2026-08-21 原始样本——
+  试盘日 07-23（阳线实体+1.93%、量比1.68、距信号日21天），
+  回踩日 08-19（阴线触 MA60，-0.48%），企稳确认 08-20/08-21 连续两阳，
+  信号日收盘高出 MA60 +4.05%，近60日峰回撤 9.0%，
+  近10日轨迹：曾在均线上方 +3.2% 运行、最低 -1.97% 未深破。
 """
 from 埋伏点_回踩均线模型 import add_indicators
 
-# ---- 阈值（重建版推断，可调）----
-NEAR_MA_DEV = 0.03        # 收盘价偏离长期均线 <= 3% 视为贴线
-YANG_MAX = 0.03           # 企稳小阳线：单日涨幅上限 3%
-TRIAL_VOL_RATIO = 1.6     # 试盘日量能 >= 近 40 日均量 1.6 倍
-TRIAL_UP = 0.03           # 试盘日涨幅 >= 3%
-TRIAL_BODY = 0.01         # 试盘日实体 >= 1%
-GAP_MIN, GAP_MAX = 18, 30  # 试盘日到当前交易日数范围
-DROP_MIN, DROP_MAX = 0.08, 0.35  # 距前高（试盘段峰值）回撤幅度范围
-# ---- 方向约束（2026-11-09 修复：只要「从高点向均线回踩」，不要「从下往上贴线」）----
-PEAK_ABOVE_MA_MIN = 1.10   # 近段峰值至少高出 MA60 10%（排除低位刚爬升、峰值≈现价的形态）
-TRIAL_ABOVE_MA = True      # 试盘日收盘须站上当时 MA60（冲高前已在均线上方，排除突破回踩）
-MA60_MAX_BREAK = 0.015     # 现价最多低于 MA60 1.5%（回踩允许轻微毛刺，排除从下往上反弹贴线）
-# 5e 轨迹约束：回踩的前提是"近期在均线上方运行、回落贴线"，而非"在均线下方爬上来"
+# ---- 阈值（以领湃科技 2026-08-21 样本校准）----
+NEAR_MA_DEV = 0.05        # 收盘价偏离 MA60 <= 5% 视为贴线（样本信号日 +4.05%）
+YANG_MAX = 0.04           # 企稳小阳线：单日实体上限 4%（样本 08-20 实体 +2.33%）
+YANG_COUNT = 2            # 企稳确认：最近 2 根均为阳线（样本 08-20/08-21，08-19 为阴线回踩）
+TRIAL_VOL_RATIO = 1.6     # 试盘日量能 >= 近 40 日均量 1.6 倍（样本 1.68）
+TRIAL_UP = 0.015          # 试盘日涨幅 >= 1.5%（样本 +1.93%）
+TRIAL_BODY = 0.01         # 试盘日实体 >= 1%（样本 +1.93%）
+GAP_MIN, GAP_MAX = 18, 30  # 试盘日到当前交易日数范围（样本 21 天）
+DROP_MIN, DROP_MAX = 0.08, 0.35  # 距前高（近60日峰值）回撤幅度范围（样本 9.0%）
+PEAK_WINDOW = 60          # 前高取近 60 日最高价
+# ---- 方向约束（2026-11-09/10 修订：只要「上方运行→回落贴线」，不要「均线下方爬上来」）----
+MA60_MAX_BREAK = 0.015     # 现价最多低于 MA60 1.5%（回踩允许轻微毛刺）
 DIP_WINDOW = 10            # 轨迹检查窗口（交易日）
-TREND_ABOVE_MIN = 0.015    # 窗口内须有收盘高出当时 MA60 至少 1.5%
-DIP_MAX_BELOW = 0.03       # 窗口内收盘不得低于当时 MA60 达 3%（触线毛刺容忍度）
+TREND_ABOVE_MIN = 0.015    # 窗口内须有收盘高出当时 MA60 至少 1.5%（样本 08-17 +3.16%）
+DIP_MAX_BELOW = 0.03       # 窗口内收盘不得低于当时 MA60 达 3%（样本最低 -1.97%）
 
 
 def detect_coil_v2(bars):
@@ -32,27 +35,31 @@ def detect_coil_v2(bars):
     cur = bars[-1]
 
     ma60 = cur.get("ma60")
-    ma30 = cur.get("ma30")
-    if ma60 is None or ma30 is None:
+    if ma60 is None:
         return None
 
-    # 1) 回踩长期均线：收盘价贴近 MA60 或 MA30（偏离 <= NEAR_MA_DEV）
+    # 1) 回踩长期均线：只看 MA60，收盘价偏离 <= NEAR_MA_DEV（校准样本 +4.05%）
     dev60 = abs(cur["c"] - ma60) / ma60
-    dev30 = abs(cur["c"] - ma30) / ma30
-    if min(dev60, dev30) > NEAR_MA_DEV:
+    if dev60 > NEAR_MA_DEV:
         return None
 
-    # 2) 企稳小阳线：最近 3 根均为小阳线（收>=开，涨幅 <= YANG_MAX），且不破均线
-    last3 = bars[-3:]
-    if not all((b["c"] >= b["o"]) and (b["c"] / b["o"] - 1) <= YANG_MAX for b in last3):
+    # 2) 企稳小阳线：最近 YANG_COUNT 根均为阳线且实体 <= YANG_MAX（样本 08-20/08-21）
+    last_y = bars[-YANG_COUNT:]
+    if not all((b["c"] >= b["o"]) and (b["c"] / b["o"] - 1) <= YANG_MAX for b in last_y):
         return None
 
-    # 3) 试盘日：往前找一根放量中阳线（量能、涨幅、实体达标）
+    # 3) 试盘日：往前找一根放量中阳线（量能、涨幅、实体达标），
+    #    取间距落在 [GAP_MIN, GAP_MAX] 内的最近一根（有多根时取最近的）
     near40 = [b["v"] for b in bars[-41:-1]]
     avg_v = sum(near40) / len(near40) if near40 else 0
     trial_idx = None
     for i in range(n - 2, n - 41, -1):
         b = bars[i]
+        gap = (n - 1) - i
+        if gap < GAP_MIN:
+            continue                    # 太近，继续往前找
+        if gap > GAP_MAX:
+            break                       # 超出间距上限，停止
         body = (b["c"] - b["o"]) / b["o"]
         if b["v"] >= TRIAL_VOL_RATIO * avg_v and (b["c"] / b["o"] - 1) >= TRIAL_UP and body >= TRIAL_BODY:
             trial_idx = i
@@ -60,26 +67,14 @@ def detect_coil_v2(bars):
     if trial_idx is None:
         return None
 
-    # 4) 试盘量能间距 18-30 天
+    # 4) 试盘量能间距已在搜索时保证 18-30 天
     gap = (n - 1) - trial_idx
-    if not (GAP_MIN <= gap <= GAP_MAX):
-        return None
 
-    # 5) 距前高跌幅：试盘段（trial 起至当前）峰值回撤到当前
-    peak = max(b["h"] for b in bars[trial_idx:])
+    # 5) 距前高跌幅：近 PEAK_WINDOW 日峰值回撤到当前（样本近60日峰回撤 9.0%）
+    peak = max(b["h"] for b in bars[-PEAK_WINDOW:])
     drop = (peak - cur["c"]) / peak
     if not (DROP_MIN <= drop <= DROP_MAX):
         return None
-
-    # 5b) 方向约束：前高须明显高出 MA60（排除从下往上贴线）
-    if peak < PEAK_ABOVE_MA_MIN * ma60:
-        return None
-
-    # 5c) 方向约束：试盘日收盘须站上当时 MA60（排除低位突破回踩，只要趋势回踩）
-    if TRIAL_ABOVE_MA and trial_idx >= 59:
-        ma60_t = sum(b["c"] for b in bars[trial_idx - 59:trial_idx + 1]) / 60
-        if ma60_t and bars[trial_idx]["c"] <= ma60_t:
-            return None
 
     # 5d) 方向约束：现价不得有效跌破 MA60（排除均线之下反弹上来的形态）
     if cur["c"] < ma60 * (1 - MA60_MAX_BREAK):
@@ -100,14 +95,13 @@ def detect_coil_v2(bars):
                 return None
 
     # 评分：贴线越紧、间距越居中、回撤越合理，分越高
-    score = 100 - min(dev60, dev30) * 1000 - abs(gap - 24) * 1.5 - abs(drop - 0.20) * 120
+    score = 100 - dev60 * 1000 - abs(gap - 24) * 1.5 - abs(drop - 0.20) * 120
     return {
         "signal": True,
         "score": max(round(score, 2), 0),
         "gap_days": gap,
         "drop_from_peak": round(drop, 4),
         "dev60": round(dev60, 4),
-        "dev30": round(dev30, 4),
-        "near_ma": "MA60" if dev60 <= dev30 else "MA30",
+        "near_ma": "MA60",
         "trial_date": bars[trial_idx]["d"],
     }
