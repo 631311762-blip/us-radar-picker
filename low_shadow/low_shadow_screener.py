@@ -302,7 +302,7 @@ DEFAULT_PARAMS = {
     # --- 框架参数 ---
     "lookback": 120,          # K线回看窗口（>=21 根即可判定末根）
     "top_n": 6,               # 简报展示前 N 只（原型 topN）
-    "candidate_pool": 60,     # 候选池上限（原型 candidatePool）
+    "candidate_pool": 0,      # 0=不截断，每只满足模型的股票都进清单（用户要求剔除60上限）
     "env_threshold": 60,      # 合格候选数 >= 此值视为「信号异常放量」告警（非空仓开关）
     "vol_mult": 1.20,         # 保留兼容（旧 env 统计用）
 }
@@ -761,7 +761,8 @@ def run_review(params, top_n=None):
     # 全市场合格清单：8 道硬条件全部通过者，不截断
     qualified = rank_candidates(candidates)
     n_qualified = len(qualified)
-    pool = qualified[:params["candidate_pool"]]
+    # 候选池：candidate_pool<=0 表示不截断（每只满足模型的股票都进清单）；>0 才取前N
+    pool = qualified if not params["candidate_pool"] else qualified[:params["candidate_pool"]]
 
     if n_qualified == 0:
         position = "空仓（全市场无符合 8 道硬条件的信号）"
@@ -809,12 +810,12 @@ def run_review(params, top_n=None):
     L.append("- 有效K线标的：%d 只" % data_ok)
     L.append("- 立信审计剔除：%d 只（一票否决）" % audited_out)
     L.append("- 符合 8 道硬条件：**%d 只**（全量清单见下方）" % n_qualified)
-    L.append("- 候选池：%d 只（上限 %d）" % (len(pool), params["candidate_pool"]))
+    L.append("- 满足模型清单：%d 只（已剔除 60 上限，每只满足的都列出）" % n_qualified)
     L.append("- 仓位状态：**%s**" % position)
     L.append("---")
     if pool:
-        L.append("前 %d 只（候选池内分位评分）：" % min(top_n, len(pool)))
-        for i, c in enumerate(pool[:top_n], 1):
+        L.append("前 %d 只预览（满足模型全量 %d 只，完整见 CSV/JSON）：" % (min(top_n, len(pool)), n_qualified))
+        for i, c in enumerate(pool, 1):
             L.append("> %d. `%s` %s | 评分 %s | 收盘 %s | 上影/开 %s | 上影/实体 %s | 量比 %s | 距20日低 %s"
                      % (i, c["symbol"], c["name"], c["score"], c["close"],
                         c["upper_amp"], c["upper_to_body"], c["vol_ratio"], c["pos_pct"]))

@@ -1,22 +1,4 @@
 {
-  "date": "2026-11-09",
-  "candidates": [
-    {
-      "symbol": "600793",
-      "name": "宜宾纸业",
-      "date": "2026-11-09",
-      "close": 13.95,
-      "upper_amp": 0.0877,
-      "upper_to_body": 30.5,
-      "vol_ratio": 2.223,
-      "pos_pct": 0.1089,
-      "amount": 179814038.0,
-      "pct_chg": 1.16,
-      "ma20": 14.35,
-      "low_20": 12.58,
-      "comp_path": false,
-      "auditor": "未知",
-      "score": 100.0
-    }
-  ]
+  "date": "2026-11-10",
+  "candidates": []
 }
