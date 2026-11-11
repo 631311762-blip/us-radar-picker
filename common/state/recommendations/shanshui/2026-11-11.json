@@ -1,0 +1,90 @@
+{
+  "date": "2026-11-11",
+  "model": "shanshui",
+  "count": 3,
+  "picks": [
+    {
+      "code": "603967",
+      "name": "中创物流",
+      "close": 12.81,
+      "score": 52.8,
+      "board": "沪市主板",
+      "raw": {
+        "code": "603967",
+        "name": "中创物流",
+        "board": "沪市主板",
+        "price": 12.81,
+        "pct": 2.23,
+        "turnover": 1.31,
+        "market_cap_yi": 44.40800555,
+        "prev_close": 12.53,
+        "trial_high": 12.97,
+        "trial_idx": 35,
+        "span": 24,
+        "drawdown": 12.6,
+        "close_gap": -1.23,
+        "vol_ratio_pull": 0.425,
+        "vr20_now": 1.47,
+        "score": 52.8
+      }
+    },
+    {
+      "code": "300692",
+      "name": "中赋科技",
+      "close": 9.59,
+      "score": 28.0,
+      "board": "创业板",
+      "raw": {
+        "code": "300692",
+        "name": "中赋科技",
+        "board": "创业板",
+        "price": 9.59,
+        "pct": 2.35,
+        "turnover": 5.13,
+        "market_cap_yi": 53.92227952,
+        "prev_close": 9.37,
+        "trial_high": 9.86,
+        "trial_idx": 28,
+        "span": 31,
+        "drawdown": 19.9,
+        "close_gap": -2.74,
+        "vol_ratio_pull": 0.418,
+        "vr20_now": 2.12,
+        "score": 28.0
+      }
+    },
+    {
+      "code": "002876",
+      "name": "三利谱",
+      "close": 31.26,
+      "score": 27.1,
+      "board": "深市主板",
+      "raw": {
+        "code": "002876",
+        "name": "三利谱",
+        "board": "深市主板",
+        "price": 31.26,
+        "pct": 1.76,
+        "turnover": 8.13,
+        "market_cap_yi": 54.35642974,
+        "prev_close": 30.72,
+        "trial_high": 31.87,
+        "trial_idx": 24,
+        "span": 35,
+        "drawdown": 21.6,
+        "close_gap": -1.91,
+        "vol_ratio_pull": 0.484,
+        "vr20_now": 2.01,
+        "score": 27.1
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 774,
+    "universe": 4607,
+    "dropped": 0
+  },
+  "written_at": "2026-11-11T17:00:50+08:00"
+}

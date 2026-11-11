@@ -1,14 +1,14 @@
 {
   "model": "kaizhong",
-  "generated_at": "2026-11-10T17:04:29+08:00",
-  "batches": 0,
-  "samples": 0,
-  "win_rate": null,
+  "generated_at": "2026-11-11T17:31:13+08:00",
+  "batches": 1,
+  "samples": 6,
+  "win_rate": 0.0,
   "by_horizon": {
     "t1": {
-      "samples": 0,
-      "win_rate": null,
-      "avg_return": null
+      "samples": 6,
+      "win_rate": 0.0,
+      "avg_return": 0.0
     },
     "t5": {
       "samples": 0,
@@ -21,5 +21,42 @@
       "avg_return": null
     }
   },
-  "details": []
+  "details": [
+    {
+      "code": "000541",
+      "name": "佛山照明",
+      "date": "2026-11-10",
+      "t1": 0.0
+    },
+    {
+      "code": "603809",
+      "name": "豪能股份",
+      "date": "2026-11-10",
+      "t1": 0.0
+    },
+    {
+      "code": "300885",
+      "name": "海昌新材",
+      "date": "2026-11-10",
+      "t1": 0.0
+    },
+    {
+      "code": "600853",
+      "name": "龙建股份",
+      "date": "2026-11-10",
+      "t1": 0.0
+    },
+    {
+      "code": "301395",
+      "name": "仁信新材",
+      "date": "2026-11-10",
+      "t1": 0.0
+    },
+    {
+      "code": "300310",
+      "name": "宜通世纪",
+      "date": "2026-11-10",
+      "t1": 0.0
+    }
+  ]
 }

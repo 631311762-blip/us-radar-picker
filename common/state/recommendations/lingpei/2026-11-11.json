@@ -1,0 +1,141 @@
+{
+  "date": "2026-11-11",
+  "model": "lingpei",
+  "count": 7,
+  "picks": [
+    {
+      "code": "000869",
+      "name": "张  裕Ａ",
+      "close": null,
+      "score": 91.46,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 91.46,
+        "gap_days": 24,
+        "drop_from_peak": 0.1624,
+        "dev60": 0.004,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-08",
+        "code": "000869",
+        "name": "张  裕Ａ"
+      }
+    },
+    {
+      "code": "601808",
+      "name": "中海油服",
+      "close": null,
+      "score": 73.31,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 73.31,
+        "gap_days": 20,
+        "drop_from_peak": 0.1034,
+        "dev60": 0.0091,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-14",
+        "code": "601808",
+        "name": "中海油服"
+      }
+    },
+    {
+      "code": "600358",
+      "name": "国旅联合",
+      "close": null,
+      "score": 59.8,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 59.8,
+        "gap_days": 28,
+        "drop_from_peak": 0.0903,
+        "dev60": 0.021,
+        "near_ma": "MA60",
+        "trial_date": "2026-09-24",
+        "code": "600358",
+        "name": "国旅联合"
+      }
+    },
+    {
+      "code": "601956",
+      "name": "东贝集团",
+      "close": null,
+      "score": 57.37,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 57.37,
+        "gap_days": 24,
+        "drop_from_peak": 0.206,
+        "dev60": 0.0419,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-08",
+        "code": "601956",
+        "name": "东贝集团"
+      }
+    },
+    {
+      "code": "603727",
+      "name": "博迈科",
+      "close": null,
+      "score": 54.05,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 54.05,
+        "gap_days": 20,
+        "drop_from_peak": 0.1371,
+        "dev60": 0.0324,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-14",
+        "code": "603727",
+        "name": "博迈科"
+      }
+    },
+    {
+      "code": "002093",
+      "name": "国脉科技",
+      "close": null,
+      "score": 47.04,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 47.04,
+        "gap_days": 27,
+        "drop_from_peak": 0.1253,
+        "dev60": 0.0395,
+        "near_ma": "MA60",
+        "trial_date": "2026-09-28",
+        "code": "002093",
+        "name": "国脉科技"
+      }
+    },
+    {
+      "code": "301311",
+      "name": "昆船智能",
+      "close": null,
+      "score": 38.34,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 38.34,
+        "gap_days": 20,
+        "drop_from_peak": 0.2497,
+        "dev60": 0.0497,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-14",
+        "code": "301311",
+        "name": "昆船智能"
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 774,
+    "universe": 4607,
+    "dropped": 0
+  },
+  "written_at": "2026-11-11T17:03:13+08:00"
+}

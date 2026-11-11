@@ -1,0 +1,24 @@
+{
+  "run_date": "2026-11-11",
+  "total_scanned": 4607,
+  "qualified_count": 1,
+  "candidates": [
+    {
+      "symbol": "300600",
+      "name": "国瑞科技",
+      "date": "2026-11-11",
+      "close": 8.83,
+      "upper_amp": 0.0467,
+      "upper_to_body": 8.2,
+      "vol_ratio": 1.988,
+      "pos_pct": 0.0821,
+      "amount": 95471726.0,
+      "pct_chg": 1.61,
+      "ma20": 9.08,
+      "low_20": 8.16,
+      "comp_path": false,
+      "auditor": "未知",
+      "score": 100.0
+    }
+  ]
+}
