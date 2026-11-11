@@ -1,0 +1,79 @@
+{
+  "model_name": "低位上影线模型",
+  "model_id": "low_shadow",
+  "column": "低位",
+  "direction": "偏多",
+  "win_rule": "up",
+  "score_mode": "tier",
+  "version": "v1.0 · 由「低位上影线模型2(双栏) v2.3」拆出，低位栏口径完全不变",
+  "source_model": "low_upper_model2_tracker (v2.3)",
+  "shape": {
+    "upper_body_min": 2.0,
+    "upper_range_min": 0.5,
+    "lower_range_max": 0.25,
+    "upper_pct_min": 0.015,
+    "require_yin": true,
+    "limit_down_pct": -0.095
+  },
+  "position": {
+    "rule": "low_hh60_ratio",
+    "window": 60,
+    "max_ratio": 0.6,
+    "ma20_window": 20,
+    "pos_quant_min": 0.5
+  },
+  "volume": {
+    "unlimited": false,
+    "ma5_window": 5,
+    "ma5_cap": 2.2,
+    "prev_min": 0.5
+  },
+  "score": {
+    "upper_weight": 40,
+    "volume_weight": 30,
+    "position_weight": 30,
+    "upper_cap": 0.04,
+    "position_target": 0.7,
+    "position_span": 0.3,
+    "vol_tiers": {
+      "cap": 1.5,
+      "cap_score": 0.0,
+      "flat_micro_vr": 1.0,
+      "flat_micro_vrp": 1.0,
+      "flat_micro": 30.0,
+      "prev_up_vrp": 1.1,
+      "prev_up": 26.0,
+      "flat_slight_vr_lo": 0.8,
+      "flat_slight": 15.0,
+      "dry_vr": 0.7,
+      "dry": 4.0,
+      "other": 10.0
+    }
+  },
+  "confirm": {
+    "gap_high": 0.005,
+    "gap_low": -0.005,
+    "buy_on": "高开",
+    "note": "次日高开才确认买入，低开放弃"
+  },
+  "settle": {
+    "n": 10,
+    "stop_loss": -5.0,
+    "take_profit": 20.0
+  },
+  "csv_name": "低位上影线模型_候选.csv",
+  "zip_name": "low_shadow_cloud.zip",
+  "task_name": "低位上影线模型 · 云端每日闭环",
+  "task_cron": "0 20 15 * * 1-5",
+  "task_time": "15:20",
+  "_change_log": [
+    {
+      "date": "2026-11-11",
+      "field": "volume.ma5_cap",
+      "from": 1.5,
+      "to": 2.2,
+      "reason": "仅放宽量比上限，其余条件(位置<=60%/阴线/上影门槛)不变",
+      "backtest": "2025-01~2026-10 全市场: T10胜率 61.7%->61.3%, 均值 +4.21%->+4.14%, 样本 3114->3314, 月均 141.5->150.6"
+    }
+  ]
+}
