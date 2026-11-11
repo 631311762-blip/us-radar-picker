@@ -1,0 +1,75 @@
+name: A股流水线保底监控
+# 背景：GitHub 对该仓库的 scheduled workflow 偶发漏跑、且严重延迟
+#       （实测 11-10 延迟49分钟、11-11 延迟47分钟才点火）。
+# 作用：本 watchdog 在主流水线 cron(北京16:05) 之后约75分钟检查当日状态：
+#       - 已成功运行        -> 跳过（无论延迟多久，结果已出）
+#       - 仍在运行(in_progress/queued) -> 跳过（只是延迟，等它跑完，避免双跑）
+#       - 完全没跑 / 仅失败  -> 自动 workflow_dispatch 补跑
+#         （手动事件优先级高于 schedule，不会被 GitHub 队列延迟，立即执行）
+# 注意：watchdog 自身也是 schedule，理论上也可能被 GitHub 延迟/漏跑；但它与主流程
+#       是两个独立定时，同时漏跑的概率远低于单个，作为“保底中的保底”。
+on:
+  schedule:
+    # 北京时间 17:20（UTC 09:20），晚于 主流程cron(16:05)+最大实测延迟(47min) 的安全余量
+    - cron: '20 9 * * 1-5'
+  workflow_dispatch: {}
+
+permissions:
+  actions: write   # 需要调用 workflow dispatch API 补跑主流水线
+  contents: read
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检查今日主流水线状态
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import os, json, urllib.request, datetime
+          repo = os.environ['REPO']; tok = os.environ['GH_TOKEN']
+          today = datetime.datetime.utcnow().strftime('%Y-%m-%d')
+          url = f"https://api.github.com/repos/{repo}/actions/workflows/412216318/runs?per_page=100"
+          req = urllib.request.Request(url, headers={
+              'Authorization': f'Bearer {tok}',
+              'Accept': 'application/vnd.github+json'})
+          data = json.load(urllib.request.urlopen(req))
+          has_success = False
+          has_running = False
+          for r in data['workflow_runs']:
+              if r['created_at'][:10] != today:
+                  continue
+              st, con = r['status'], r.get('conclusion')
+              if st == 'completed' and con == 'success':
+                  has_success = True
+                  print(f"今日已成功运行: run {r['id']} @ {r['created_at']}")
+                  break
+              if st in ('in_progress', 'queued', 'pending', 'requested'):
+                  has_running = True
+                  print(f"今日仍在运行(可能延迟): run {r['id']} {st}")
+          if has_success:
+              decision = 'skip'
+          elif has_running:
+              decision = 'skip'   # 主流程在跑，仅延迟，等其完成，避免双跑
+          else:
+              decision = 'dispatch'
+          print(f"DECISION={decision}")
+          open('/tmp/wd_decision', 'w').write(decision)
+          PY
+      - name: 补跑主流水线（如需要）
+        if: steps.check.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          DEC=$(cat /tmp/wd_decision 2>/dev/null)
+          if [ "$DEC" = "dispatch" ]; then
+            echo "今日主流水线未成功运行，触发 workflow_dispatch 补跑..."
+            gh api -X POST repos/$REPO/actions/workflows/412216318/dispatches -f ref=main
+            echo "已补跑（手动事件，不受 schedule 延迟影响）"
+          else
+            echo "今日主流水线已运行(成功或在途)，无需补跑"
+          fi
