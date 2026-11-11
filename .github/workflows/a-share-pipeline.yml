@@ -117,6 +117,7 @@ jobs:
           git add common/state/reviews 2>/dev/null || true
           git add common/state/params 2>/dev/null || true
           git add common/state/run_summary.json 2>/dev/null || true
+          git add common/state/universe.json 2>/dev/null || true  # 合并流水线样本池（供云盘自动化筛选）
           # 各模型自有台账/归档
           git add shanshui/善水模型_推荐跟踪.csv 2>/dev/null || true
           git add lingpei/state 2>/dev/null || true
