@@ -23,7 +23,8 @@ last_run*
 
 # ===== 共同前置层：当日临时产物（同一 job 内共享即可，无需入库）=====
 common/state/klines/
-common/state/universe.json
+# common/state/universe.json  —— 改为入库：作为「合并流水线样本池」权威源，
+#   供云盘自动化（高位上影线模型等）筛选使用（ST+立信剔除后的全市场样本）
 common/state/meta.json
 
 # ===== 凯众 K 线缓存：由 prefilter 每日预填（东财 fqt=0，新浪同口径）=====
