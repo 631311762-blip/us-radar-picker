@@ -39,6 +39,12 @@
       "enabled": true,
       "settle": false,
       "_note": "自带 回溯/进化/选股/推送/云端备份 的独立子系统，不消费共同前置层 universe/K线缓存；settle=false 跳过公共回溯（它有自己的 feedback 闭环）。"
+    },
+    {
+      "name": "high_shadow",
+      "label": "高位上影线模型（风险观察名单）",
+      "enabled": false,
+      "_note": "云盘自动化运行（与 GitHub Actions 流水线分开定时），消费合并流水线 common/state/universe.json 样本池（ST+立信剔除），在选股入口强制生效；不在本 runner 内执行，故 enabled=false。"
     }
   ]
 }
