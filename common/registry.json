@@ -15,6 +15,13 @@
       "enabled": true
     },
     {
+      "name": "low_shadow2",
+      "label": "低位上影模型2（双栏拆分·低位栏）",
+      "cmd": "python3 low_shadow2/low_shadow2_screener.py --mode review",
+      "enabled": true,
+      "_note": "云端 /workspace/low_shadow_model 同口径（config.json+model_core.py），仅数据入口换共同前置层；与 low_shadow（严格上影线）为两个独立模型。"
+    },
+    {
       "name": "lingpei",
       "label": "领湃模型 B_V2",
       "cmd": "bash -lc 'cd lingpei && python3 _lixin_update.py && python3 领湃模型_每日.py && python3 领湃跟踪修正.py'",

@@ -47,7 +47,7 @@ def universe_for(model):
         return None
     m = (model or "").lower()
 
-    if m == "low_shadow":
+    if m in ("low_shadow", "low_shadow2"):
         # 原格式: [{symbol, name, pct}]
         return [{"symbol": x["code"], "name": x["name"], "pct": x.get("pct", 0)}
                 for x in u]
@@ -127,7 +127,7 @@ def kline_for(code, model, count=None):
         return [{"d": b["date"], "o": b["open"], "c": b["close"],
                  "h": b["high"], "l": b["low"], "v": b["volume"]} for b in bars]
 
-    if m == "low_shadow":
+    if m in ("low_shadow", "low_shadow2"):
         # {date,open,close,high,low,vol}
         return [{"date": b["date"], "open": b["open"], "close": b["close"],
                  "high": b["high"], "low": b["low"], "vol": b["volume"]} for b in bars]
