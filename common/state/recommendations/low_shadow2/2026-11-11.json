@@ -1,0 +1,16 @@
+{
+ "date": "2026-11-11",
+ "model": "low_shadow2",
+ "count": 0,
+ "picks": [],
+ "dropped": [],
+ "extra": {
+  "written_by": "cloud-sandbox(低位上影模型2 同口径), universe=共同前置层权威样本池"
+ },
+ "gate": {
+  "lixin": 774,
+  "universe": 4607,
+  "dropped": 0
+ },
+ "written_at": "2026-11-11T18:21:36+08:00"
+}
