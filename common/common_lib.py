@@ -57,8 +57,18 @@ HEADERS = {
                    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
     "Referer": "https://quote.eastmoney.com/",
 }
-SESSION = requests.Session()
-SESSION.headers.update(HEADERS)
+# requests.Session 不是线程安全的：多线程共用单例会让连接池复用混乱，
+# 表现为随机的 502 / 连接重置。改为每线程独立 Session（thread-local）。
+_SESSION_TLS = threading.local()
+
+
+def _session():
+    s = getattr(_SESSION_TLS, "session", None)
+    if s is None:
+        s = requests.Session()
+        s.headers.update(HEADERS)
+        _SESSION_TLS.session = s
+    return s
 
 EM_KLINE_HOSTS = [
     "push2his.eastmoney.com", "88.push2his.eastmoney.com", "22.push2his.eastmoney.com",
@@ -90,8 +100,10 @@ EM_BOARDS = [
 
 # 全市场 K 线缓存统一抓取的根数（覆盖各模型最大需求：领湃 180 / low_shadow 150）
 KLINE_CACHE_COUNT = 220
-# 批量拉取并发数
-KLINE_WORKERS = 24
+# 批量拉取并发数：云 IP 下 24 并发会直接撞东财 CDN 的 CC 防护，
+# 表现为持续性 502（网关回源失败）。降到 4，并同步放宽 KLINE_BATCH_BUDGET，
+# 避免吞吐不足导致缓存覆盖率下降、触发下游模型告警。
+KLINE_WORKERS = 4
 
 # 批量抓取单请求超时（秒）：云 IP 偶发「挂起」而非「重置」，必须短，否则超时层层
 # 叠加会变成无底洞（一只股票最多 超时×重试×host 数 秒，4000 只轻松跑几小时）。
@@ -109,17 +121,18 @@ def _env_int(name, default, lo=30, hi=3600):
 
 
 # 批量任务硬上限（秒）：超时即放弃剩余（K线缓存本就是优化，模型各自会回退重抓）。
-# 2026-11-13：改为可由 workflow 环境变量覆盖（不改代码即可按需调预算）。
-# 保持默认 300s：新浪 K 线兜底修复后实测 4606 只可在预算内全部命中，
-# 盲目放宽只会延长降级日的前置层耗时，挤占 180 分钟 job 预算。
-KLINE_BATCH_BUDGET = _env_int("KLINE_BATCH_BUDGET", 300)
+# 2026-11-13：可由 workflow 环境变量覆盖（不改代码即可按需调预算）。
+# 并发从 24 降到 4 后，300s 不足以覆盖 4600+ 只，故默认放宽到 900s；
+# 仍远小于 180 分钟 job 预算，且网关错误快速失败 + 早熔断会提前终止东财链路。
+KLINE_BATCH_BUDGET = _env_int("KLINE_BATCH_BUDGET", 900)
 # 列表接口整体抓取的时间上限（秒）：到点即回退快照，避免挂起卡死整条流水线。
 # 300s：东财被云 IP 阻断时每页都要烧满超时，600s 会让前置层白等 10 分钟；
 # 且已有带富字段的基础快照可回退（见 get_universe），早回退反而更准更快。
 LIST_FETCH_DEADLINE = _env_int("LIST_FETCH_DEADLINE", 300)
-# K 线源熔断：东财探测能通过但批量被限流时，连续失败达此数即整体切兜底，
-# 避免 4000+ 只逐只烧满「3 host × 超时 × 重试」把流水线拖成几小时。
-EM_KLINE_CIRCUIT_THRESHOLD = 15
+# K 线源熔断：东财探测能通过但批量被限流/持续 502 时，连续失败达此数即整体
+# 切兜底，避免 4000+ 只逐只烧满「3 host × 超时 × 重试」把流水线拖成几小时。
+# 2026-11-13：15 -> 5，网关类错误快速失败后尽早熔断，别在已拒绝的链路上加压。
+EM_KLINE_CIRCUIT_THRESHOLD = 5
 
 # 最近一次抓取的可观测状态（供 prefilter.py 写 meta.json / 触发降级告警）。
 # 2026-11-13 新增：此前 K 线「成功 297 / 失败 4309」只有一行日志，下游模型
@@ -155,17 +168,36 @@ def universe_status():
 
 
 # ------------------------------------------------------------------ 通用工具
+# 网关/风控类状态码：重试与逐 host 轮换只会给已被拒绝的链路继续加压，
+# 这类错误直接快速失败，由上层熔断切新浪/腾讯兜底。
+_GATEWAY_FAIL_CODES = {403, 418, 429, 502, 503, 504}
+_HTTP_ERR_SEEN = {}
+
+
 def http_json(url, params=None, timeout=15, retry=2, referer=None):
     headers = {"Referer": referer} if referer else None
+    host = url.split("//")[-1].split("/")[0]
     for attempt in range(retry + 1):
         try:
-            r = SESSION.get(url, params=params, headers=headers, timeout=timeout)
+            r = _session().get(url, params=params, headers=headers, timeout=timeout)
             if r.status_code != 200:
+                key = (r.status_code, host)
+                n = _HTTP_ERR_SEEN.get(key, 0) + 1
+                _HTTP_ERR_SEEN[key] = n
+                if n <= 2:      # 限量打印，避免 4600 只 x 多 host 把日志刷爆
+                    body = (r.text or "")[:160].replace("\n", " ")
+                    print("[common] HTTP %s host=%s secid=%s body=%s"
+                          % (r.status_code, host,
+                             (params or {}).get("secid", "-"), body))
+                if r.status_code in _GATEWAY_FAIL_CODES:
+                    return None
                 raise RuntimeError("HTTP %s" % r.status_code)
             return r.json()
-        except Exception:
+        except Exception as e:
             if attempt < retry:
                 time.sleep(0.4 * (attempt + 1))
+            else:
+                print("[common] 请求异常 host=%s err=%s" % (host, e))
     return None
 
 
@@ -625,7 +657,7 @@ def _fetch_one_kline_tx(code, count=KLINE_CACHE_COUNT, fqt=1):
     # 自己发请求以识别 WAF 拦截：腾讯对云 IP 会返回 501 跳转页（非 JSON），
     # http_json 只会当普通失败并重试，导致每只白等 超时×重试。首次识别即熔断。
     try:
-        r = SESSION.get("https://%s/appstock/app/fqkline/get" % TX_KLINE_HOST,
+        r = _session().get("https://%s/appstock/app/fqkline/get" % TX_KLINE_HOST,
                         params={"param": "%s,%s,,,%d," % (sid, kind, count)},
                         timeout=4)
         if r.status_code in (403, 501):
@@ -672,7 +704,7 @@ def _fetch_one_kline_sina(code, count=KLINE_CACHE_COUNT, fqt=1):
     txt = None
     for _attempt in range(2):
         try:
-            r = SESSION.get(url, headers={"User-Agent": HEADERS["User-Agent"],
+            r = _session().get(url, headers={"User-Agent": HEADERS["User-Agent"],
                                           "Referer": "https://finance.sina.com.cn"},
                             timeout=BULK_TIMEOUT)
             if r.status_code == 200 and r.text:
@@ -750,7 +782,7 @@ def _refresh_prices_tx(codes, batch=80):
         chunk = codes[i:i + batch]
         q = ",".join(tx_secid_of(c) for c in chunk)
         try:
-            r = SESSION.get("https://%s/q=%s" % (TX_QUOTE_HOST, q),
+            r = _session().get("https://%s/q=%s" % (TX_QUOTE_HOST, q),
                             headers={"User-Agent": HEADERS["User-Agent"],
                                      "Referer": "https://gu.qq.com/"},
                             timeout=8)
