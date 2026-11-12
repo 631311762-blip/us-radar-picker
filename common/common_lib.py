@@ -266,10 +266,17 @@ def get_universe(verbose=True, apply_lixin=True):
         # 实时结果完整 → 刷新快照，供后续接口失效时兜底
         save_base_universe(raw)
     elif len(raw) > 0:
-        # 降级日：接口慢/部分可达，只拉到部分股票。仍继续跑（避免整条流水线瘫痪），
-        # 但不拿「部分结果」刷新快照，避免污染兜底数据。
-        print("[common] 实时列表偏少（%d 只，疑似接口降级），仍继续（不刷新快照）"
-              % len(raw))
+        # 降级日：接口只拉到部分股票。与已提交的完整快照比较，取更全的一份，
+        # 避免拿残缺样本池硬跑（结果静默失真）；绝不拿部分结果刷新快照。
+        snap = load_base_universe()
+        if len(snap) > len(raw):
+            print("[common] 实时列表偏少（%d 只，疑似接口降级），回退基础快照 %d 只"
+                  % (len(raw), len(snap)))
+            raw = snap
+            used_fallback = True
+        else:
+            print("[common] 实时列表偏少（%d 只），快照不更全，仍继续（不刷新快照）"
+                  % len(raw))
     else:
         # 实时一只没拉到 → 回退快照；无任何数据则样本池为空（交由 watchdog 重试）
         snap = load_base_universe()
