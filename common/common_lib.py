@@ -100,8 +100,12 @@ BULK_RETRY = 1
 # 批量任务硬上限（秒）：超时即放弃剩余（K线缓存本就是优化，模型各自会回退重抓）。
 KLINE_BATCH_BUDGET = 300
 # 列表接口整体抓取的时间上限（秒）：到点即回退快照，避免挂起卡死整条流水线。
-# 放宽到 600：东财降级（慢）时多攒股票，最大化降级日也能凑出可用样本池的概率。
-LIST_FETCH_DEADLINE = 600
+# 300s：东财被云 IP 阻断时每页都要烧满超时，600s 会让前置层白等 10 分钟；
+# 且已有带富字段的基础快照可回退（见 get_universe），早回退反而更准更快。
+LIST_FETCH_DEADLINE = 300
+# K 线源熔断：东财探测能通过但批量被限流时，连续失败达此数即整体切兜底，
+# 避免 4000+ 只逐只烧满「3 host × 超时 × 重试」把流水线拖成几小时。
+EM_KLINE_CIRCUIT_THRESHOLD = 15
 
 _lock = threading.Lock()
 
@@ -208,7 +212,22 @@ def _fetch_raw_universe(attempts=3, backoff=20, deadline=LIST_FETCH_DEADLINE):
                     nm = x.get("f14", "") or ""
                     if not code or price <= 0:
                         continue
-                    rows.append({"code": code, "name": nm, "board": name})
+                    # 必须保留东财原始富字段：get_universe() 用 f2/f3/f5/f6/f8/
+                    # f18/f20/f21/f10 构建样本池，只存 code/name/board 会让
+                    # price/pct/amount/量比 全部归零，下游模型筛选静默失真。
+                    # 同时保证 save_base_universe 写出的快照与种入快照结构一致。
+                    rows.append({
+                        "code": code, "name": nm, "board": name,
+                        "f2": price,
+                        "f3": _to_float(x.get("f3")),      # 涨跌幅 %
+                        "f5": _to_float(x.get("f5")),      # 成交量（手）
+                        "f6": _to_float(x.get("f6")),      # 成交额（元）
+                        "f8": _to_float(x.get("f8")),      # 换手率 %
+                        "f10": _to_float(x.get("f10")),    # 量比
+                        "f18": _to_float(x.get("f18")),    # 昨收
+                        "f20": _to_float(x.get("f20")),    # 总市值
+                        "f21": _to_float(x.get("f21")),    # 流通市值
+                    })
                 if len(diff) < 100 or (total and pn * 100 >= total):
                     break
                 pn += 1
@@ -223,7 +242,18 @@ def _fetch_raw_universe(attempts=3, backoff=20, deadline=LIST_FETCH_DEADLINE):
 
 
 def save_base_universe(rows):
-    """把成功拉到的原始股票列表落盘为快照（下次接口失效时兜底）。"""
+    """把成功拉到的原始股票列表落盘为快照（下次接口失效时兜底）。
+
+    防污染：只有带价格富字段的 rows 才能覆盖快照。历史版本曾因
+    _fetch_raw_universe 只存 3 个字段，把种入的富字段快照刷成「无价格」版本，
+    导致降级日回退后整池 price=0、模型筛选静默失真。
+    """
+    if not rows:
+        return
+    probe = rows[:50]
+    if not any(_to_float(r.get("f2")) > 0 for r in probe):
+        print("[common] 实时列表缺价格字段，跳过刷新基础快照（避免污染富字段快照）")
+        return
     try:
         with open(BASE_UNIVERSE_JSON, "w", encoding="utf-8") as fh:
             json.dump({"generated_at": datetime.now(BJT).isoformat(timespec="seconds"),
@@ -262,15 +292,16 @@ def get_universe(verbose=True, apply_lixin=True):
 
     raw = _fetch_raw_universe()
     used_fallback = False
-    if len(raw) >= UNIVERSE_SANITY_MIN:
-        # 实时结果完整 → 刷新快照，供后续接口失效时兜底
+    snap = load_base_universe()
+    # 只有「实时结果不比已提交的完整快照少」才允许刷新快照。
+    # UNIVERSE_SANITY_MIN(1000) 只代表接口没完全挂：若降级日实时拉到 1500 只
+    # 就覆盖 4607 只快照，会造成样本池静默缩水（历史缺陷）。降级日一律回退
+    # 更全的快照，绝不拿部分结果刷新快照。
+    if len(raw) >= UNIVERSE_SANITY_MIN and len(raw) >= int(len(snap) * 0.9):
         save_base_universe(raw)
-    elif len(raw) > 0:
-        # 降级日：接口只拉到部分股票。与已提交的完整快照比较，取更全的一份，
-        # 避免拿残缺样本池硬跑（结果静默失真）；绝不拿部分结果刷新快照。
-        snap = load_base_universe()
+    elif raw:
         if len(snap) > len(raw):
-            print("[common] 实时列表偏少（%d 只，疑似接口降级），回退基础快照 %d 只"
+            print("[common] 实时列表偏少（%d 只 < 快照 %d 只，疑似接口降级），回退基础快照"
                   % (len(raw), len(snap)))
             raw = snap
             used_fallback = True
@@ -279,7 +310,6 @@ def get_universe(verbose=True, apply_lixin=True):
                   % len(raw))
     else:
         # 实时一只没拉到 → 回退快照；无任何数据则样本池为空（交由 watchdog 重试）
-        snap = load_base_universe()
         if snap:
             print("[common] 实时列表异常（0 只），回退基础股票池快照 %d 只"
                   % len(snap))
@@ -324,6 +354,29 @@ def get_universe(verbose=True, apply_lixin=True):
             "float_mktcap": _to_float(r.get("f21")),
             "vr": _to_float(r.get("f10")),
         })
+    # 价格健全性兜底：若样本池绝大多数价格为 0（实时列表丢字段 / 旧快照被污染 /
+    # 腾讯补价失败），用带富字段的基础快照按代码补齐，避免下游模型拿着全 0 的
+    # 价格、成交额、量比静默跑出失真结果。
+    if rows:
+        priced = sum(1 for r in rows if r["price"] > 0)
+        if priced * 2 < len(rows):
+            smap = {str(r.get("code", "")).zfill(6): r for r in load_base_universe()}
+            _fields = (("price", "f2"), ("pct", "f3"), ("volume", "f5"),
+                       ("amount", "f6"), ("turnover", "f8"), ("vr", "f10"),
+                       ("prev_close", "f18"), ("mktcap", "f20"),
+                       ("float_mktcap", "f21"))
+            filled = 0
+            for r in rows:
+                if r["price"] > 0:
+                    continue
+                s = smap.get(r["code"])
+                if not s or _to_float(s.get("f2")) <= 0:
+                    continue
+                for dst, src in _fields:
+                    r[dst] = _to_float(s.get(src))
+                filled += 1
+            print("[common] 样本池价格异常（仅 %d/%d 有价），用基础快照补齐 %d 只"
+                  % (priced, len(rows), filled))
     if verbose:
         print("[common] 全市场样本池：%d 只（ST/次新剔除 %d，立信剔除 %d）"
               % (len(rows), st_drop, lixin_drop))
@@ -381,6 +434,7 @@ def tx_secid_of(code):
 # K 线直接走腾讯兜底，避免在 4000+ 只上每只都烧东财超时（无底洞卡死）。
 _EM_PROBED = False
 _EM_AVAILABLE = True
+_em_fail_streak = 0      # 东财连续失败计数（批量熔断用，受 _lock 保护）
 
 
 def _em_kline_available():
@@ -521,10 +575,21 @@ def _fetch_one_kline(code, count=KLINE_CACHE_COUNT, fqt=1):
     「无近期除权」时等价；除权股在降级日略有偏差，属可接受的兜底近似（远优于无
     数据导致整条流水线崩溃）。
     """
+    global _em_fail_streak, _EM_AVAILABLE
     if _em_kline_available():
         bars = _fetch_one_kline_em(code, count=count, fqt=fqt)
         if bars:
+            with _lock:
+                _em_fail_streak = 0
             return bars
+        # 探测能过但批量被限流是东财对云 IP 的典型症状：此时逐只重试只会把
+        # 4000+ 只 × 超时叠加成几小时。连续失败到阈值即整体熔断，后续直接兜底。
+        with _lock:
+            _em_fail_streak += 1
+            if _em_fail_streak >= EM_KLINE_CIRCUIT_THRESHOLD and _EM_AVAILABLE:
+                _EM_AVAILABLE = False
+                print("[common] 东财 K 线连续失败 %d 次，熔断切新浪/腾讯兜底"
+                      % _em_fail_streak)
     bars = _fetch_one_kline_sina(code, count=count)
     if bars:
         return bars
@@ -693,7 +758,8 @@ def _csv_last_date(path):
 
 
 def cache_kaizhong_klines(universe, count=KAIZHONG_LOOKBACK,
-                          workers=KLINE_WORKERS, quote_date=None, verbose=True):
+                          workers=KLINE_WORKERS, quote_date=None, verbose=True,
+                          budget=KLINE_BATCH_BUDGET):
     """为凯众预填「不复权」K 线 CSV，使其 update_cache 零网络抓取。
 
     实测依据（2026-11-10，180 根逐日比对 6 只样本）：
@@ -709,7 +775,8 @@ def cache_kaizhong_klines(universe, count=KAIZHONG_LOOKBACK,
     GitHub Actions 全新 runner 会 checkout 到仓库里的旧缓存，必须重写为当日，
     否则凯众 update_cache 判定末日过期仍会全量重抓（这正是原先慢的根源）。
 
-    返回 (成功数, 失败数)。失败个股由凯众自行回退新浪抓取，不影响正确性。
+    返回 (成功数, 未预填数=抓取失败+超预算跳过)。这些个股由凯众自行回退
+    新浪抓取，不影响正确性；预算用于保证前置层不会拖垮整条流水线。
     """
     if quote_date is None:
         _, quote_date, _ = check_trading_day()
@@ -735,9 +802,15 @@ def cache_kaizhong_klines(universe, count=KAIZHONG_LOOKBACK,
     if verbose:
         print("[common] 凯众不复权K线：需预填 %d 只（已是当日 %d 只）→ %s"
               % (len(targets), fresh, d))
-    ok = fail = 0
+    ok = fail = skipped = 0
+    deadline = time.time() + budget
 
     def work(code):
+        # 硬时间预算：与 fetch_klines_batch 对齐。此前本函数没有预算，
+        # 东财挂起时 4000+ 只逐只烧超时会让前置层卡死数小时，
+        # 进而拖垮整条统一流水线（run_all 根本轮不到执行）。
+        if time.time() > deadline:
+            return None
         bars = _fetch_one_kline(code, count=count, fqt=0)
         if not bars or len(bars) < 6:
             return False
@@ -751,14 +824,22 @@ def cache_kaizhong_klines(universe, count=KAIZHONG_LOOKBACK,
         return True
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        for r in ex.map(work, targets):
-            if r:
+        futs = {ex.submit(work, c): c for c in targets}
+        for fut in as_completed(futs):
+            try:
+                r = fut.result()
+            except Exception:
+                r = False
+            if r is True:
                 ok += 1
+            elif r is None:
+                skipped += 1
             else:
                 fail += 1
     if verbose:
-        print("[common] 凯众不复权K线完成：成功 %d，失败 %d（失败者凯众自行回退）" % (ok, fail))
-    return ok, fail
+        print("[common] 凯众不复权K线完成：成功 %d，失败 %d，超预算跳过 %d"
+              "（失败/跳过者凯众自行回退）" % (ok, fail, skipped))
+    return ok, fail + skipped
 
 
 # ------------------------------------------------------------------ 下游读取入口
