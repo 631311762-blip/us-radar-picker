@@ -92,7 +92,8 @@ BULK_RETRY = 1
 # 批量任务硬上限（秒）：超时即放弃剩余（K线缓存本就是优化，模型各自会回退重抓）。
 KLINE_BATCH_BUDGET = 300
 # 列表接口整体抓取的时间上限（秒）：到点即回退快照，避免挂起卡死整条流水线。
-LIST_FETCH_DEADLINE = 120
+# 放宽到 600：东财降级（慢）时多攒股票，最大化降级日也能凑出可用样本池的概率。
+LIST_FETCH_DEADLINE = 600
 
 _lock = threading.Lock()
 
@@ -147,8 +148,10 @@ def _is_hard_excluded(name):
 # 基础股票池快照（提交进仓库，跨 runner 持久化）：东财 clist 列表接口对云 IP
 # 偶发阻断/限流，实时拉取失败时回退此快照，避免整条流水线崩溃。
 BASE_UNIVERSE_JSON = os.path.join(STATE_DIR, "base_universe.json")
-# 全A 剔除 ST/立信后正常应 >3000；低于此值视为接口拉取失败，启用兜底/重试。
-UNIVERSE_SANITY_MIN = 1500
+# 全A 剔除 ST/立信后正常应 >3000；低于此值视为接口拉取「明显失败」。
+# 注意：仅用于「是否刷新快照」的阈值——降级日即使只拉到部分（>0），也允许继续跑
+# （见 get_universe 的 partial 分支），只是不拿部分结果污染快照。
+UNIVERSE_SANITY_MIN = 1000
 
 
 def _fetch_raw_universe(attempts=3, backoff=20, deadline=LIST_FETCH_DEADLINE):
@@ -251,11 +254,20 @@ def get_universe(verbose=True, apply_lixin=True):
 
     raw = _fetch_raw_universe()
     used_fallback = False
-    if len(raw) < UNIVERSE_SANITY_MIN:
+    if len(raw) >= UNIVERSE_SANITY_MIN:
+        # 实时结果完整 → 刷新快照，供后续接口失效时兜底
+        save_base_universe(raw)
+    elif len(raw) > 0:
+        # 降级日：接口慢/部分可达，只拉到部分股票。仍继续跑（避免整条流水线瘫痪），
+        # 但不拿「部分结果」刷新快照，避免污染兜底数据。
+        print("[common] 实时列表偏少（%d 只，疑似接口降级），仍继续（不刷新快照）"
+              % len(raw))
+    else:
+        # 实时一只没拉到 → 回退快照；无任何数据则样本池为空（交由 watchdog 重试）
         snap = load_base_universe()
         if snap:
-            print("[common] 实时列表异常（%d 只），回退基础股票池快照 %d 只"
-                  % (len(raw), len(snap)))
+            print("[common] 实时列表异常（0 只），回退基础股票池快照 %d 只"
+                  % len(snap))
             raw = snap
             used_fallback = True
         else:
@@ -263,9 +275,6 @@ def get_universe(verbose=True, apply_lixin=True):
             if verbose:
                 print("[common] 全市场样本池：0 只（ST/次新剔除 0，立信剔除 0）")
             return []
-    # 实时成功（非兜底）且结果完整 → 刷新快照，供后续接口失效时兜底
-    if not used_fallback and len(raw) >= UNIVERSE_SANITY_MIN:
-        save_base_universe(raw)
 
     rows, seen = [], set()
     for r in raw:
