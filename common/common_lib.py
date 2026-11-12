@@ -65,8 +65,8 @@ EM_KLINE_HOSTS = [
 ]
 EM_LIST_HOSTS = [
     "push2.eastmoney.com", "82.push2.eastmoney.com", "22.push2.eastmoney.com",
-    "33.push2his.eastmoney.com", "48.push2his.eastmoney.com", "72.push2his.eastmoney.com",
-    "1.push2.eastmoney.com",
+    "1.push2.eastmoney.com", "7.push2.eastmoney.com", "15.push2.eastmoney.com",
+    "112.push2.eastmoney.com",
 ]
 EM_UT = "bd1d9ddb04089700cf9c27f6f7426281"   # 列表接口专用 ut（已验证有效）
 EM_KUT = "fa5fd1943c7b386f172d6893dbfba10b"  # K线接口 ut
@@ -84,6 +84,15 @@ EM_BOARDS = [
 KLINE_CACHE_COUNT = 220
 # 批量拉取并发数
 KLINE_WORKERS = 24
+
+# 批量抓取单请求超时（秒）：云 IP 偶发「挂起」而非「重置」，必须短，否则超时层层
+# 叠加会变成无底洞（一只股票最多 超时×重试×host 数 秒，4000 只轻松跑几小时）。
+BULK_TIMEOUT = 8
+BULK_RETRY = 1
+# 批量任务硬上限（秒）：超时即放弃剩余（K线缓存本就是优化，模型各自会回退重抓）。
+KLINE_BATCH_BUDGET = 300
+# 列表接口整体抓取的时间上限（秒）：到点即回退快照，避免挂起卡死整条流水线。
+LIST_FETCH_DEADLINE = 120
 
 _lock = threading.Lock()
 
@@ -142,32 +151,40 @@ BASE_UNIVERSE_JSON = os.path.join(STATE_DIR, "base_universe.json")
 UNIVERSE_SANITY_MIN = 1500
 
 
-def _fetch_raw_universe(attempts=3, backoff=20):
+def _fetch_raw_universe(attempts=3, backoff=20, deadline=LIST_FETCH_DEADLINE):
     """从东财 clist 拉全市场原始股票列表（code/name/board），不含任何剔除。
 
-    对「云 IP 偶发阻断/限流」做多层退避：单 host 失败重试(retry=2) + 整轮
-    拉取偏少时退避重跑。返回原始 rows；全部失败返回 []。
+    对「云 IP 偶发阻断/限流/挂起」做多层退避：单 host 短超时重试 + 整轮
+    拉取偏少时退避重跑；并设整体时间上限 deadline，到点即回退快照，
+    避免「挂起」型故障把整条流水线卡死成无底洞。返回原始 rows；全部失败返回 []。
     """
     fields = "f2,f3,f5,f6,f8,f10,f12,f13,f14,f15,f16,f17,f18,f20,f21"
+    start = time.time()
     for attempt in range(attempts + 1):
         rows = []
         for name, fs in EM_BOARDS:
+            if time.time() - start > deadline:
+                print("[common] 列表抓取已超 %ds 上限，提前结束本轮" % deadline)
+                return rows
             pn = 1
             while True:
+                if time.time() - start > deadline:
+                    print("[common] 列表抓取已超 %ds 上限，提前结束本轮" % deadline)
+                    return rows
                 params = {
                     "pn": pn, "pz": 100, "po": 1, "np": 1, "fid": "f3",
                     "fs": fs, "fields": fields, "ut": EM_UT, "fltt": 2, "invt": 2,
                 }
                 data = {}
-                hosts = EM_LIST_HOSTS[:]
+                hosts = EM_LIST_HOSTS[:4]   # 只试前 4 个 host，减少挂起叠加
                 random.shuffle(hosts)
                 for host in hosts:
                     j = http_json("https://%s/api/qt/clist/get" % host, params=params,
-                                  timeout=15, retry=2)
+                                  timeout=BULK_TIMEOUT, retry=BULK_RETRY)
                     data = (j or {}).get("data") or {}
                     if data.get("diff"):
                         break
-                    time.sleep(0.3)
+                    time.sleep(0.2)
                 diff = data.get("diff") or []
                 if isinstance(diff, dict):
                     diff = list(diff.values())
@@ -333,9 +350,9 @@ def _fetch_one_kline(code, count=KLINE_CACHE_COUNT, fqt=1):
     }
     hosts = EM_KLINE_HOSTS[:]
     random.shuffle(hosts)
-    for host in hosts[:4]:
+    for host in hosts[:3]:
         j = http_json("https://%s/api/qt/stock/kline/get" % host, params=params,
-                      timeout=12, retry=1)
+                      timeout=BULK_TIMEOUT, retry=BULK_RETRY)
         rows = ((j or {}).get("data") or {}).get("klines") or []
         bars = []
         for s in rows:
@@ -397,10 +414,11 @@ def _read_kline_csv(code, count=None):
 
 
 def fetch_klines_batch(universe, count=KLINE_CACHE_COUNT, workers=KLINE_WORKERS,
-                       skip_existing=True, verbose=True):
+                       skip_existing=True, verbose=True, budget=KLINE_BATCH_BUDGET):
     """批量把全市场 K 线缓存到本地（共享给下游模型）。已存在且足够的跳过。
 
-    返回 (成功数, 失败数)。
+    返回 (成功数, 失败数)。本步骤是「提速优化」而非必需：设硬性时间预算 budget，
+    超时即放弃剩余（模型各自会回退重抓），避免东财挂起时把整条流水线卡死。
     """
     targets = []
     for u in universe:
@@ -411,14 +429,17 @@ def fetch_klines_batch(universe, count=KLINE_CACHE_COUNT, workers=KLINE_WORKERS,
         targets.append(code)
 
     if verbose:
-        print("[common] K线缓存：需新拉 %d 只（已缓存跳过 %d 只）"
-              % (len(targets), len(universe) - len(targets)))
+        print("[common] K线缓存：需新拉 %d 只（已缓存跳过 %d 只），预算 %ds"
+              % (len(targets), len(universe) - len(targets), budget))
 
-    ok = fail = 0
+    ok = fail = skip = 0
     done = 0
     total = len(targets)
+    deadline = time.time() + budget
 
     def work(code):
+        if time.time() > deadline:
+            return None          # 超预算，跳过（不抓）
         bars = _fetch_one_kline(code, count=count)
         if bars:
             _write_kline_csv(code, bars)
@@ -429,21 +450,22 @@ def fetch_klines_batch(universe, count=KLINE_CACHE_COUNT, workers=KLINE_WORKERS,
         futs = {ex.submit(work, c): c for c in targets}
         for fut in as_completed(futs):
             try:
-                if fut.result():
-                    with _lock:
-                        ok += 1
-                else:
-                    with _lock:
-                        fail += 1
+                res = fut.result()
             except Exception:
-                with _lock:
-                    fail += 1
+                res = False
+            if res is True:
+                ok += 1
+            elif res is False:
+                fail += 1
+            else:
+                skip += 1       # 超预算跳过
             done += 1
             if verbose and done % 200 == 0:
-                print("[common] K线缓存进度 %d/%d  成功 %d 失败 %d"
-                      % (done, total, ok, fail))
+                print("[common] K线缓存进度 %d/%d  成功 %d 失败 %d 跳过 %d"
+                      % (done, total, ok, fail, skip))
     if verbose:
-        print("[common] K线缓存完成：成功 %d，失败 %d" % (ok, fail))
+        print("[common] K线缓存完成：成功 %d，失败 %d，跳过 %d（预算 %ds）"
+              % (ok, fail, skip, budget))
     return ok, fail
 
 
