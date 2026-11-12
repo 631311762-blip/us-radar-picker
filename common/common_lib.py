@@ -435,6 +435,7 @@ def tx_secid_of(code):
 _EM_PROBED = False
 _EM_AVAILABLE = True
 _em_fail_streak = 0      # 东财连续失败计数（批量熔断用，受 _lock 保护）
+_TX_WAF_BLOCKED = False  # 腾讯 WAF 拦截熔断（云 IP 常见 501）
 
 
 def _em_kline_available():
@@ -502,11 +503,27 @@ def _fetch_one_kline_tx(code, count=KLINE_CACHE_COUNT, fqt=1):
     字段顺序与东财一致：[日期,开,收,高,低,成交量(手)]，成交量单位同为「手」，
     故下游模型无需任何改动。fqt=1→前复权(qfqday)，fqt=0→不复权(day)。
     """
+    global _TX_WAF_BLOCKED
+    if _TX_WAF_BLOCKED:
+        return None
     kind = "qfqday" if fqt else "day"
     sid = tx_secid_of(code)
-    j = http_json("https://%s/appstock/app/fqkline/get" % TX_KLINE_HOST,
-                  params={"param": "%s,%s,,,%d," % (sid, kind, count)},
-                  timeout=BULK_TIMEOUT, retry=BULK_RETRY)
+    # 自己发请求以识别 WAF 拦截：腾讯对云 IP 会返回 501 跳转页（非 JSON），
+    # http_json 只会当普通失败并重试，导致每只白等 超时×重试。首次识别即熔断。
+    try:
+        r = SESSION.get("https://%s/appstock/app/fqkline/get" % TX_KLINE_HOST,
+                        params={"param": "%s,%s,,,%d," % (sid, kind, count)},
+                        timeout=4)
+        if r.status_code in (403, 501):
+            _TX_WAF_BLOCKED = True
+            print("[common] 腾讯 K 线被 WAF 拦截（HTTP %s），后续跳过该兜底源"
+                  % r.status_code)
+            return None
+        if r.status_code != 200:
+            return None
+        j = r.json()
+    except Exception:
+        return None
     node = ((j or {}).get("data") or {}).get(sid) or {}
     rows = (node.get(kind) or node.get("day") or node.get("qfqday")) or []
     bars = []
@@ -534,18 +551,30 @@ def _fetch_one_kline_sina(code, count=KLINE_CACHE_COUNT, fqt=1):
     fqt 参数仅东财前/不复权有意义，新浪固定不复权，故忽略 fqt。
     """
     sym = tx_secid_of(code)      # sh/sz/bj 前缀，与新浪代码一致
-    url = ("http://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_=/"
+    # 走 HTTPS：部分云环境会拦明文 HTTP。
+    url = ("https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_=/"
            "CN_MarketDataService.getKLineData?symbol=" + sym +
            "&scale=240&ma=no&datalen=" + str(count))
-    try:
-        r = SESSION.get(url, headers={"User-Agent": HEADERS["User-Agent"],
-                                      "Referer": "https://finance.sina.com.cn"},
-                        timeout=BULK_TIMEOUT)
-        txt = r.text
-    except Exception:
+    txt = None
+    for _attempt in range(2):
+        try:
+            r = SESSION.get(url, headers={"User-Agent": HEADERS["User-Agent"],
+                                          "Referer": "https://finance.sina.com.cn"},
+                            timeout=BULK_TIMEOUT)
+            if r.status_code == 200 and r.text:
+                txt = r.text
+                break
+        except Exception:
+            pass
+        time.sleep(0.25)
+    if not txt:
         return None
-    if not txt or "location.href" in txt:
-        return None
+    # 【重要】新浪正常响应开头固定带一段注释：
+    #   /*<script>location.href='//sina.com';</script>*/
+    # 历史版本用 `if "location.href" in txt: return None` 判反爬，
+    # 结果把 **每一次正常响应都误杀**，导致东财熔断后兜底 100% 失败
+    # （2026-11-12 实测 K 线缓存仅 297/4606 成功）。
+    # 正确判据是「能否提取到有效 JSON 数组」，而不是任何字符串黑名单。
     m = re.search(r"\((\[.*\])\)", txt, re.S)
     if not m:
         return None
