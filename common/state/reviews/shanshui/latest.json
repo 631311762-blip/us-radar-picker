@@ -1,14 +1,14 @@
 {
   "model": "shanshui",
-  "generated_at": "2026-11-11T17:31:13+08:00",
-  "batches": 1,
-  "samples": 1,
-  "win_rate": 1.0,
+  "generated_at": "2026-11-12T22:46:59+08:00",
+  "batches": 2,
+  "samples": 0,
+  "win_rate": null,
   "by_horizon": {
     "t1": {
-      "samples": 1,
-      "win_rate": 1.0,
-      "avg_return": 0.0418
+      "samples": 0,
+      "win_rate": null,
+      "avg_return": null
     },
     "t5": {
       "samples": 0,
@@ -21,12 +21,5 @@
       "avg_return": null
     }
   },
-  "details": [
-    {
-      "code": "600609",
-      "name": "金杯汽车",
-      "date": "2026-11-10",
-      "t1": 0.0418
-    }
-  ]
+  "details": []
 }

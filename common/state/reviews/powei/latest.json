@@ -1,0 +1,25 @@
+{
+  "model": "powei",
+  "generated_at": "2026-11-12T22:46:59+08:00",
+  "batches": 0,
+  "samples": 0,
+  "win_rate": null,
+  "by_horizon": {
+    "t1": {
+      "samples": 0,
+      "win_rate": null,
+      "avg_return": null
+    },
+    "t5": {
+      "samples": 0,
+      "win_rate": null,
+      "avg_return": null
+    },
+    "t10": {
+      "samples": 0,
+      "win_rate": null,
+      "avg_return": null
+    }
+  },
+  "details": []
+}
