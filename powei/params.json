@@ -1,0 +1,15 @@
+{
+  "model": "powei",
+  "const": {
+    "WIN": 80,
+    "RANGE_MAX": 0.4,
+    "TOUCH_MIN": 3,
+    "BREAK_PCT": 0.98,
+    "RECLAIM_WIN": 12,
+    "RECLAIM_PCT": 1.0,
+    "MAX_AGE": 3,
+    "TOP_N": 30,
+    "KLINE_COUNT": 330
+  },
+  "updated_at": "2026-11-12 18:23"
+}

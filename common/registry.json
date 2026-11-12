@@ -40,6 +40,13 @@
       "enabled": true
     },
     {
+      "name": "powei",
+      "label": "破位后上涨模型（假破位收复）",
+      "cmd": "python3 powei/run.py",
+      "enabled": true,
+      "_note": "收盘后全市场扫描：横盘水平支撑→假破位→N日内收复，博反弹信号，价格行为优先于量能。消费共同前置层(ST/立信剔除+共享K线)，经 ctx.record 落盘 common/state/recommendations/powei/ 实现与其它模型区分；自有台账回写 powei/state/。"
+    },
+    {
       "name": "zhushanglang",
       "label": "主升浪 V4",
       "cmd": "python3 stock-v3/daily_v3.py",

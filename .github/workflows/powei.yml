@@ -1,0 +1,54 @@
+name: 破位后上涨模型每日流程
+
+on:
+  # UTC 08:50 = 北京时间 16:50，周一至周五收盘后（晚于各模型，避免与其它定时重叠）
+  - cron: "50 8 * * 1-5"
+  # push 触发：仅监听脚本/依赖/本 workflow 变更，不含 powei/state/**，避免状态回写形成循环
+  push:
+    paths:
+      - "powei/run.py"
+      - "powei/requirements.txt"
+      - ".github/workflows/powei.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: powei
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        working-directory: powei
+        run: pip install -r requirements.txt
+
+      - name: 运行破位后上涨模型
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          STATE_DIR: powei/state
+        working-directory: powei
+        run: |
+          mkdir -p state
+          python3 run.py
+
+      - name: 回写状态（供次日复盘 / 回溯）
+        if: always()
+        run: |
+          git config user.name "powei-bot"
+          git config user.email "powei-bot@users.noreply.github.com"
+          git add powei/state
+          git commit -m "powei state: $(date -u +%F)" || echo "无状态变更"
+          git push || echo "推送状态失败（不影响选股）"
