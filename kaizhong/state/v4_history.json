@@ -27,7 +27,7 @@
     "hit_dates": [
       "2026-08-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -58,7 +58,7 @@
     "hit_dates": [
       "2026-08-04"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -89,7 +89,7 @@
     "hit_dates": [
       "2026-08-04"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -120,7 +120,7 @@
     "hit_dates": [
       "2026-08-04"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -151,7 +151,7 @@
     "hit_dates": [
       "2026-08-04"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -182,7 +182,7 @@
     "hit_dates": [
       "2026-08-04"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -208,12 +208,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -0.33,
-    "note": "提示日收盘买入 9.15，现价 9.12",
+    "ret": -2.84,
+    "note": "提示日收盘买入 9.15，现价 8.89",
     "hit_dates": [
       "2026-08-04"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -239,12 +239,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -17.25,
-    "note": "提示日收盘买入 5.97，现价 4.94",
+    "ret": -19.77,
+    "note": "提示日收盘买入 5.97，现价 4.79",
     "hit_dates": [
       "2026-08-05"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -275,7 +275,7 @@
     "hit_dates": [
       "2026-08-06"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -338,7 +338,7 @@
       "2026-08-06",
       "2026-08-07"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -395,12 +395,12 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 5.4,
-    "note": "提示日收盘买入 12.97，现价 13.67",
+    "ret": 3.32,
+    "note": "提示日收盘买入 12.97，现价 13.40",
     "hit_dates": [
       "2026-08-07"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -426,12 +426,12 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 5.22,
-    "note": "提示日收盘买入 9.97，现价 10.49",
+    "ret": 5.32,
+    "note": "提示日收盘买入 9.97，现价 10.50",
     "hit_dates": [
       "2026-08-10"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -462,7 +462,7 @@
     "hit_dates": [
       "2026-08-10"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -524,7 +524,7 @@
     "hit_dates": [
       "2026-08-10"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -555,7 +555,7 @@
     "hit_dates": [
       "2026-08-11"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -581,12 +581,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -12.32,
-    "note": "提示日收盘买入 6.33，现价 5.55",
+    "ret": -15.32,
+    "note": "提示日收盘买入 6.33，现价 5.36",
     "hit_dates": [
       "2026-08-11"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -617,7 +617,7 @@
     "hit_dates": [
       "2026-08-11"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -648,7 +648,7 @@
     "hit_dates": [
       "2026-08-12"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -679,7 +679,7 @@
     "hit_dates": [
       "2026-08-12"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -705,13 +705,13 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -3.16,
-    "note": "提示日收盘买入 5.69，现价 5.51",
+    "ret": -3.34,
+    "note": "提示日收盘买入 5.69，现价 5.50",
     "hit_dates": [
       "2026-08-12",
       "2026-08-13"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -768,12 +768,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -12.74,
-    "note": "提示日收盘买入 47.49，现价 41.44",
+    "ret": -18.3,
+    "note": "提示日收盘买入 47.49，现价 38.80",
     "hit_dates": [
       "2026-08-12"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -804,7 +804,7 @@
     "hit_dates": [
       "2026-08-12"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -835,7 +835,7 @@
     "hit_dates": [
       "2026-08-12"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -866,7 +866,7 @@
     "hit_dates": [
       "2026-08-12"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1017,12 +1017,12 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 32.09,
-    "note": "提示日收盘买入 17.45，现价 23.05",
+    "ret": 29.23,
+    "note": "提示日收盘买入 17.45，现价 22.55",
     "hit_dates": [
       "2026-08-13"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1053,7 +1053,7 @@
     "hit_dates": [
       "2026-08-13"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1084,7 +1084,7 @@
     "hit_dates": [
       "2026-08-13"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1177,7 +1177,7 @@
     "hit_dates": [
       "2026-08-14"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1208,7 +1208,7 @@
     "hit_dates": [
       "2026-08-17"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1239,7 +1239,7 @@
     "hit_dates": [
       "2026-08-17"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1332,7 +1332,7 @@
     "hit_dates": [
       "2026-08-18"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1363,7 +1363,7 @@
     "hit_dates": [
       "2026-08-18"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1394,7 +1394,7 @@
     "hit_dates": [
       "2026-08-18"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1425,7 +1425,7 @@
     "hit_dates": [
       "2026-08-18"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1580,7 +1580,7 @@
     "hit_dates": [
       "2026-08-18"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1606,12 +1606,12 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 2.99,
-    "note": "提示日收盘买入 6.02，现价 6.20",
+    "ret": 4.49,
+    "note": "提示日收盘买入 6.02，现价 6.29",
     "hit_dates": [
       "2026-08-18"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1642,7 +1642,7 @@
     "hit_dates": [
       "2026-08-18"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1673,7 +1673,7 @@
     "hit_dates": [
       "2026-08-18"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1704,7 +1704,7 @@
     "hit_dates": [
       "2026-08-18"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1730,12 +1730,12 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 2.84,
-    "note": "提示日收盘买入 4.23，现价 4.35",
+    "ret": 4.73,
+    "note": "提示日收盘买入 4.23，现价 4.43",
     "hit_dates": [
       "2026-08-19"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1797,7 +1797,7 @@
     "hit_dates": [
       "2026-08-19"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1859,7 +1859,7 @@
     "hit_dates": [
       "2026-08-19"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1885,13 +1885,13 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 7.84,
-    "note": "提示日收盘买入 11.48，现价 12.38",
+    "ret": 6.71,
+    "note": "提示日收盘买入 11.48，现价 12.25",
     "hit_dates": [
       "2026-08-19",
       "2026-08-20"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1922,7 +1922,7 @@
     "hit_dates": [
       "2026-08-19"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -1978,13 +1978,13 @@
     "score": 0.6298,
     "concepts": "",
     "industry": "",
-    "status": "mid",
-    "ret": 0.17,
-    "note": "提示日收盘买入 5.94，现价 5.95",
+    "status": "bad",
+    "ret": -2.02,
+    "note": "提示日收盘买入 5.94，现价 5.82",
     "hit_dates": [
       "2026-08-21"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2042,12 +2042,12 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 18.16,
-    "note": "提示日收盘买入 15.53，现价 18.35",
+    "ret": 24.6,
+    "note": "提示日收盘买入 15.53，现价 19.35",
     "hit_dates": [
       "2026-08-24"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2073,13 +2073,13 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 6.59,
-    "note": "提示日收盘买入 7.74，现价 8.25",
+    "ret": 7.36,
+    "note": "提示日收盘买入 7.74，现价 8.31",
     "hit_dates": [
       "2026-08-24",
       "2026-08-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2110,7 +2110,7 @@
     "hit_dates": [
       "2026-08-25"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2167,12 +2167,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -8.37,
-    "note": "提示日收盘买入 5.14，现价 4.71",
+    "ret": -10.12,
+    "note": "提示日收盘买入 5.14，现价 4.62",
     "hit_dates": [
       "2026-08-25"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2198,12 +2198,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -7.5,
-    "note": "提示日收盘买入 6.27，现价 5.80",
+    "ret": -9.73,
+    "note": "提示日收盘买入 6.27，现价 5.66",
     "hit_dates": [
       "2026-08-25"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2261,12 +2261,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -10.16,
-    "note": "提示日收盘买入 5.12，现价 4.60",
+    "ret": -11.91,
+    "note": "提示日收盘买入 5.12，现价 4.51",
     "hit_dates": [
       "2026-08-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2292,13 +2292,13 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -2.81,
-    "note": "提示日收盘买入 11.02，现价 10.71",
+    "ret": -2.36,
+    "note": "提示日收盘买入 11.02，现价 10.76",
     "hit_dates": [
       "2026-08-26",
       "2026-08-27"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2324,12 +2324,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -11.96,
-    "note": "提示日收盘买入 5.77，现价 5.08",
+    "ret": -12.48,
+    "note": "提示日收盘买入 5.77，现价 5.05",
     "hit_dates": [
       "2026-08-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2391,7 +2391,7 @@
     "hit_dates": [
       "2026-08-27"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2453,7 +2453,7 @@
     "hit_dates": [
       "2026-08-27"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2511,13 +2511,13 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -10.09,
-    "note": "提示日收盘买入 6.94，现价 6.24",
+    "ret": -10.81,
+    "note": "提示日收盘买入 6.94，现价 6.19",
     "hit_dates": [
       "2026-08-27",
       "2026-09-01"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2548,7 +2548,7 @@
     "hit_dates": [
       "2026-08-28"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2573,13 +2573,13 @@
     "score": 0.5126,
     "concepts": "",
     "industry": "",
-    "status": "mid",
-    "ret": 2.42,
-    "note": "提示日收盘买入 10.32，现价 10.57",
+    "status": "bad",
+    "ret": -0.58,
+    "note": "提示日收盘买入 10.32，现价 10.26",
     "hit_dates": [
       "2026-08-28"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2636,12 +2636,12 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 42.72,
-    "note": "提示日收盘买入 3.02，现价 4.31",
+    "ret": 40.07,
+    "note": "提示日收盘买入 3.02，现价 4.23",
     "hit_dates": [
       "2026-08-28"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2667,12 +2667,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -16.31,
-    "note": "提示日收盘买入 12.57，现价 10.52",
+    "ret": -18.38,
+    "note": "提示日收盘买入 12.57，现价 10.26",
     "hit_dates": [
       "2026-08-31"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2703,7 +2703,7 @@
     "hit_dates": [
       "2026-08-31"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2729,12 +2729,12 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 5.22,
-    "note": "提示日收盘买入 7.85，现价 8.26",
+    "ret": 6.37,
+    "note": "提示日收盘买入 7.85，现价 8.35",
     "hit_dates": [
       "2026-08-31"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2760,13 +2760,13 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 3.33,
-    "note": "提示日收盘买入 4.80，现价 4.96",
+    "ret": 0.21,
+    "note": "提示日收盘买入 4.80，现价 4.81",
     "hit_dates": [
       "2026-08-31",
       "2026-09-01"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2797,7 +2797,7 @@
     "hit_dates": [
       "2026-08-31"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2828,7 +2828,7 @@
     "hit_dates": [
       "2026-08-31"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2859,7 +2859,7 @@
     "hit_dates": [
       "2026-08-31"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2890,7 +2890,7 @@
     "hit_dates": [
       "2026-08-31"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2916,12 +2916,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -12.24,
-    "note": "提示日收盘买入 8.50，现价 7.46",
+    "ret": -13.53,
+    "note": "提示日收盘买入 8.50，现价 7.35",
     "hit_dates": [
       "2026-08-31"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2947,12 +2947,12 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 66.17,
-    "note": "提示日收盘买入 3.34，现价 5.55",
+    "ret": 61.68,
+    "note": "提示日收盘买入 3.34，现价 5.40",
     "hit_dates": [
       "2026-08-31"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -2978,12 +2978,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -4.55,
-    "note": "提示日收盘买入 7.03，现价 6.71",
+    "ret": -5.69,
+    "note": "提示日收盘买入 7.03，现价 6.63",
     "hit_dates": [
       "2026-08-31"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3014,7 +3014,7 @@
     "hit_dates": [
       "2026-08-31"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3102,12 +3102,12 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 2.16,
-    "note": "提示日收盘买入 5.55，现价 5.67",
+    "ret": 1.8,
+    "note": "提示日收盘买入 5.55，现价 5.65",
     "hit_dates": [
       "2026-09-01"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3138,7 +3138,7 @@
     "hit_dates": [
       "2026-09-01"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3164,12 +3164,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -9.1,
-    "note": "提示日收盘买入 7.91，现价 7.19",
+    "ret": -10.24,
+    "note": "提示日收盘买入 7.91，现价 7.10",
     "hit_dates": [
       "2026-09-01"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3200,7 +3200,7 @@
     "hit_dates": [
       "2026-09-01"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3226,12 +3226,12 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 2.74,
-    "note": "提示日收盘买入 5.48，现价 5.63",
+    "ret": 2.55,
+    "note": "提示日收盘买入 5.48，现价 5.62",
     "hit_dates": [
       "2026-09-01"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3262,7 +3262,7 @@
     "hit_dates": [
       "2026-09-01"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3325,7 +3325,7 @@
       "2026-09-02",
       "2026-09-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3356,7 +3356,7 @@
     "hit_dates": [
       "2026-09-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3382,12 +3382,12 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 17.48,
-    "note": "提示日收盘买入 13.27，现价 15.59",
+    "ret": 14.77,
+    "note": "提示日收盘买入 13.27，现价 15.23",
     "hit_dates": [
       "2026-09-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3418,7 +3418,7 @@
     "hit_dates": [
       "2026-09-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3480,7 +3480,7 @@
     "hit_dates": [
       "2026-09-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3511,7 +3511,7 @@
     "hit_dates": [
       "2026-09-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3573,7 +3573,7 @@
     "hit_dates": [
       "2026-09-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3666,7 +3666,7 @@
     "hit_dates": [
       "2026-09-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3697,7 +3697,7 @@
     "hit_dates": [
       "2026-09-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3723,12 +3723,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -8.3,
-    "note": "提示日收盘买入 5.18，现价 4.75",
+    "ret": -7.14,
+    "note": "提示日收盘买入 5.18，现价 4.81",
     "hit_dates": [
       "2026-09-04"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3759,7 +3759,7 @@
     "hit_dates": [
       "2026-09-04"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3785,13 +3785,13 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 4.98,
-    "note": "提示日收盘买入 10.85，现价 11.39",
+    "ret": 2.4,
+    "note": "提示日收盘买入 10.85，现价 11.11",
     "hit_dates": [
       "2026-09-04",
       "2026-09-07"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3822,7 +3822,7 @@
     "hit_dates": [
       "2026-09-04"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3853,7 +3853,7 @@
     "hit_dates": [
       "2026-09-04"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3884,7 +3884,7 @@
     "hit_dates": [
       "2026-09-04"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3915,7 +3915,7 @@
     "hit_dates": [
       "2026-09-04"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -3946,7 +3946,7 @@
     "hit_dates": [
       "2026-09-04"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4008,7 +4008,7 @@
     "hit_dates": [
       "2026-09-07"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4040,7 +4040,7 @@
       "2026-09-07",
       "2026-09-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4102,7 +4102,7 @@
     "hit_dates": [
       "2026-09-07"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4133,7 +4133,7 @@
     "hit_dates": [
       "2026-09-07"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4195,7 +4195,7 @@
     "hit_dates": [
       "2026-09-07"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4257,7 +4257,7 @@
     "hit_dates": [
       "2026-09-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4288,7 +4288,7 @@
     "hit_dates": [
       "2026-09-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4319,7 +4319,7 @@
     "hit_dates": [
       "2026-09-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4350,7 +4350,7 @@
     "hit_dates": [
       "2026-09-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4413,7 +4413,7 @@
       "2026-09-08",
       "2026-09-11"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4439,12 +4439,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -20.7,
-    "note": "提示日收盘买入 29.56，现价 23.44",
+    "ret": -23.17,
+    "note": "提示日收盘买入 29.56，现价 22.71",
     "hit_dates": [
       "2026-09-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4475,7 +4475,7 @@
     "hit_dates": [
       "2026-09-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4506,7 +4506,7 @@
     "hit_dates": [
       "2026-09-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4537,7 +4537,7 @@
     "hit_dates": [
       "2026-09-09"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4599,7 +4599,7 @@
     "hit_dates": [
       "2026-09-09"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4625,12 +4625,12 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 40.16,
-    "note": "提示日收盘买入 16.66，现价 23.35",
+    "ret": 38.0,
+    "note": "提示日收盘买入 16.66，现价 22.99",
     "hit_dates": [
       "2026-09-09"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4662,7 +4662,7 @@
       "2026-09-09",
       "2026-09-10"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4693,7 +4693,7 @@
     "hit_dates": [
       "2026-09-09"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4755,7 +4755,7 @@
     "hit_dates": [
       "2026-09-09"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4817,7 +4817,7 @@
     "hit_dates": [
       "2026-09-09"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4843,12 +4843,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -0.87,
-    "note": "提示日收盘买入 12.62，现价 12.51",
+    "ret": -2.14,
+    "note": "提示日收盘买入 12.62，现价 12.35",
     "hit_dates": [
       "2026-09-10"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4910,7 +4910,7 @@
     "hit_dates": [
       "2026-09-10"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4941,7 +4941,7 @@
     "hit_dates": [
       "2026-09-10"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -4972,7 +4972,7 @@
     "hit_dates": [
       "2026-09-10"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5034,7 +5034,7 @@
     "hit_dates": [
       "2026-09-11"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5065,7 +5065,7 @@
     "hit_dates": [
       "2026-09-11"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5096,7 +5096,7 @@
     "hit_dates": [
       "2026-09-11"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5127,7 +5127,7 @@
     "hit_dates": [
       "2026-09-11"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5158,7 +5158,7 @@
     "hit_dates": [
       "2026-09-11"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5184,12 +5184,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -9.37,
-    "note": "提示日收盘买入 16.11，现价 14.60",
+    "ret": -11.61,
+    "note": "提示日收盘买入 16.11，现价 14.24",
     "hit_dates": [
       "2026-09-11"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5283,7 +5283,7 @@
       "2026-09-14",
       "2026-09-15"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5345,7 +5345,7 @@
     "hit_dates": [
       "2026-09-16"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5407,7 +5407,7 @@
     "hit_dates": [
       "2026-09-17"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5438,7 +5438,7 @@
     "hit_dates": [
       "2026-09-17"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5464,12 +5464,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -21.05,
-    "note": "提示日收盘买入 5.51，现价 4.35",
+    "ret": -22.32,
+    "note": "提示日收盘买入 5.51，现价 4.28",
     "hit_dates": [
       "2026-09-17"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5500,7 +5500,7 @@
     "hit_dates": [
       "2026-09-17"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5532,7 +5532,7 @@
       "2026-09-18",
       "2026-09-21"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5558,13 +5558,13 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -1.08,
-    "note": "提示日收盘买入 12.06，现价 11.93",
+    "ret": -5.22,
+    "note": "提示日收盘买入 12.06，现价 11.43",
     "hit_dates": [
       "2026-09-18",
       "2026-09-21"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5621,12 +5621,12 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 29.14,
-    "note": "提示日收盘买入 13.90，现价 17.95",
+    "ret": 25.76,
+    "note": "提示日收盘买入 13.90，现价 17.48",
     "hit_dates": [
       "2026-09-18"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5652,12 +5652,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -12.33,
-    "note": "提示日收盘买入 3.65，现价 3.20",
+    "ret": -13.97,
+    "note": "提示日收盘买入 3.65，现价 3.14",
     "hit_dates": [
       "2026-09-21"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5688,7 +5688,7 @@
     "hit_dates": [
       "2026-09-21"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5719,7 +5719,7 @@
     "hit_dates": [
       "2026-09-21"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5750,7 +5750,7 @@
     "hit_dates": [
       "2026-09-21"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5781,7 +5781,7 @@
     "hit_dates": [
       "2026-09-21"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5843,7 +5843,7 @@
     "hit_dates": [
       "2026-09-21"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5874,7 +5874,7 @@
     "hit_dates": [
       "2026-09-21"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5905,7 +5905,7 @@
     "hit_dates": [
       "2026-09-22"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5936,7 +5936,7 @@
     "hit_dates": [
       "2026-09-22"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -5967,7 +5967,7 @@
     "hit_dates": [
       "2026-09-22"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6024,13 +6024,13 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 9.87,
-    "note": "提示日收盘买入 15.40，现价 16.92",
+    "ret": 11.23,
+    "note": "提示日收盘买入 15.40，现价 17.13",
     "hit_dates": [
       "2026-09-22",
       "2026-09-24"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6061,7 +6061,7 @@
     "hit_dates": [
       "2026-09-22"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6092,7 +6092,7 @@
     "hit_dates": [
       "2026-09-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6180,12 +6180,12 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 23.93,
-    "note": "提示日收盘买入 26.33，现价 32.63",
+    "ret": 20.24,
+    "note": "提示日收盘买入 26.33，现价 31.66",
     "hit_dates": [
       "2026-09-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6216,7 +6216,7 @@
     "hit_dates": [
       "2026-09-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6248,7 +6248,7 @@
       "2026-09-23",
       "2026-09-24"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6310,7 +6310,7 @@
     "hit_dates": [
       "2026-09-24"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6341,7 +6341,7 @@
     "hit_dates": [
       "2026-09-24"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6403,7 +6403,7 @@
     "hit_dates": [
       "2026-09-24"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6434,7 +6434,7 @@
     "hit_dates": [
       "2026-09-24"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6465,7 +6465,7 @@
     "hit_dates": [
       "2026-09-28"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6496,7 +6496,7 @@
     "hit_dates": [
       "2026-09-28"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6527,7 +6527,7 @@
     "hit_dates": [
       "2026-09-28"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6589,7 +6589,7 @@
     "hit_dates": [
       "2026-09-29"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6621,7 +6621,7 @@
       "2026-09-30",
       "2026-10-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6715,7 +6715,7 @@
     "hit_dates": [
       "2026-09-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6777,7 +6777,7 @@
     "hit_dates": [
       "2026-09-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6808,7 +6808,7 @@
     "hit_dates": [
       "2026-09-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6840,7 +6840,7 @@
       "2026-09-30",
       "2026-10-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6871,7 +6871,7 @@
     "hit_dates": [
       "2026-09-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6897,12 +6897,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -4.6,
-    "note": "提示日收盘买入 8.04，现价 7.67",
+    "ret": -5.97,
+    "note": "提示日收盘买入 8.04，现价 7.56",
     "hit_dates": [
       "2026-09-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6933,7 +6933,7 @@
     "hit_dates": [
       "2026-09-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6964,7 +6964,7 @@
     "hit_dates": [
       "2026-09-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -6995,7 +6995,7 @@
     "hit_dates": [
       "2026-09-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7057,7 +7057,7 @@
     "hit_dates": [
       "2026-10-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7119,7 +7119,7 @@
     "hit_dates": [
       "2026-10-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7145,12 +7145,12 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 8.82,
-    "note": "提示日收盘买入 11.11，现价 12.09",
+    "ret": 10.35,
+    "note": "提示日收盘买入 11.11，现价 12.26",
     "hit_dates": [
       "2026-10-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7212,7 +7212,7 @@
     "hit_dates": [
       "2026-10-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7243,7 +7243,7 @@
     "hit_dates": [
       "2026-10-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7274,7 +7274,7 @@
     "hit_dates": [
       "2026-10-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7331,12 +7331,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -37.97,
-    "note": "提示日收盘买入 38.40，现价 23.82",
+    "ret": -40.23,
+    "note": "提示日收盘买入 38.40，现价 22.95",
     "hit_dates": [
       "2026-10-08"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7429,7 +7429,7 @@
     "hit_dates": [
       "2026-10-09"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7584,7 +7584,7 @@
     "hit_dates": [
       "2026-10-09"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7615,7 +7615,7 @@
     "hit_dates": [
       "2026-10-09"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7646,7 +7646,7 @@
     "hit_dates": [
       "2026-10-09"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7677,7 +7677,7 @@
     "hit_dates": [
       "2026-10-09"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7739,7 +7739,7 @@
     "hit_dates": [
       "2026-10-09"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7770,7 +7770,7 @@
     "hit_dates": [
       "2026-10-09"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7801,7 +7801,7 @@
     "hit_dates": [
       "2026-10-12"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7863,7 +7863,7 @@
     "hit_dates": [
       "2026-10-12"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7925,7 +7925,7 @@
     "hit_dates": [
       "2026-10-12"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7956,7 +7956,7 @@
     "hit_dates": [
       "2026-10-12"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -7987,7 +7987,7 @@
     "hit_dates": [
       "2026-10-12"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8018,7 +8018,7 @@
     "hit_dates": [
       "2026-10-12"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8049,7 +8049,7 @@
     "hit_dates": [
       "2026-10-12"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8081,7 +8081,7 @@
       "2026-10-13",
       "2026-10-14"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8112,7 +8112,7 @@
     "hit_dates": [
       "2026-10-13"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8143,7 +8143,7 @@
     "hit_dates": [
       "2026-10-13"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8169,13 +8169,13 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -8.05,
-    "note": "提示日收盘买入 4.35，现价 4.00",
+    "ret": -8.74,
+    "note": "提示日收盘买入 4.35，现价 3.97",
     "hit_dates": [
       "2026-10-13",
       "2026-10-14"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8206,7 +8206,7 @@
     "hit_dates": [
       "2026-10-13"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8232,12 +8232,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -1.39,
-    "note": "提示日收盘买入 14.44，现价 14.24",
+    "ret": -0.76,
+    "note": "提示日收盘买入 14.44，现价 14.33",
     "hit_dates": [
       "2026-10-13"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8299,7 +8299,7 @@
     "hit_dates": [
       "2026-10-14"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8330,7 +8330,7 @@
     "hit_dates": [
       "2026-10-14"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8361,7 +8361,7 @@
     "hit_dates": [
       "2026-10-14"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8392,7 +8392,7 @@
     "hit_dates": [
       "2026-10-14"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8418,12 +8418,12 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 2.75,
-    "note": "提示日收盘买入 10.53，现价 10.82",
+    "ret": 2.85,
+    "note": "提示日收盘买入 10.53，现价 10.83",
     "hit_dates": [
       "2026-10-14"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8454,7 +8454,7 @@
     "hit_dates": [
       "2026-10-14"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8480,12 +8480,12 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 11.82,
-    "note": "提示日收盘买入 8.04，现价 8.99",
+    "ret": 9.2,
+    "note": "提示日收盘买入 8.04，现价 8.78",
     "hit_dates": [
       "2026-10-14"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8516,7 +8516,7 @@
     "hit_dates": [
       "2026-10-14"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8547,7 +8547,7 @@
     "hit_dates": [
       "2026-10-14"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8573,12 +8573,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -3.21,
-    "note": "提示日收盘买入 6.55，现价 6.34",
+    "ret": -4.27,
+    "note": "提示日收盘买入 6.55，现价 6.27",
     "hit_dates": [
       "2026-10-14"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8609,7 +8609,7 @@
     "hit_dates": [
       "2026-10-15"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8665,13 +8665,13 @@
     "score": 0.5119,
     "concepts": "",
     "industry": "",
-    "status": "bad",
-    "ret": -0.31,
-    "note": "提示日收盘买入 12.79，现价 12.75",
+    "status": "mid",
+    "ret": 1.41,
+    "note": "提示日收盘买入 12.79，现价 12.97",
     "hit_dates": [
       "2026-10-15"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8703,7 +8703,7 @@
       "2026-10-16",
       "2026-10-19"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8734,7 +8734,7 @@
     "hit_dates": [
       "2026-10-16"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8765,7 +8765,7 @@
     "hit_dates": [
       "2026-10-16"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8822,12 +8822,12 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 33.2,
-    "note": "提示日收盘买入 51.53，现价 68.64",
+    "ret": 24.18,
+    "note": "提示日收盘买入 51.53，现价 63.99",
     "hit_dates": [
       "2026-10-19"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8889,7 +8889,7 @@
     "hit_dates": [
       "2026-10-19"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8915,12 +8915,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -2.13,
-    "note": "提示日收盘买入 40.92，现价 40.05",
+    "ret": -2.79,
+    "note": "提示日收盘买入 40.92，现价 39.78",
     "hit_dates": [
       "2026-10-19"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8951,7 +8951,7 @@
     "hit_dates": [
       "2026-10-19"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -8982,7 +8982,7 @@
     "hit_dates": [
       "2026-10-19"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9013,7 +9013,7 @@
     "hit_dates": [
       "2026-10-20"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9075,7 +9075,7 @@
     "hit_dates": [
       "2026-10-20"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9106,7 +9106,7 @@
     "hit_dates": [
       "2026-10-21"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9137,7 +9137,7 @@
     "hit_dates": [
       "2026-10-21"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9168,7 +9168,7 @@
     "hit_dates": [
       "2026-10-21"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9231,7 +9231,7 @@
     "hit_dates": [
       "2026-10-21"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9263,7 +9263,7 @@
       "2026-10-21",
       "2026-10-22"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9295,7 +9295,7 @@
       "2026-10-22",
       "2026-10-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9327,7 +9327,7 @@
       "2026-10-22",
       "2026-10-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9358,7 +9358,7 @@
     "hit_dates": [
       "2026-10-22"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9389,7 +9389,7 @@
     "hit_dates": [
       "2026-10-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9420,7 +9420,7 @@
     "hit_dates": [
       "2026-10-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9451,7 +9451,7 @@
     "hit_dates": [
       "2026-10-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9477,13 +9477,13 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -0.29,
-    "note": "提示日收盘买入 27.31，现价 27.23",
+    "ret": -0.88,
+    "note": "提示日收盘买入 27.31，现价 27.07",
     "hit_dates": [
       "2026-10-23",
       "2026-10-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9514,7 +9514,7 @@
     "hit_dates": [
       "2026-10-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9540,12 +9540,12 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 15.36,
-    "note": "提示日收盘买入 10.87，现价 12.54",
+    "ret": 12.88,
+    "note": "提示日收盘买入 10.87，现价 12.27",
     "hit_dates": [
       "2026-10-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9571,13 +9571,13 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 2.55,
-    "note": "提示日收盘买入 18.01，现价 18.47",
+    "ret": 0.61,
+    "note": "提示日收盘买入 18.01，现价 18.12",
     "hit_dates": [
       "2026-10-23",
       "2026-10-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9608,7 +9608,7 @@
     "hit_dates": [
       "2026-10-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9633,13 +9633,13 @@
     "score": 0.5079,
     "concepts": "",
     "industry": "",
-    "status": "bad",
-    "ret": -0.29,
-    "note": "提示日收盘买入 177.30，现价 176.79",
+    "status": "mid",
+    "ret": 0.12,
+    "note": "提示日收盘买入 177.30，现价 177.51",
     "hit_dates": [
       "2026-10-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9670,7 +9670,7 @@
     "hit_dates": [
       "2026-10-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9696,12 +9696,12 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 70.46,
-    "note": "提示日收盘买入 29.65，现价 50.54",
+    "ret": 57.1,
+    "note": "提示日收盘买入 29.65，现价 46.58",
     "hit_dates": [
       "2026-10-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9732,7 +9732,7 @@
     "hit_dates": [
       "2026-10-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9763,7 +9763,7 @@
     "hit_dates": [
       "2026-10-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9788,13 +9788,13 @@
     "score": 0.5484,
     "concepts": "",
     "industry": "",
-    "status": "good",
-    "ret": 8.48,
-    "note": "提示日收盘买入 56.49，现价 61.28",
+    "status": "mid",
+    "ret": 5.51,
+    "note": "提示日收盘买入 56.49，现价 59.60",
     "hit_dates": [
       "2026-10-23"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9887,7 +9887,7 @@
     "hit_dates": [
       "2026-10-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9918,7 +9918,7 @@
     "hit_dates": [
       "2026-10-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9949,7 +9949,7 @@
     "hit_dates": [
       "2026-10-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -9980,7 +9980,7 @@
     "hit_dates": [
       "2026-10-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10011,7 +10011,7 @@
     "hit_dates": [
       "2026-10-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10042,7 +10042,7 @@
     "hit_dates": [
       "2026-10-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10068,14 +10068,14 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 8.22,
-    "note": "提示日收盘买入 3.65，现价 3.95",
+    "ret": 10.41,
+    "note": "提示日收盘买入 3.65，现价 4.03",
     "hit_dates": [
       "2026-10-26",
       "2026-10-27",
       "2026-10-28"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10106,7 +10106,7 @@
     "hit_dates": [
       "2026-10-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10132,12 +10132,12 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 4.92,
-    "note": "提示日收盘买入 11.19，现价 11.74",
+    "ret": 2.23,
+    "note": "提示日收盘买入 11.19，现价 11.44",
     "hit_dates": [
       "2026-10-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10168,7 +10168,7 @@
     "hit_dates": [
       "2026-10-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10199,7 +10199,7 @@
     "hit_dates": [
       "2026-10-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10225,12 +10225,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -0.29,
-    "note": "提示日收盘买入 116.49，现价 116.15",
+    "ret": -0.94,
+    "note": "提示日收盘买入 116.49，现价 115.39",
     "hit_dates": [
       "2026-10-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10261,7 +10261,7 @@
     "hit_dates": [
       "2026-10-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10292,7 +10292,7 @@
     "hit_dates": [
       "2026-10-26"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10355,7 +10355,7 @@
       "2026-10-27",
       "2026-10-28"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10386,7 +10386,7 @@
     "hit_dates": [
       "2026-10-27"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10411,13 +10411,13 @@
     "score": 0.6477,
     "concepts": "",
     "industry": "",
-    "status": "good",
-    "ret": 8.17,
-    "note": "提示日收盘买入 13.83，现价 14.96",
+    "status": "mid",
+    "ret": 6.72,
+    "note": "提示日收盘买入 13.83，现价 14.76",
     "hit_dates": [
       "2026-10-27"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10448,7 +10448,7 @@
     "hit_dates": [
       "2026-10-27"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10479,7 +10479,7 @@
     "hit_dates": [
       "2026-10-27"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10505,12 +10505,12 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 2.25,
-    "note": "提示日收盘买入 38.19，现价 39.05",
+    "ret": 0.08,
+    "note": "提示日收盘买入 38.19，现价 38.22",
     "hit_dates": [
       "2026-10-27"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10541,7 +10541,7 @@
     "hit_dates": [
       "2026-10-28"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10572,7 +10572,7 @@
     "hit_dates": [
       "2026-10-28"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10603,7 +10603,7 @@
     "hit_dates": [
       "2026-10-28"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10629,13 +10629,13 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 18.86,
-    "note": "提示日收盘买入 16.70，现价 19.85",
+    "ret": 15.33,
+    "note": "提示日收盘买入 16.70，现价 19.26",
     "hit_dates": [
       "2026-10-28",
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10666,7 +10666,7 @@
     "hit_dates": [
       "2026-10-28"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10697,7 +10697,7 @@
     "hit_dates": [
       "2026-10-28"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10728,7 +10728,7 @@
     "hit_dates": [
       "2026-10-28"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10759,7 +10759,7 @@
     "hit_dates": [
       "2026-10-28"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10791,7 +10791,7 @@
       "2026-10-28",
       "2026-10-29"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10853,7 +10853,7 @@
     "hit_dates": [
       "2026-10-29"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10879,12 +10879,12 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 1.29,
-    "note": "提示日收盘买入 5.41，现价 5.48",
+    "ret": 0.55,
+    "note": "提示日收盘买入 5.41，现价 5.44",
     "hit_dates": [
       "2026-10-29"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10910,12 +10910,12 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 5.36,
-    "note": "提示日收盘买入 12.49，现价 13.16",
+    "ret": 2.8,
+    "note": "提示日收盘买入 12.49，现价 12.84",
     "hit_dates": [
       "2026-10-29"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10940,13 +10940,13 @@
     "score": 0.5854,
     "concepts": "",
     "industry": "",
-    "status": "mid",
-    "ret": 7.22,
-    "note": "提示日收盘买入 5.68，现价 6.09",
+    "status": "good",
+    "ret": 10.21,
+    "note": "提示日收盘买入 5.68，现价 6.26",
     "hit_dates": [
       "2026-10-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -10972,12 +10972,12 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 2.47,
-    "note": "提示日收盘买入 14.98，现价 15.35",
+    "ret": 6.48,
+    "note": "提示日收盘买入 14.98，现价 15.95",
     "hit_dates": [
       "2026-10-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11008,7 +11008,7 @@
     "hit_dates": [
       "2026-10-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11039,7 +11039,7 @@
     "hit_dates": [
       "2026-10-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11096,12 +11096,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -1.73,
-    "note": "提示日收盘买入 126.27，现价 124.08",
+    "ret": -1.01,
+    "note": "提示日收盘买入 126.27，现价 125.00",
     "hit_dates": [
       "2026-10-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11132,7 +11132,7 @@
     "hit_dates": [
       "2026-10-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11163,7 +11163,7 @@
     "hit_dates": [
       "2026-10-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11195,7 +11195,7 @@
       "2026-10-30",
       "2026-11-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11226,7 +11226,7 @@
     "hit_dates": [
       "2026-10-30"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11252,12 +11252,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -2.15,
-    "note": "提示日收盘买入 21.40，现价 20.94",
+    "ret": -2.76,
+    "note": "提示日收盘买入 21.40，现价 20.81",
     "hit_dates": [
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11288,7 +11288,7 @@
     "hit_dates": [
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11314,12 +11314,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -4.07,
-    "note": "提示日收盘买入 12.28，现价 11.78",
+    "ret": -5.0,
+    "note": "触及 -5% 止损离场",
     "hit_dates": [
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11345,12 +11345,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -2.13,
-    "note": "提示日收盘买入 11.73，现价 11.48",
+    "ret": -2.64,
+    "note": "提示日收盘买入 11.73，现价 11.42",
     "hit_dates": [
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11375,13 +11375,13 @@
     "score": 0.5882,
     "concepts": "",
     "industry": "",
-    "status": "mid",
-    "ret": 2.13,
-    "note": "提示日收盘买入 40.33，现价 41.19",
+    "status": "bad",
+    "ret": -2.45,
+    "note": "提示日收盘买入 40.33，现价 39.34",
     "hit_dates": [
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11407,13 +11407,13 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -2.78,
-    "note": "提示日收盘买入 4.32，现价 4.20",
+    "ret": -3.94,
+    "note": "提示日收盘买入 4.32，现价 4.15",
     "hit_dates": [
       "2026-11-02",
       "2026-11-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11438,13 +11438,13 @@
     "score": 0.6313,
     "concepts": "",
     "industry": "",
-    "status": "mid",
-    "ret": 0.23,
-    "note": "提示日收盘买入 12.95，现价 12.98",
+    "status": "bad",
+    "ret": -2.32,
+    "note": "提示日收盘买入 12.95，现价 12.65",
     "hit_dates": [
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11470,12 +11470,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -0.09,
-    "note": "提示日收盘买入 22.56，现价 22.54",
+    "ret": -0.71,
+    "note": "提示日收盘买入 22.56，现价 22.40",
     "hit_dates": [
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11500,14 +11500,14 @@
     "score": 0.5186,
     "concepts": "",
     "industry": "",
-    "status": "bad",
-    "ret": -0.35,
-    "note": "提示日收盘买入 28.39，现价 28.29",
+    "status": "mid",
+    "ret": 0.07,
+    "note": "提示日收盘买入 28.39，现价 28.41",
     "hit_dates": [
       "2026-11-02",
       "2026-11-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11533,12 +11533,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -2.56,
-    "note": "提示日收盘买入 1439.10，现价 1402.30",
+    "ret": -2.0,
+    "note": "提示日收盘买入 1439.10，现价 1410.27",
     "hit_dates": [
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11563,14 +11563,14 @@
     "score": 0.6271,
     "concepts": "",
     "industry": "",
-    "status": "mid",
-    "ret": 0.0,
-    "note": "提示日收盘买入 20.57，现价 20.57",
+    "status": "bad",
+    "ret": -0.24,
+    "note": "提示日收盘买入 20.57，现价 20.52",
     "hit_dates": [
       "2026-11-02",
       "2026-11-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11596,12 +11596,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -1.86,
-    "note": "提示日收盘买入 36.51，现价 35.83",
+    "ret": -2.99,
+    "note": "提示日收盘买入 36.51，现价 35.42",
     "hit_dates": [
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11626,13 +11626,13 @@
     "score": 0.6537,
     "concepts": "",
     "industry": "",
-    "status": "mid",
-    "ret": 0.53,
-    "note": "提示日收盘买入 7.61，现价 7.65",
+    "status": "bad",
+    "ret": -0.26,
+    "note": "提示日收盘买入 7.61，现价 7.59",
     "hit_dates": [
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11663,7 +11663,7 @@
     "hit_dates": [
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11689,12 +11689,12 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 1.7,
-    "note": "提示日收盘买入 5.87，现价 5.97",
+    "ret": 2.39,
+    "note": "提示日收盘买入 5.87，现价 6.01",
     "hit_dates": [
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11725,7 +11725,7 @@
     "hit_dates": [
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11751,12 +11751,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -1.9,
-    "note": "提示日收盘买入 20.55，现价 20.16",
+    "ret": -1.36,
+    "note": "提示日收盘买入 20.55，现价 20.27",
     "hit_dates": [
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11787,7 +11787,7 @@
     "hit_dates": [
       "2026-11-02"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11844,12 +11844,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -0.85,
-    "note": "提示日收盘买入 24.79，现价 24.58",
+    "ret": -3.15,
+    "note": "提示日收盘买入 24.79，现价 24.01",
     "hit_dates": [
       "2026-11-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11875,12 +11875,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -2.34,
-    "note": "提示日收盘买入 55.60，现价 54.30",
+    "ret": -1.69,
+    "note": "提示日收盘买入 55.60，现价 54.66",
     "hit_dates": [
       "2026-11-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11911,7 +11911,7 @@
     "hit_dates": [
       "2026-11-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11937,12 +11937,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -3.5,
-    "note": "提示日收盘买入 14.56，现价 14.05",
+    "ret": -5.0,
+    "note": "触及 -5% 止损离场",
     "hit_dates": [
       "2026-11-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -11973,7 +11973,7 @@
     "hit_dates": [
       "2026-11-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12004,7 +12004,7 @@
     "hit_dates": [
       "2026-11-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12035,7 +12035,7 @@
     "hit_dates": [
       "2026-11-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12097,7 +12097,7 @@
     "hit_dates": [
       "2026-11-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12123,12 +12123,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -3.68,
-    "note": "提示日收盘买入 53.48，现价 51.51",
+    "ret": -3.27,
+    "note": "提示日收盘买入 53.48，现价 51.73",
     "hit_dates": [
       "2026-11-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12154,12 +12154,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -4.47,
-    "note": "提示日收盘买入 25.30，现价 24.17",
+    "ret": -5.0,
+    "note": "触及 -5% 止损离场",
     "hit_dates": [
       "2026-11-03"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12185,13 +12185,13 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 2.45,
-    "note": "提示日收盘买入 6.11，现价 6.26",
+    "ret": 1.8,
+    "note": "提示日收盘买入 6.11，现价 6.22",
     "hit_dates": [
       "2026-11-03",
       "2026-11-05"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12217,12 +12217,12 @@
     "concepts": "",
     "industry": "",
     "status": "mid",
-    "ret": 0.53,
-    "note": "提示日收盘买入 33.85，现价 34.03",
+    "ret": 1.77,
+    "note": "提示日收盘买入 33.85，现价 34.45",
     "hit_dates": [
       "2026-11-04"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12248,12 +12248,12 @@
     "concepts": "",
     "industry": "",
     "status": "good",
-    "ret": 24.85,
-    "note": "提示日收盘买入 17.14，现价 21.40",
+    "ret": 31.68,
+    "note": "提示日收盘买入 17.14，现价 22.57",
     "hit_dates": [
       "2026-11-04"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12284,7 +12284,7 @@
     "hit_dates": [
       "2026-11-05"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12315,7 +12315,7 @@
     "hit_dates": [
       "2026-11-05"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12346,7 +12346,7 @@
     "hit_dates": [
       "2026-11-05"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12408,7 +12408,7 @@
     "hit_dates": [
       "2026-11-05"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12439,7 +12439,7 @@
     "hit_dates": [
       "2026-11-05"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12470,7 +12470,7 @@
     "hit_dates": [
       "2026-11-05"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12501,7 +12501,7 @@
     "hit_dates": [
       "2026-11-05"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12532,7 +12532,7 @@
     "hit_dates": [
       "2026-11-05"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12558,12 +12558,12 @@
     "concepts": "",
     "industry": "",
     "status": "bad",
-    "ret": -2.57,
-    "note": "提示日收盘买入 8.17，现价 7.96",
+    "ret": -5.0,
+    "note": "触及 -5% 止损离场",
     "hit_dates": [
       "2026-11-05"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12588,13 +12588,13 @@
     "score": 0.5233,
     "concepts": "",
     "industry": "",
-    "status": "mid",
-    "ret": 1.45,
-    "note": "提示日收盘买入 11.73，现价 11.90",
+    "status": "bad",
+    "ret": -1.96,
+    "note": "提示日收盘买入 11.73，现价 11.50",
     "hit_dates": [
       "2026-11-05"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12625,7 +12625,7 @@
     "hit_dates": [
       "2026-11-05"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12656,7 +12656,7 @@
     "hit_dates": [
       "2026-11-05"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12687,7 +12687,7 @@
     "hit_dates": [
       "2026-11-05"
     ],
-    "last_check": "2026-11-11",
+    "last_check": "2026-11-12",
     "source": "backtest_bootstrap"
   },
   {
@@ -12712,14 +12712,14 @@
     "score": 0.6625,
     "concepts": "深圳特区,智能穿戴,智能电视,医疗器械概念,粤港自贸,智能家居,虚拟现实,人工智能,OLED,贬值受益,电子竞技,华为概念,MiniLED,抖音概念(字节概念),AIPC,AI眼镜,消费电子概念,机构重仓,深股通,专精特新,小盘股,小盘价值,破发股",
     "industry": "电子设备-消费电子设备-消费电子设备",
-    "status": "good",
-    "ret": 12.56,
-    "note": "提示日收盘买入 20.94，现价 23.57",
+    "status": "mid",
+    "ret": 6.02,
+    "note": "提示日收盘买入 20.94，现价 22.20",
     "hit_dates": [
       "2026-11-06",
       "2026-11-09"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "600278",
@@ -12743,14 +12743,14 @@
     "score": 0.6534,
     "concepts": "创投,参股券商,长江三角,上海自贸,在线教育,沪企改革,央国企改革,IPO受益,一带一路,贬值受益,机构重仓,融资融券,沪股通,内贸流通,破增发价股,低市净率",
     "industry": "商贸零售-贸易-贸易",
-    "status": "good",
-    "ret": 9.55,
-    "note": "提示日收盘买入 7.12，现价 7.80",
+    "status": "mid",
+    "ret": 4.78,
+    "note": "提示日收盘买入 7.12，现价 7.46",
     "hit_dates": [
       "2026-11-06",
       "2026-11-09"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "600038",
@@ -12775,12 +12775,12 @@
     "concepts": "军工,通用航空,央国企改革,无人机,军民融合,大飞机,飞行汽车(eVTOL),低空经济,交运设备,航天航空,高端装备,机构重仓,融资融券,中证500,上证380,沪股通,富时罗素,标准普尔,小盘股,小盘价值,破增发价股",
     "industry": "国防与装备-航空航天装备-航空装备",
     "status": "bad",
-    "ret": -4.1,
-    "note": "提示日收盘买入 28.77，现价 27.59",
+    "ret": -5.0,
+    "note": "触及 -5% 止损离场",
     "hit_dates": [
       "2026-11-06"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "603151",
@@ -12804,13 +12804,13 @@
     "score": 0.6173,
     "concepts": "猪肉概念,机构重仓,昨日高振幅,2026中报首亏,基金增仓,高市盈率",
     "industry": "农林牧渔-畜牧业-饲料",
-    "status": "mid",
-    "ret": 1.88,
-    "note": "提示日收盘买入 20.77，现价 21.16",
+    "status": "bad",
+    "ret": -0.19,
+    "note": "提示日收盘买入 20.77，现价 20.73",
     "hit_dates": [
       "2026-11-06"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "300793",
@@ -12834,13 +12834,13 @@
     "score": 0.509,
     "concepts": "创投,智能穿戴,苹果概念,粤港自贸,脑机接口,虚拟现实,人工智能,贬值受益,小米概念,华为概念,无线耳机,WiFi,储能概念,元宇宙概念,机器人概念,荣耀概念,AI眼镜,消费电子概念,通信技术,智能音箱,转债标的,深股通,创业板综,破增发价股,基金增仓",
     "industry": "电子设备-电子设备制造-电子设备制造",
-    "status": "mid",
-    "ret": 0.54,
-    "note": "提示日收盘买入 13.08，现价 13.15",
+    "status": "bad",
+    "ret": -2.75,
+    "note": "提示日收盘买入 13.08，现价 12.72",
     "hit_dates": [
       "2026-11-06"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "301181",
@@ -12864,13 +12864,13 @@
     "score": 0.5342,
     "concepts": "燃料电池概念,新能源车,汽车热管理,飞行汽车(eVTOL),低空经济,电池技术,机构重仓,融资融券,创业板综",
     "industry": "交运设备-汽车-汽车零部件",
-    "status": "mid",
-    "ret": 3.37,
-    "note": "提示日收盘买入 27.91，现价 28.85",
+    "status": "bad",
+    "ret": -1.68,
+    "note": "提示日收盘买入 27.91，现价 27.44",
     "hit_dates": [
       "2026-11-09"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "002911",
@@ -12895,13 +12895,13 @@
     "concepts": "光伏概念,央国企改革,充电桩,天然气,氢能源,储能概念,油气资源,机构重仓,融资融券,深股通,富时罗素,标准普尔,小盘股",
     "industry": "公用事业-燃气-燃气",
     "status": "mid",
-    "ret": 6.3,
-    "note": "提示日收盘买入 12.06，现价 12.82",
+    "ret": 7.21,
+    "note": "提示日收盘买入 12.06，现价 12.93",
     "hit_dates": [
       "2026-11-09",
       "2026-11-11"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "000541",
@@ -12926,12 +12926,12 @@
     "concepts": "参股银行,LED概念,海洋经济,智能家居,央国企改革,网红经济,华为概念,半导体概念,汽车芯片,华为汽车,植物照明,智慧灯杆,跨境电商,AB股,机构重仓,融资融券,深股通,标准普尔,破增发价股,2026中报预减",
     "industry": "家电-照明设备-照明设备",
     "status": "bad",
-    "ret": -1.49,
-    "note": "提示日收盘买入 5.37，现价 5.29",
+    "ret": -3.54,
+    "note": "提示日收盘买入 5.37，现价 5.18",
     "hit_dates": [
       "2026-11-10"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "603809",
@@ -12956,12 +12956,12 @@
     "concepts": "军工,西部大开发,铁路基建,新能源车,大飞机,商业航天,机器人概念,减速器,小米汽车,人形机器人,转债标的,股权激励,融资融券,沪股通,专精特新",
     "industry": "交运设备-汽车-汽车零部件",
     "status": "bad",
-    "ret": -1.57,
-    "note": "提示日收盘买入 9.55，现价 9.40",
+    "ret": -5.0,
+    "note": "触及 -5% 止损离场",
     "hit_dates": [
       "2026-11-10"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "300885",
@@ -12991,7 +12991,7 @@
     "hit_dates": [
       "2026-11-10"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "600853",
@@ -13015,13 +13015,13 @@
     "score": 0.5727,
     "concepts": "生态农业,央国企改革,一带一路,PPP模式,乡村振兴,东北振兴,商业航天,抽水蓄能,新型城镇化,冰雪经济,工程建设,转债标的,QFII新进,基金增仓,低市盈率",
     "industry": "建筑-基础建设-路桥建设",
-    "status": "bad",
-    "ret": -2.3,
-    "note": "提示日收盘买入 3.92，现价 3.83",
+    "status": "mid",
+    "ret": 7.4,
+    "note": "提示日收盘买入 3.92，现价 4.21",
     "hit_dates": [
       "2026-11-10"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "301395",
@@ -13046,12 +13046,12 @@
     "concepts": "新材料,QFII重仓,融资融券,创业板综,专精特新,破发股",
     "industry": "基础化工-化学原料-其他化学原料",
     "status": "mid",
-    "ret": 3.41,
-    "note": "提示日收盘买入 13.78，现价 14.25",
+    "ret": 0.94,
+    "note": "提示日收盘买入 13.78，现价 13.91",
     "hit_dates": [
       "2026-11-10"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "300310",
@@ -13075,14 +13075,14 @@
     "score": 0.5088,
     "concepts": "物联网,光伏概念,特斯拉概念,网络安全,安防概念,智能家居,5G概念,车联网(车路云),工业互联网,互联网医疗,华为概念,边缘计算,机器人概念,信创,低空经济,DeepSeek概念,通信技术,融资融券,深股通,创业板综,破增发价股,股权分散,高市盈率",
     "industry": "信息技术-通信设备-通信配套服务",
-    "status": "good",
-    "ret": 14.22,
-    "note": "提示日收盘买入 4.64，现价 5.30",
+    "status": "mid",
+    "ret": 4.96,
+    "note": "提示日收盘买入 4.64，现价 4.87",
     "hit_dates": [
       "2026-11-10",
       "2026-11-11"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "002139",
@@ -13106,13 +13106,13 @@
     "score": 0.6468,
     "concepts": "深圳特区,物联网,锂电池概念,智能电网,光伏概念,安防概念,智能家居,无人机,人工智能,智能驾驶,新能源车,无线充电,华为概念,边缘计算,无线耳机,半导体概念,鸿蒙概念,华为汽车,钠离子电池,储能概念,机器视觉,激光雷达,机器人概念,空气能热泵,液冷服务器,高压快充,新型工业化,人形机器人,DeepSeek概念,消费电子概念,电网概念,电池技术,深成500,融资融券,参股新三板,深股通,小盘股,破增发价股,2026中报预减,基金减仓",
     "industry": "电子设备-电子设备制造-电子设备制造",
-    "status": "mid",
-    "ret": 0.0,
-    "note": "提示日收盘买入 10.48，现价 10.48",
+    "status": "bad",
+    "ret": -4.01,
+    "note": "提示日收盘买入 10.48，现价 10.06",
     "hit_dates": [
       "2026-11-11"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "002765",
@@ -13136,13 +13136,13 @@
     "score": 0.6328,
     "concepts": "西部大开发,央国企改革,虚拟现实,新能源车,华为汽车,机器人概念,减速器,低空经济,融资融券,深股通,超跌股,破增发价股,2026中报首亏",
     "industry": "交运设备-汽车-汽车零部件",
-    "status": "mid",
-    "ret": 0.0,
-    "note": "提示日收盘买入 7.80，现价 7.80",
+    "status": "bad",
+    "ret": -5.0,
+    "note": "触及 -5% 止损离场",
     "hit_dates": [
       "2026-11-11"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "002362",
@@ -13166,13 +13166,13 @@
     "score": 0.6194,
     "concepts": "云计算,智慧城市,大数据,智能穿戴,在线教育,安防概念,基因测序,人工智能,智能驾驶,国产芯片,生物识别,互联网医疗,数字阅读,机器视觉,电子纸概念,电子身份证,机器人概念,信创,ChatGPT概念,DeepSeek概念,AI应用,消费电子概念,融资融券,参股新三板,深股通,破发股,破增发价股,连续亏损",
     "industry": "信息技术-计算机软件-行业应用软件",
-    "status": "mid",
-    "ret": 0.0,
-    "note": "提示日收盘买入 18.69，现价 18.69",
+    "status": "bad",
+    "ret": -5.0,
+    "note": "触及 -5% 止损离场",
     "hit_dates": [
       "2026-11-11"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "300113",
@@ -13196,13 +13196,13 @@
     "score": 0.5701,
     "concepts": "网络游戏,云计算,大数据,网络安全,虚拟现实,人工智能,网红经济,百度概念,电子竞技,边缘计算,抖音概念(字节概念),盲盒经济,元宇宙概念,虚拟数字人,Web3.0,数据确权,算力概念,多模态AI,英伟达概念,谷子经济,首发经济,AI智能体,DeepSeek概念,腾讯云,AI应用,新消费,文娱消费,融资融券,深股通,创业板综,富时罗素,小盘股,小盘成长,基金减仓",
     "industry": "互联网-互联网服务-其他互联网服务",
-    "status": "mid",
-    "ret": 0.0,
-    "note": "提示日收盘买入 18.68，现价 18.68",
+    "status": "bad",
+    "ret": -5.0,
+    "note": "触及 -5% 止损离场",
     "hit_dates": [
       "2026-11-11"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "603097",
@@ -13227,12 +13227,12 @@
     "concepts": "光伏概念,铁路基建,风能,充电桩,数据中心,储能概念,转债标的,沪股通,专精特新,2026中报首亏,基金增仓",
     "industry": "电气设备-输变电设备-其他输变电设备",
     "status": "mid",
-    "ret": 0.0,
-    "note": "提示日收盘买入 20.75，现价 20.75",
+    "ret": 3.42,
+    "note": "提示日收盘买入 20.75，现价 21.46",
     "hit_dates": [
       "2026-11-11"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
   },
   {
     "code": "300043",
@@ -13256,12 +13256,72 @@
     "score": 0.4889,
     "concepts": "网络游戏,婴童概念,电子竞技,抖音概念(字节概念),元宇宙概念,谷子经济,AI应用,新消费,文娱消费,深股通,创业板综,富时罗素,基金减仓",
     "industry": "互联网-互联网服务-游戏娱乐",
-    "status": "mid",
-    "ret": 0.0,
-    "note": "提示日收盘买入 4.92，现价 4.92",
+    "status": "bad",
+    "ret": -5.0,
+    "note": "触及 -5% 止损离场",
     "hit_dates": [
       "2026-11-11"
     ],
-    "last_check": "2026-11-11"
+    "last_check": "2026-11-12"
+  },
+  {
+    "code": "002148",
+    "name": "北纬科技",
+    "date": "2026-11-12",
+    "symbol": "",
+    "trigger": 6.73,
+    "req_vol": 23745753,
+    "req_vol_wan": 23.75,
+    "model_stop": 6.39,
+    "stop": 6.87,
+    "buy_price": 7.23,
+    "buy_date": "2026-11-12",
+    "platform_top": 6.7,
+    "sw_win": "2026-09-09~2026-11-11",
+    "sw_range": 1.197,
+    "sw_std": 0.039,
+    "vol_x": 10.26,
+    "chg": 10.05,
+    "last_close": 7.23,
+    "score": 0.6323,
+    "concepts": "创投,网络游戏,物联网,大数据,安防概念,无人机,5G概念,智能驾驶,国产芯片,车联网(车路云),抖音概念(字节概念),数字经济,机器人概念,低空经济,通信技术,融资融券,深股通,2026中报扭亏,基金减仓,高市盈率",
+    "industry": "信息技术-通信设备-通信配套服务",
+    "status": "mid",
+    "ret": 0.0,
+    "note": "提示日收盘买入 7.23，现价 7.23",
+    "hit_dates": [
+      "2026-11-12"
+    ],
+    "last_check": "2026-11-12"
+  },
+  {
+    "code": "300629",
+    "name": "新劲刚",
+    "date": "2026-11-12",
+    "symbol": "",
+    "trigger": 19.38,
+    "req_vol": 19839805,
+    "req_vol_wan": 19.84,
+    "model_stop": 18.41,
+    "stop": 18.55,
+    "buy_price": 19.53,
+    "buy_date": "2026-11-12",
+    "platform_top": 19.28,
+    "sw_win": "2026-09-09~2026-11-11",
+    "sw_range": 1.147,
+    "sw_std": 0.028,
+    "vol_x": 2.5,
+    "chg": 5.97,
+    "last_close": 19.53,
+    "score": 0.5715,
+    "concepts": "军工,新材料,无人机,军民融合,大飞机,卫星互联网,商业航天,低空经济,碳纤维,融资融券,深股通,创业板综,破增发价股",
+    "industry": "信息技术-通信设备-通信传输设备",
+    "status": "mid",
+    "ret": 0.0,
+    "note": "提示日收盘买入 19.53，现价 19.53",
+    "hit_dates": [
+      "2026-11-12"
+    ],
+    "last_check": "2026-11-12"
   }
 ]
