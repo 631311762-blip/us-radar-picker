@@ -135,6 +135,86 @@ def _is_hard_excluded(name):
 
 
 # ------------------------------------------------------------------ 全市场列表 + 硬剔除
+# 基础股票池快照（提交进仓库，跨 runner 持久化）：东财 clist 列表接口对云 IP
+# 偶发阻断/限流，实时拉取失败时回退此快照，避免整条流水线崩溃。
+BASE_UNIVERSE_JSON = os.path.join(STATE_DIR, "base_universe.json")
+# 全A 剔除 ST/立信后正常应 >3000；低于此值视为接口拉取失败，启用兜底/重试。
+UNIVERSE_SANITY_MIN = 1500
+
+
+def _fetch_raw_universe(attempts=3, backoff=20):
+    """从东财 clist 拉全市场原始股票列表（code/name/board），不含任何剔除。
+
+    对「云 IP 偶发阻断/限流」做多层退避：单 host 失败重试(retry=2) + 整轮
+    拉取偏少时退避重跑。返回原始 rows；全部失败返回 []。
+    """
+    fields = "f2,f3,f5,f6,f8,f10,f12,f13,f14,f15,f16,f17,f18,f20,f21"
+    for attempt in range(attempts + 1):
+        rows = []
+        for name, fs in EM_BOARDS:
+            pn = 1
+            while True:
+                params = {
+                    "pn": pn, "pz": 100, "po": 1, "np": 1, "fid": "f3",
+                    "fs": fs, "fields": fields, "ut": EM_UT, "fltt": 2, "invt": 2,
+                }
+                data = {}
+                hosts = EM_LIST_HOSTS[:]
+                random.shuffle(hosts)
+                for host in hosts:
+                    j = http_json("https://%s/api/qt/clist/get" % host, params=params,
+                                  timeout=15, retry=2)
+                    data = (j or {}).get("data") or {}
+                    if data.get("diff"):
+                        break
+                    time.sleep(0.3)
+                diff = data.get("diff") or []
+                if isinstance(diff, dict):
+                    diff = list(diff.values())
+                if not diff:
+                    break
+                total = int(float(data.get("total") or 0))
+                for x in diff:
+                    code = str(x.get("f12", "")).zfill(6)
+                    price = _to_float(x.get("f2"))
+                    nm = x.get("f14", "") or ""
+                    if not code or price <= 0:
+                        continue
+                    rows.append({"code": code, "name": nm, "board": name})
+                if len(diff) < 100 or (total and pn * 100 >= total):
+                    break
+                pn += 1
+                time.sleep(0.2)
+        if len(rows) >= UNIVERSE_SANITY_MIN:
+            return rows
+        if attempt < attempts:
+            print("[common] 全市场列表仅拉到 %d 只（疑似接口限流/阻断），%ds 后重试（%d/%d）"
+                  % (len(rows), backoff, attempt + 1, attempts))
+            time.sleep(backoff)
+    return rows
+
+
+def save_base_universe(rows):
+    """把成功拉到的原始股票列表落盘为快照（下次接口失效时兜底）。"""
+    try:
+        with open(BASE_UNIVERSE_JSON, "w", encoding="utf-8") as fh:
+            json.dump({"generated_at": datetime.now(BJT).isoformat(timespec="seconds"),
+                       "count": len(rows), "rows": rows}, fh, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def load_base_universe():
+    if not os.path.exists(BASE_UNIVERSE_JSON):
+        return []
+    try:
+        with open(BASE_UNIVERSE_JSON, "r", encoding="utf-8") as fh:
+            d = json.load(fh)
+        return [r for r in (d.get("rows") or []) if r.get("code")]
+    except Exception:
+        return []
+
+
 def get_universe(verbose=True, apply_lixin=True):
     """东方财富全市场列表，应用硬共识剔除，返回统一结构的样本池。
 
@@ -144,72 +224,61 @@ def get_universe(verbose=True, apply_lixin=True):
     返回字段：code, name, board, price, pct(涨跌幅%), turnover(换手%),
              mktcap(总市值), float_mktcap(流通市值), vr(量比)。
     board 用于下游按板块过滤（如易点仅创/科/北交）。
+
+    韧性：优先实时拉取（多层退避重试）；若实时结果异常偏少（接口偶发阻断），
+    回退已提交的 base_universe.json 快照，保证流水线不因单一接口抖动而整体
+    崩溃。实时成功时自动刷新快照。
     """
-    fields = "f2,f3,f5,f6,f8,f10,f12,f13,f14,f15,f16,f17,f18,f20,f21"
     lixin = load_lixin_exclude() if apply_lixin else set()
     st_drop = lixin_drop = 0
-    rows = []
-    for name, fs in EM_BOARDS:
-        pn = 1
-        while True:
-            params = {
-                "pn": pn, "pz": 100, "po": 1, "np": 1, "fid": "f3",
-                "fs": fs, "fields": fields, "ut": EM_UT, "fltt": 2, "invt": 2,
-            }
-            data = {}
-            hosts = EM_LIST_HOSTS[:]
-            random.shuffle(hosts)
-            for host in hosts:
-                j = http_json("https://%s/api/qt/clist/get" % host, params=params,
-                              timeout=15, retry=0)
-                data = (j or {}).get("data") or {}
-                if data.get("diff"):
-                    break
-                time.sleep(0.2)
-            diff = data.get("diff") or []
-            if isinstance(diff, dict):
-                diff = list(diff.values())
-            if not diff:
-                break
-            total = int(float(data.get("total") or 0))
-            for x in diff:
-                code = str(x.get("f12", "")).zfill(6)
-                price = _to_float(x.get("f2"))
-                nm = x.get("f14", "") or ""
-                if not code or price <= 0:
-                    continue
-                if _is_hard_excluded(nm):   # 条件③：ST/退市/次新 硬剔除
-                    st_drop += 1
-                    continue
-                if code in lixin:            # 条件②：立信审计排除集 物理剔除
-                    lixin_drop += 1
-                    continue
-                rows.append({
-                    "code": code, "name": nm, "board": name,
-                    "price": price,
-                    "pct": _to_float(x.get("f3")),
-                    "turnover": _to_float(x.get("f8")),
-                    "volume": _to_float(x.get("f5")),     # 成交量（手）
-                    "amount": _to_float(x.get("f6")),     # 成交额（元）
-                    "prev_close": _to_float(x.get("f18")),
-                    "mktcap": _to_float(x.get("f20")),
-                    "float_mktcap": _to_float(x.get("f21")),
-                    "vr": _to_float(x.get("f10")),
-                })
-            if len(diff) < 100 or (total and pn * 100 >= total):
-                break
-            pn += 1
-            time.sleep(0.2)
-    seen, uniq = set(), []
-    for r in rows:
-        if r["code"] in seen:
+
+    raw = _fetch_raw_universe()
+    used_fallback = False
+    if len(raw) < UNIVERSE_SANITY_MIN:
+        snap = load_base_universe()
+        if snap:
+            print("[common] 实时列表异常（%d 只），回退基础股票池快照 %d 只"
+                  % (len(raw), len(snap)))
+            raw = snap
+            used_fallback = True
+        else:
+            print("[common] 实时列表异常且无快照，样本池为空。")
+            if verbose:
+                print("[common] 全市场样本池：0 只（ST/次新剔除 0，立信剔除 0）")
+            return []
+    # 实时成功（非兜底）且结果完整 → 刷新快照，供后续接口失效时兜底
+    if not used_fallback and len(raw) >= UNIVERSE_SANITY_MIN:
+        save_base_universe(raw)
+
+    rows, seen = [], set()
+    for r in raw:
+        code = str(r.get("code", "")).zfill(6)
+        nm = r.get("name", "") or ""
+        if code in seen:
             continue
-        seen.add(r["code"])
-        uniq.append(r)
+        seen.add(code)
+        if _is_hard_excluded(nm):   # 条件③：ST/退市/次新 硬剔除
+            st_drop += 1
+            continue
+        if code in lixin:            # 条件②：立信审计排除集 物理剔除
+            lixin_drop += 1
+            continue
+        rows.append({
+            "code": code, "name": nm, "board": r.get("board") or board_of(code),
+            "price": _to_float(r.get("f2")),
+            "pct": _to_float(r.get("f3")),
+            "turnover": _to_float(r.get("f8")),
+            "volume": _to_float(r.get("f5")),     # 成交量（手）
+            "amount": _to_float(r.get("f6")),     # 成交额（元）
+            "prev_close": _to_float(r.get("f18")),
+            "mktcap": _to_float(r.get("f20")),
+            "float_mktcap": _to_float(r.get("f21")),
+            "vr": _to_float(r.get("f10")),
+        })
     if verbose:
         print("[common] 全市场样本池：%d 只（ST/次新剔除 %d，立信剔除 %d）"
-              % (len(uniq), st_drop, lixin_drop))
-    return uniq
+              % (len(rows), st_drop, lixin_drop))
+    return rows
 
 
 def _to_float(v, default=0.0):

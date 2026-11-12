@@ -105,7 +105,7 @@ jobs:
             python3 common/run_all.py
           fi
 
-      - name: 回写状态（立信集 / 推荐台账 / 回溯 / 参数）
+      - name: 回写状态（立信集 / 推荐台账 / 回溯 / 参数 / 基础股票池快照）
         if: always()
         run: |
           git config user.name "a-share-bot"
@@ -117,7 +117,9 @@ jobs:
           git add common/state/reviews 2>/dev/null || true
           git add common/state/params 2>/dev/null || true
           git add common/state/run_summary.json 2>/dev/null || true
-          git add common/state/universe.json 2>/dev/null || true  # 合并流水线样本池（供云盘自动化筛选）
+          git add common/state/universe.json 2>/dev/null || true  # 合并流水线样本池（供云盘自动化筛选；gitignored 实际不入库）
+          # 基础股票池快照：实时列表接口失效时的兜底，必须入库以跨 runner 持久化
+          git add common/state/base_universe.json 2>/dev/null || true
           # 各模型自有台账/归档
           git add shanshui/善水模型_推荐跟踪.csv 2>/dev/null || true
           git add lingpei/state 2>/dev/null || true
