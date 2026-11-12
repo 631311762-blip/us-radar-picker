@@ -1,25 +1,18 @@
 {
-  "generated_at": "2026-11-12T22:46:59+08:00",
-  "results": [
-    {
-      "name": "kaizhong",
-      "label": "凯众模型 v4",
-      "exit": 0,
-      "seconds": 236.9
-    }
-  ],
+  "generated_at": "2026-11-12T23:23:26+08:00",
+  "results": [],
   "settlements": [
     {
       "model": "shanshui",
       "batches": 2,
-      "samples": 0,
-      "win_rate": null
+      "samples": 4,
+      "win_rate": 0.5
     },
     {
       "model": "low_shadow",
       "batches": 2,
-      "samples": 0,
-      "win_rate": null
+      "samples": 1,
+      "win_rate": 0.0
     },
     {
       "model": "low_shadow2",
@@ -30,20 +23,20 @@
     {
       "model": "lingpei",
       "batches": 2,
-      "samples": 1,
+      "samples": 17,
       "win_rate": 0.0
     },
     {
       "model": "kaizhong",
       "batches": 2,
-      "samples": 0,
-      "win_rate": null
+      "samples": 12,
+      "win_rate": 0.0
     },
     {
       "model": "yidian",
       "batches": 3,
-      "samples": 6,
-      "win_rate": 0.0
+      "samples": 18,
+      "win_rate": 0.2778
     },
     {
       "model": "powei",

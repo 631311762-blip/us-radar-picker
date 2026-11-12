@@ -1,14 +1,14 @@
 {
   "model": "shanshui",
-  "generated_at": "2026-11-12T22:46:59+08:00",
+  "generated_at": "2026-11-12T23:23:26+08:00",
   "batches": 2,
-  "samples": 0,
-  "win_rate": null,
+  "samples": 4,
+  "win_rate": 0.5,
   "by_horizon": {
     "t1": {
-      "samples": 0,
-      "win_rate": null,
-      "avg_return": null
+      "samples": 4,
+      "win_rate": 0.5,
+      "avg_return": 0.0077
     },
     "t5": {
       "samples": 0,
@@ -21,5 +21,30 @@
       "avg_return": null
     }
   },
-  "details": []
+  "details": [
+    {
+      "code": "600609",
+      "name": "金杯汽车",
+      "date": "2026-11-10",
+      "t1": 0.0418
+    },
+    {
+      "code": "603967",
+      "name": "中创物流",
+      "date": "2026-11-11",
+      "t1": 0.0461
+    },
+    {
+      "code": "300692",
+      "name": "中赋科技",
+      "date": "2026-11-11",
+      "t1": -0.0334
+    },
+    {
+      "code": "002876",
+      "name": "三利谱",
+      "date": "2026-11-11",
+      "t1": -0.0237
+    }
+  ]
 }
