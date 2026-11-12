@@ -77,7 +77,13 @@ jobs:
         id: prefilter
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
           KZ_DATA_DIR: kaizhong/state
+          # 2026-11-13：抓取时间预算改为仓库变量可配置
+          # （Settings → Secrets and variables → Actions → Variables），
+          # 缺省仍为 300s，无需改代码即可按运行状况调整。
+          KLINE_BATCH_BUDGET: ${{ vars.KLINE_BATCH_BUDGET || '300' }}
+          LIST_FETCH_DEADLINE: ${{ vars.LIST_FETCH_DEADLINE || '300' }}
         run: |
           set -o pipefail
           ARGS=""
@@ -88,6 +94,62 @@ jobs:
           # 输出 trading_day 供后续步骤判断
           TD=$(python3 -c "import json;print('true' if json.load(open('common/state/meta.json')).get('trading_day') else 'false')")
           echo "trading_day=$TD" >> "$GITHUB_OUTPUT"
+
+      # 2026-11-13：前置层可观测性 —— 把降级模式、K线覆盖率、快照健康、
+      # 告警清单写进 Step Summary，避免「静默用残缺数据」无人察觉。
+      - name: 前置层运行摘要（降级 / 覆盖率 / 告警）
+        if: always()
+        id: prefilter_report
+        run: |
+          python3 - <<'PY'
+          import json, os
+          m = {}
+          try:
+              m = json.load(open("common/state/meta.json", encoding="utf-8"))
+          except Exception as e:
+              print("meta.json 不可读（前置层可能未产出）: %s" % e)
+          degraded = bool(m.get("degraded"))
+          alerts = m.get("alerts") or []
+          k = m.get("kline") or {}
+          kz = m.get("kz_kline") or {}
+          sh = m.get("snapshot_health") or {}
+          out = os.environ.get("GITHUB_OUTPUT")
+          if out:
+              with open(out, "a", encoding="utf-8") as fh:
+                  fh.write("degraded=%s\n" % ("true" if degraded else "false"))
+          lines = [
+              "### 共同前置层运行摘要", "",
+              "- 样本池：%s 只，来源：%s" % (m.get("universe_count", "-"), m.get("universe_source", "-")),
+              "- 降级模式：%s" % ("是" if degraded else "否"),
+              "- 快照健康：%s（%s 只）%s" % (
+                  sh.get("ok", "-"), sh.get("rows", "-"),
+                  "" if sh.get("ok") else " / " + str(sh.get("reason", ""))),
+          ]
+          if k and not k.get("skipped"):
+              lines.append("- 共享K线覆盖率：%.1f%%（成功 %s / 需拉 %s，失败 %s，超预算跳过 %s）" % (
+                  k.get("coverage", 0) * 100, k.get("ok", "-"), k.get("targets", "-"),
+                  k.get("fail", "-"), k.get("skip", "-")))
+          if kz:
+              lines.append("- 凯众K线覆盖率：%.1f%%（成功 %s / 需预填 %s）" % (
+                  kz.get("coverage", 0) * 100, kz.get("ok", "-"), kz.get("targets", "-")))
+          if alerts:
+              lines += ["", "#### 本次告警"]
+              for a in alerts:
+                  lines.append("- **%s**：%s" % (
+                      a.get("title", ""), str(a.get("content", "")).replace("\n", " ")))
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as fh:
+                  fh.write("\n".join(lines) + "\n")
+          print("\n".join(lines))
+          PY
+
+      - name: 失败摘要（配合按天聚合通知）
+        if: failure()
+        run: |
+          echo "### 本次运行失败" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "失败详情已由 failure-notify.yml 按天聚合成一条告警，当日后续失败不再重复推送。" >> "$GITHUB_STEP_SUMMARY"
 
       - name: 运行全部模型（共同样本池 + 统一回溯/修正）
         if: steps.prefilter.outputs.trading_day == 'true'

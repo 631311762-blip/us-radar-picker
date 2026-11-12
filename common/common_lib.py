@@ -97,17 +97,61 @@ KLINE_WORKERS = 24
 # 叠加会变成无底洞（一只股票最多 超时×重试×host 数 秒，4000 只轻松跑几小时）。
 BULK_TIMEOUT = 8
 BULK_RETRY = 1
+
+
+def _env_int(name, default, lo=30, hi=3600):
+    """从环境变量读整型配置；缺失/非法时用默认值，并夹在 [lo, hi] 防误配。"""
+    try:
+        v = int(os.environ.get(name, default))
+        return max(lo, min(hi, v))
+    except (TypeError, ValueError):
+        return default
+
+
 # 批量任务硬上限（秒）：超时即放弃剩余（K线缓存本就是优化，模型各自会回退重抓）。
-KLINE_BATCH_BUDGET = 300
+# 2026-11-13：改为可由 workflow 环境变量覆盖（不改代码即可按需调预算）。
+# 保持默认 300s：新浪 K 线兜底修复后实测 4606 只可在预算内全部命中，
+# 盲目放宽只会延长降级日的前置层耗时，挤占 180 分钟 job 预算。
+KLINE_BATCH_BUDGET = _env_int("KLINE_BATCH_BUDGET", 300)
 # 列表接口整体抓取的时间上限（秒）：到点即回退快照，避免挂起卡死整条流水线。
 # 300s：东财被云 IP 阻断时每页都要烧满超时，600s 会让前置层白等 10 分钟；
 # 且已有带富字段的基础快照可回退（见 get_universe），早回退反而更准更快。
-LIST_FETCH_DEADLINE = 300
+LIST_FETCH_DEADLINE = _env_int("LIST_FETCH_DEADLINE", 300)
 # K 线源熔断：东财探测能通过但批量被限流时，连续失败达此数即整体切兜底，
 # 避免 4000+ 只逐只烧满「3 host × 超时 × 重试」把流水线拖成几小时。
 EM_KLINE_CIRCUIT_THRESHOLD = 15
 
+# 最近一次抓取的可观测状态（供 prefilter.py 写 meta.json / 触发降级告警）。
+# 2026-11-13 新增：此前 K 线「成功 297 / 失败 4309」只有一行日志，下游模型
+# 静默使用残缺缓存无从感知；现在把覆盖率、熔断状态显式暴露出去。
+LAST_KLINE_STATS = {}
+LAST_KZ_KLINE_STATS = {}
+LAST_UNIVERSE_STATUS = {}
+# 覆盖率低于此比例即判定「缓存降级」，写 meta 并告警（下游模型会自行回退抓数，
+# 结果不必然错，但耗时与数据完整度都受影响，必须让人看得见）。
+KLINE_COVERAGE_WARN = 0.9
+
 _lock = threading.Lock()
+
+
+def kline_stats(which="shared"):
+    """返回最近一次 K 线批量抓取的详细统计（copy，避免调用方污染全局）。"""
+    return dict(LAST_KLINE_STATS if which == "shared" else LAST_KZ_KLINE_STATS)
+
+
+def kline_source_status():
+    """当前 K 线数据源状态：是否已熔断切兜底、腾讯 WAF 是否拦截。"""
+    return {
+        "em_available": bool(_EM_AVAILABLE),
+        "em_fail_streak": int(_em_fail_streak),
+        "tx_waf_blocked": bool(_TX_WAF_BLOCKED),
+        "em_circuit_threshold": EM_KLINE_CIRCUIT_THRESHOLD,
+    }
+
+
+def universe_status():
+    """最近一次样本池构建的数据来源状态（realtime / snapshot / none）。"""
+    return dict(LAST_UNIVERSE_STATUS)
 
 
 # ------------------------------------------------------------------ 通用工具
@@ -273,7 +317,38 @@ def load_base_universe():
         return []
 
 
-def get_universe(verbose=True, apply_lixin=True):
+# 快照健康判据（2026-11-13）：条数下限 + 必需字段 + 价格健全率。
+# 目的：降级前先确认兜底数据本身可信，避免「空快照 / 旧快照被污染成 price=0」
+# 被当成有效样本池，静默跑出失真的选股结果（11-12 曾发生）。
+BASE_UNIVERSE_MIN_ROWS = 3000
+BASE_UNIVERSE_MIN_PRICED_RATIO = 0.8
+
+
+def check_base_universe_health(rows=None):
+    """校验 base_universe.json 能否作为降级兜底。
+
+    返回 (healthy: bool, reason: str, rows: list)。任何一项不满足都视为不可用。
+    """
+    if rows is None:
+        rows = load_base_universe()
+    if not rows:
+        return False, "基础股票池快照缺失、为空或无法解析（base_universe.json）", []
+    n = len(rows)
+    if n < BASE_UNIVERSE_MIN_ROWS:
+        return False, "快照仅 %d 只 < 下限 %d 只（疑似残缺）" % (n, BASE_UNIVERSE_MIN_ROWS), rows
+    probe = rows[:500]
+    if not all(str(r.get("code") or "").strip() and str(r.get("name") or "").strip()
+               for r in probe):
+        return False, "快照缺少 code/name 必需字段", rows
+    priced = sum(1 for r in rows if _to_float(r.get("f2")) > 0)
+    ratio = priced / float(n)
+    if ratio < BASE_UNIVERSE_MIN_PRICED_RATIO:
+        return False, ("快照价格健全率仅 %.1f%%（%d/%d 有价）< %.0f%%"
+                       % (ratio * 100, priced, n, BASE_UNIVERSE_MIN_PRICED_RATIO * 100)), rows
+    return True, "ok（%d 只，价格健全率 %.1f%%）" % (n, ratio * 100), rows
+
+
+def get_universe(verbose=True, apply_lixin=True, force_snapshot=False):
     """东方财富全市场列表，应用硬共识剔除，返回统一结构的样本池。
 
     apply_lixin=False 时只做 ST/次新/无行情 剔除，用于「立信排除集生成」阶段
@@ -286,18 +361,45 @@ def get_universe(verbose=True, apply_lixin=True):
     韧性：优先实时拉取（多层退避重试）；若实时结果异常偏少（接口偶发阻断），
     回退已提交的 base_universe.json 快照，保证流水线不因单一接口抖动而整体
     崩溃。实时成功时自动刷新快照。
+
+    force_snapshot=True：跳过实时源，直接用「已通过健康校验」的基础快照构建
+    样本池。仅供 prefilter 的 fail-degraded 二次兜底使用（实时源与常规回退都
+    返回空时）。走的是同一套 ST / 立信 硬剔除逻辑，降级不改变任何准入条件。
     """
     lixin = load_lixin_exclude() if apply_lixin else set()
     st_drop = lixin_drop = 0
 
-    raw = _fetch_raw_universe()
-    used_fallback = False
-    snap = load_base_universe()
+    if force_snapshot:
+        healthy, reason, snap_rows = check_base_universe_health()
+        if not healthy:
+            print("[common] 强制快照降级不可用：%s" % reason)
+            LAST_UNIVERSE_STATUS.clear()
+            LAST_UNIVERSE_STATUS.update({"source": "none", "rows": 0, "error": reason})
+            return []
+        raw = snap_rows
+        used_fallback = True
+        snap = snap_rows
+        print("[common] 强制使用基础股票池快照 %d 只（实时源异常，fail-degraded）" % len(raw))
+        # best-effort 补当日价格；失败则沿用快照自带价格，不阻断
+        prices = _refresh_prices_tx([r.get("code", "") for r in raw])
+        if prices:
+            for r in raw:
+                pr = prices.get(str(r.get("code", "")).zfill(6))
+                if pr:
+                    r["f2"] = pr[0]
+                    r["f3"] = pr[1]
+            print("[common] 腾讯实时行情补价成功 %d 只" % len(prices))
+    else:
+        raw = _fetch_raw_universe()
+        used_fallback = False
+        snap = load_base_universe()
     # 只有「实时结果不比已提交的完整快照少」才允许刷新快照。
     # UNIVERSE_SANITY_MIN(1000) 只代表接口没完全挂：若降级日实时拉到 1500 只
     # 就覆盖 4607 只快照，会造成样本池静默缩水（历史缺陷）。降级日一律回退
     # 更全的快照，绝不拿部分结果刷新快照。
-    if len(raw) >= UNIVERSE_SANITY_MIN and len(raw) >= int(len(snap) * 0.9):
+    if force_snapshot:
+        pass  # 上面已完成 raw 赋值；降级数据绝不回写快照，避免污染富字段快照
+    elif len(raw) >= UNIVERSE_SANITY_MIN and len(raw) >= int(len(snap) * 0.9):
         save_base_universe(raw)
     elif raw:
         if len(snap) > len(raw):
@@ -327,6 +429,11 @@ def get_universe(verbose=True, apply_lixin=True):
             print("[common] 实时列表异常且无快照，样本池为空。")
             if verbose:
                 print("[common] 全市场样本池：0 只（ST/次新剔除 0，立信剔除 0）")
+            LAST_UNIVERSE_STATUS.clear()
+            LAST_UNIVERSE_STATUS.update({
+                "source": "none", "rows": 0,
+                "error": "realtime_empty_and_snapshot_unusable",
+            })
             return []
 
     rows, seen = [], set()
@@ -380,6 +487,13 @@ def get_universe(verbose=True, apply_lixin=True):
     if verbose:
         print("[common] 全市场样本池：%d 只（ST/次新剔除 %d，立信剔除 %d）"
               % (len(rows), st_drop, lixin_drop))
+    LAST_UNIVERSE_STATUS.clear()
+    LAST_UNIVERSE_STATUS.update({
+        "source": "snapshot" if used_fallback else "realtime",
+        "rows": len(rows),
+        "st_drop": st_drop,
+        "lixin_drop": lixin_drop,
+    })
     return rows
 
 
@@ -755,6 +869,19 @@ def fetch_klines_batch(universe, count=KLINE_CACHE_COUNT, workers=KLINE_WORKERS,
     if verbose:
         print("[common] K线缓存完成：成功 %d，失败 %d，跳过 %d（预算 %ds）"
               % (ok, fail, skip, budget))
+    coverage = (ok / float(total)) if total else 1.0
+    LAST_KLINE_STATS.clear()
+    LAST_KLINE_STATS.update({
+        "kind": "shared", "ok": ok, "fail": fail, "skip": skip,
+        "targets": total, "budget": budget,
+        "coverage": round(coverage, 4),
+        "degraded": bool(total) and coverage < KLINE_COVERAGE_WARN,
+        "source": kline_source_status(),
+    })
+    if total and coverage < KLINE_COVERAGE_WARN:
+        print("[common][ALERT] 共享K线缓存未全覆盖：成功 %d / 需拉 %d（覆盖率 %.1f%%），"
+              "失败 %d、超预算跳过 %d；下游模型将回退自行抓取，耗时与数据完整度受影响。"
+              % (ok, total, coverage * 100, fail, skip))
     return ok, fail
 
 
@@ -868,6 +995,19 @@ def cache_kaizhong_klines(universe, count=KAIZHONG_LOOKBACK,
     if verbose:
         print("[common] 凯众不复权K线完成：成功 %d，失败 %d，超预算跳过 %d"
               "（失败/跳过者凯众自行回退）" % (ok, fail, skipped))
+    total = len(targets)
+    coverage = (ok / float(total)) if total else 1.0
+    LAST_KZ_KLINE_STATS.clear()
+    LAST_KZ_KLINE_STATS.update({
+        "kind": "kaizhong", "ok": ok, "fail": fail, "skip": skipped,
+        "targets": total, "budget": budget,
+        "coverage": round(coverage, 4),
+        "degraded": bool(total) and coverage < KLINE_COVERAGE_WARN,
+        "source": kline_source_status(),
+    })
+    if total and coverage < KLINE_COVERAGE_WARN:
+        print("[common][ALERT] 凯众不复权K线未全覆盖：成功 %d / 需预填 %d（覆盖率 %.1f%%），"
+              "凯众将自行回退新浪抓取。" % (ok, total, coverage * 100))
     return ok, fail + skipped
 
 

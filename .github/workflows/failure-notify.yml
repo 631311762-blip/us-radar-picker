@@ -1,0 +1,83 @@
+name: 失败通知聚合
+
+# =========================================================================
+# 2026-11-13（诊断报告第 5 项）
+# -------------------------------------------------------------------------
+# 背景：11-12 当天主流水线连挂 5 次，GitHub 每次失败都发一封邮件，
+#       加上 6 次 cancelled，体感成了「每天都失败」。
+#
+# 作用：监听下列工作流 completed 事件，只对 conclusion=failure 做出反应；
+#       同一天（北京时间）的多次失败聚合成 **一条** PushPlus / Server酱 告警，
+#       后续失败只累加计数并写入去重状态文件，不再重复推送。
+#       去重状态 state/failure_notify.json 回写入库，跨 runner 持久生效。
+#
+# 重要边界：本 workflow **管不到 GitHub 账户自带的失败邮件** —— 那是账户级
+#   Settings → Notifications 的设置，仓库代码无法关闭。请在账户设置里把
+#   Actions 的 Email 通知关掉（或只保留 Web / Mobile），改由本聚合告警兜底，
+#   即可消除「一天 5 封失败邮件」的噪音。
+#
+# 防循环：workflows 列表显式列举、且不含本 workflow 自身；推送用 GITHUB_TOKEN
+#   并带 [skip ci]，不会触发列表内的任何工作流。
+# =========================================================================
+
+on:
+  workflow_run:
+    workflows:
+      - "A股模型统一流水线（共同前置层）"
+      - "凯众模型 v4 每日流程"
+      - "领湃模型每日流程"
+      - "低位上影线模型每日流程"
+      - "破位后上涨模型每日流程"
+      - "善水模型每日流程"
+      - "stock-v3 每日选股闭环"
+      - "美股异动双模型选股"
+      - "A股流水线保底监控"
+      - "易点模型每日流程"
+    types: [completed]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: failure-notify
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    # 成功 / 取消 / 跳过 都不告警，只有失败进入聚合
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 聚合并发送告警（当日仅一条）
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+          WF_NAME: ${{ github.event.workflow_run.name }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          python3 common/notify.py \
+            --workflow "$WF_NAME" \
+            --run-id "$RUN_ID" \
+            --url "$RUN_URL" \
+            --dedup-file state/failure_notify.json
+
+      - name: 回写去重状态（跨 runner 持久化）
+        if: always()
+        run: |
+          git config user.name "failure-notify-bot"
+          git config user.email "failure-notify-bot@users.noreply.github.com"
+          git add state/failure_notify.json 2>/dev/null || true
+          git commit -m "notify: failure aggregate $(date -u +%F) [skip ci]" || echo "去重状态无变更"
+          git pull --rebase origin main || true
+          git push || echo "推送去重状态失败（下次可能重复告警，不影响选股）"
