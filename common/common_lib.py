@@ -9,7 +9,8 @@ common_lib.py —— 多模型共享的「共同前置层」
      注意：价格下限、流动性下限、立信审计等「模型专属门槛」不在此层，
      由各模型自己保留，避免改变任何模型的选股结果。
   3) 交易日 / 行情更新判定（取若干样本 K 线最新日，与北京时间当日比较）。
-  4) 一次性批量缓存全市场 K 线到 common/state/klines/<code>.csv，
+  4) 一次性批量缓存全市场 K 线到 common/state/klines/<code>.csv
+     （东财为主，东财对云 IP 阻断时自动回退新浪/腾讯兜底），
      下游模型读缓存而非各自再拉一遍（这是合并流水线提速的关键）。
   5) load_universe() / load_kline() —— 下游模型读取共享结果的入口。
 
@@ -19,6 +20,7 @@ import os
 import sys
 import csv
 import json
+import re
 import time
 import random
 import threading
@@ -70,6 +72,12 @@ EM_LIST_HOSTS = [
 ]
 EM_UT = "bd1d9ddb04089700cf9c27f6f7426281"   # 列表接口专用 ut（已验证有效）
 EM_KUT = "fa5fd1943c7b386f172d6893dbfba10b"  # K线接口 ut
+
+# 腾讯财经兜底源：东财对云 IP 偶发整体阻断/限流时，K 线（历史+实时行情）改走腾讯。
+# 已验证腾讯可从云环境直连（HTTP 200，<0.1s），历史 K 线字段顺序与东财一致
+# [日期,开,收,高,低,成交量(手)]，成交量单位同为「手」，故下游模型无需任何改动。
+TX_KLINE_HOST = "web.ifzq.gtimg.cn"      # 历史 K 线（前复权 qfqday / 不复权 day）
+TX_QUOTE_HOST = "qt.gtimg.cn"            # 实时行情（批量刷新列表价格）
 
 # 全 A：沪深主板 + 创业板 + 科创板 + 北交所
 EM_BOARDS = [
@@ -270,6 +278,14 @@ def get_universe(verbose=True, apply_lixin=True):
                   % len(snap))
             raw = snap
             used_fallback = True
+            # 用腾讯实时行情补当日价格（best-effort，失败则用快照自带价格）
+            prices = _refresh_prices_tx([r.get("code", "") for r in snap])
+            if prices:
+                for r in raw:
+                    pr = prices.get(str(r.get("code", "")).zfill(6))
+                    if pr:
+                        r["f2"] = pr[0]; r["f3"] = pr[1]
+                print("[common] 腾讯实时行情补价成功 %d 只" % len(prices))
         else:
             print("[common] 实时列表异常且无快照，样本池为空。")
             if verbose:
@@ -344,7 +360,42 @@ def check_trading_day(verbose=True):
 
 
 # ------------------------------------------------------------------ K 线抓取与缓存
-def _fetch_one_kline(code, count=KLINE_CACHE_COUNT, fqt=1):
+def tx_secid_of(code):
+    """腾讯行情代码前缀：沪/科创=sh，深/创业=sz，北交=bj。"""
+    code = str(code).zfill(6)
+    if code.startswith(("6", "688", "689")):
+        return "sh" + code
+    if code.startswith(("8", "4", "92")):
+        return "bj" + code
+    return "sz" + code
+
+
+# 东财可用性探针（进程内只探一次）：东财对云 IP 偶发整体阻断，一旦探测失败则后续
+# K 线直接走腾讯兜底，避免在 4000+ 只上每只都烧东财超时（无底洞卡死）。
+_EM_PROBED = False
+_EM_AVAILABLE = True
+
+
+def _em_kline_available():
+    global _EM_PROBED, _EM_AVAILABLE
+    if _EM_PROBED:
+        return _EM_AVAILABLE
+    _EM_PROBED = True
+    for host in (EM_KLINE_HOSTS[0], EM_KLINE_HOSTS[1]):
+        j = http_json("https://%s/api/qt/stock/kline/get" % host,
+                      params={"secid": secid_of("600519"), "ut": EM_KUT,
+                              "fields1": "f1", "fields2": "f51",
+                              "klt": 101, "fqt": 1, "end": "20500101", "lmt": 1},
+                      timeout=5, retry=0)
+        if ((j or {}).get("data") or {}).get("klines"):
+            _EM_AVAILABLE = True
+            return True
+    _EM_AVAILABLE = False
+    print("[common] 东财 K 线探测失败，后续 K 线自动回退新浪/腾讯兜底")
+    return False
+
+
+def _fetch_one_kline_em(code, count=KLINE_CACHE_COUNT, fqt=1):
     """从东财抓取单只 K 线，返回规范 bars 或 None。
 
     fqt=1 前复权（共享主缓存，供 善水/低位上影/易点/领湃）；
@@ -382,6 +433,134 @@ def _fetch_one_kline(code, count=KLINE_CACHE_COUNT, fqt=1):
             return bars
         time.sleep(0.12)
     return None
+
+
+def _fetch_one_kline_tx(code, count=KLINE_CACHE_COUNT, fqt=1):
+    """腾讯财经历史 K 线兜底（东财挂起/阻断时启用）。
+
+    字段顺序与东财一致：[日期,开,收,高,低,成交量(手)]，成交量单位同为「手」，
+    故下游模型无需任何改动。fqt=1→前复权(qfqday)，fqt=0→不复权(day)。
+    """
+    kind = "qfqday" if fqt else "day"
+    sid = tx_secid_of(code)
+    j = http_json("https://%s/appstock/app/fqkline/get" % TX_KLINE_HOST,
+                  params={"param": "%s,%s,,,%d," % (sid, kind, count)},
+                  timeout=BULK_TIMEOUT, retry=BULK_RETRY)
+    node = ((j or {}).get("data") or {}).get(sid) or {}
+    rows = (node.get(kind) or node.get("day") or node.get("qfqday")) or []
+    bars = []
+    for p in rows:
+        if not isinstance(p, (list, tuple)) or len(p) < 6:
+            continue
+        try:
+            bars.append({
+                "date": str(p[0]),
+                "open": float(p[1]), "close": float(p[2]),
+                "high": float(p[3]), "low": float(p[4]),
+                "volume": float(p[5]),
+                "turnover": 0.0,
+            })
+        except (ValueError, TypeError):
+            continue
+    return bars if bars else None
+
+
+def _fetch_one_kline_sina(code, count=KLINE_CACHE_COUNT, fqt=1):
+    """新浪历史日线兜底（东财不可用时启用，已在该 runner 环境验证可全市场扫描）。
+
+    不复权日线（scale=240）；字段 day/open/high/low/close/volume，成交量单位为
+    「股」，÷100 转「手」以与东财口径一致（凯众量能判定用相对倍数，常数不影响结果）。
+    fqt 参数仅东财前/不复权有意义，新浪固定不复权，故忽略 fqt。
+    """
+    sym = tx_secid_of(code)      # sh/sz/bj 前缀，与新浪代码一致
+    url = ("http://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_=/"
+           "CN_MarketDataService.getKLineData?symbol=" + sym +
+           "&scale=240&ma=no&datalen=" + str(count))
+    try:
+        r = SESSION.get(url, headers={"User-Agent": HEADERS["User-Agent"],
+                                      "Referer": "https://finance.sina.com.cn"},
+                        timeout=BULK_TIMEOUT)
+        txt = r.text
+    except Exception:
+        return None
+    if not txt or "location.href" in txt:
+        return None
+    m = re.search(r"\((\[.*\])\)", txt, re.S)
+    if not m:
+        return None
+    bars = []
+    try:
+        for d in json.loads(m.group(1)):
+            try:
+                bars.append({
+                    "date": str(d["day"]),
+                    "open": float(d["open"]), "close": float(d["close"]),
+                    "high": float(d["high"]), "low": float(d["low"]),
+                    "volume": float(d["volume"]) / 100.0,   # 股→手
+                    "turnover": 0.0,
+                })
+            except (ValueError, TypeError, KeyError):
+                continue
+    except Exception:
+        return None
+    return bars if bars else None
+
+
+def _fetch_one_kline(code, count=KLINE_CACHE_COUNT, fqt=1):
+    """单只 K 线：优先东财；东财不可用时自动回退新浪→腾讯兜底（字段口径一致）。
+
+    兜底顺序 新浪→腾讯：新浪历史日线已在该 runner 环境验证可全市场扫描；腾讯历史
+    K 线字段与东财一致，作次选冗余。两者均返回不复权日线，与东财 fqt=1 前复权在
+    「无近期除权」时等价；除权股在降级日略有偏差，属可接受的兜底近似（远优于无
+    数据导致整条流水线崩溃）。
+    """
+    if _em_kline_available():
+        bars = _fetch_one_kline_em(code, count=count, fqt=fqt)
+        if bars:
+            return bars
+    bars = _fetch_one_kline_sina(code, count=count)
+    if bars:
+        return bars
+    return _fetch_one_kline_tx(code, count=count)
+
+
+def _refresh_prices_tx(codes, batch=80):
+    """腾讯实时行情批量刷新价格（东财列表接口失效时，给快照样本池补当日价格）。
+
+    返回 {code: (price, pct)}。best-effort：单批失败不中断，整体失败返回空，
+    交由快照自带（上次成功时的）价格兜底，流水线不会因此崩溃。
+    """
+    out = {}
+    for i in range(0, len(codes), batch):
+        chunk = codes[i:i + batch]
+        q = ",".join(tx_secid_of(c) for c in chunk)
+        try:
+            r = SESSION.get("https://%s/q=%s" % (TX_QUOTE_HOST, q),
+                            headers={"User-Agent": HEADERS["User-Agent"],
+                                     "Referer": "https://gu.qq.com/"},
+                            timeout=8)
+            txt = r.text
+        except Exception:
+            continue
+        for line in txt.split(";"):
+            line = line.strip()
+            if not line.startswith("v_"):
+                continue
+            _, _, val = line.partition("=")
+            val = val.strip().strip('"')
+            if not val:
+                continue
+            parts = val.split("~")
+            if len(parts) < 5:
+                continue
+            try:
+                price = float(parts[3]); prev = float(parts[4])
+            except ValueError:
+                continue
+            code = str(parts[2]).zfill(6)
+            pct = (price - prev) / prev * 100 if prev else 0.0
+            out[code] = (price, pct)
+    return out
 
 
 def _kline_csv_path(code):
