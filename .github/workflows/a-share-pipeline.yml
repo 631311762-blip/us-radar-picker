@@ -13,13 +13,13 @@ name: A股模型统一流水线（共同前置层）
 # 无需改本 workflow。
 #
 # 2026-11-10：主升浪 V4（stock-v3/daily_v3.py）已登记进 registry.json，
-# 由本流水线同一 runner、同一 cron（16:05）顺序跑，并纳入统一结论表
+# 由本流水线同一 runner、同一 cron（15:10）顺序跑，并纳入统一结论表
 # run_summary.json；其独立定时 workflow（stock-v3-daily.yml）已取消 schedule、
 # 仅保留手动触发兜底，不再单独自动运行。
 # =========================================================================
 
 on:
-  # 正式切换后启用定时：UTC 08:05 = 北京时间 16:05（周一~五，A 股收盘后）。
+  # 正式切换后启用定时：UTC 07:10 = 北京时间 15:10（周一~五，A 股收盘后）。
   # 已停用 5 个被本流水线取代的独立 A 股 workflow
   #（shanshui/low_shadow/lingpei/kaizhong/yidian），避免重复运行。
   # 美股 us-radar-picker.yml 仍保持独立运行（不同市场，不共享前置层）。
@@ -28,7 +28,7 @@ on:
   # 仅用 API 构造 commit 不会激活定时（GitHub schedule 依赖 push 事件 resync）。
   # 若某日发现未自动触发，先用 `gh` 或 git push 一次本文件即可恢复。
   schedule:
-    - cron: "5 8 * * 1-5"
+    - cron: "10 7 * * 1-5"
   workflow_dispatch:
     inputs:
       f10_only:
