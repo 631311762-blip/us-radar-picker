@@ -237,18 +237,27 @@ def detect(bars, const=None):
 
 
 def score(e):
-    """简易评分：近期 + 触点质量 + 量价，用于排序（越大越优先）。"""
+    """评分：近期 + 触点质量 + 量价，越大越优先。
+    量能分层（回测结论，非硬过滤）：
+      · 买点放量 + 破位→收复间隔≤3 → 最强组合（回测3日胜率71.5%），+6；
+      · 买点放量（间隔偏大）→ 优选层，+3；
+      · 买点缩量承接 → 稳健型，保留但排序靠后，+1；
+      缩量/放量均不剔除，仅影响排序，三只样板仍能进池。"""
     s = 0
     s += max(0, 6 - e["age"]) * 3                 # 越近期越高
     if e.get("vol_ratio") is not None:
-        if e["vol_ratio"] >= 1.2: s += 4
-        if e["vol_ratio"] < 1.0:  s += 2          # 缩量收复同样认可（研究结论）
+        if e["vol_ratio"] >= 1.2: s += 4          # 收复日放量长阳
+        if e["vol_ratio"] < 1.0:  s += 1          # 缩量收复也认可（弱加分，避免误杀）
     if e.get("peak20") is not None and e["peak20"] > 0.10: s += 3
     opd = e.get("op") or {}
-    if isinstance(opd, dict) and opd.get("buy_vol_ok"):
-        s += 3          # 买点缩量承接（量能确认），更优
-    # 破位→收复间隔越短质量越优：gap 越小加分越多（gap=1 满分，超过 MAX_GAP 已被过滤）
     g = e.get("break_to_sig")
+    vr_buy = opd.get("vol_ratio_buy") if isinstance(opd, dict) else None
+    if vr_buy is not None and vr_buy > 1.0:
+        # 买点放量：回测显示胜率更高，做精选层加分（非硬过滤）
+        s += 6 if (isinstance(g, int) and g <= 3) else 3
+    else:
+        s += 1   # 买点缩量承接：稳健型仍保留，排序靠后
+    # 破位→收复间隔越短质量越优：gap 越小加分越多（gap=1 满分，超过 MAX_GAP 已被过滤）
     if isinstance(g, int):
         s += max(0, 10 - g) * 1   # 1 日即回 +9，10 日回 +0
     return s
@@ -262,7 +271,7 @@ OPER_RULE = """**操作策略（本模型「管三天」，每次推荐必附）
   · 若 **缩量小涨** → 当天可买；
   · 若 **上影线 / 绿阴线**（诱空）→ 等第三天（T+2）**开盘低位**买入。
 - **买入后第三天必须卖出**（固定持有 ≤3 日，不恋战）。
-- **买点量能须低于提示日**：买点当天成交量须 **小于提示日（收复日）量能**（缩量承接）；若买点放量则量能不符、谨慎或放弃。
+- **买点量能（分层参考·非硬过滤）**：回测显示「买点放量 + 破位→收复间隔≤3」组合未来 3 日胜率最高（71.5%），列为**量能精选层（优先关注）**；缩量承接型仍保留但排序靠后。两者均不剔除。
 - 风控：跌破支撑下 3~5% 止损；到达 +8~12% 或放量滞涨可提前止盈。"""
 
 # T+1 形态识别阈值
@@ -321,12 +330,14 @@ def op_plan(bars, sig):
     buy_i = min(sig + buy_offset, n - 1)
     sell_i = min(sig + sell_offset, n - 1)
 
-    # ---- 买点量能校验：买点当天量能须低于提示日（缩量承接）----
+    # ---- 买点量能分层（非硬过滤）：放量=优选层，缩量=稳健型，均保留 ----
     b_buy = bars[buy_i]
     vol_ratio_buy = round(b_buy["volume"] / bs["volume"], 2) if bs["volume"] else None
     buy_vol_ok = (vol_ratio_buy is not None and vol_ratio_buy < 1.0)
-    if not buy_vol_ok:
-        trigger += "；⚠买点量能≥提示日·量能不符·谨慎/放弃"
+    if vol_ratio_buy is not None and vol_ratio_buy > 1.0:
+        trigger += "；买点放量·量能优先层"
+    elif buy_vol_ok:
+        trigger += "；买点缩量承接·稳健型"
 
     hold3_ret = None
     if sell_i > buy_i:
@@ -347,7 +358,8 @@ def op_plan(bars, sig):
         "note": "T+1(%s): %s；%s → 买点%s(量比%.2f%s)；买入后第 3 日卖出。" % (
             b1["day"], t1_shape, trigger, "提示日+%d" % buy_offset,
             vol_ratio_buy if vol_ratio_buy is not None else 0,
-            "·量能不符" if not buy_vol_ok else ""),
+            "·量能优先层" if (vol_ratio_buy is not None and vol_ratio_buy > 1.0)
+            else ("·缩量稳健" if buy_vol_ok else "")),
     }
 
 
@@ -505,6 +517,16 @@ def _push_report(cands, today):
         lines.append("| %d | %s | %s | %.2f | %s | %s | %d | %s | %d |" % (
             i, e["code"], e.get("name", ""), e["support"], e["break_day"],
             e["sig_day"], e["age"], e.get("vol_ratio"), score(e)))
+    # 量能精选层（买点放量 + 破位→收复间隔≤3，回测3日胜率71.5%）：优先关注视图
+    elite = [e for e in cands
+             if isinstance(e.get("op"), dict) and (e["op"].get("vol_ratio_buy") or 0) > 1.0
+             and (e.get("break_to_sig") or 99) <= 3]
+    if elite:
+        lines += ["", "### 量能精选层（买点放量 + 破位→收复间隔≤3，回测3日胜率 71.5%，优先关注）"]
+        for e in elite:
+            lines.append("- %s %s：支撑 %.2f ｜ 破位 %s → 收复 %s ｜ 量比 %s ｜ 买点量比 %.2f ｜ 评分 %d" % (
+                e["code"], e.get("name", ""), e["support"], e["break_day"], e["sig_day"],
+                e.get("vol_ratio"), (e["op"].get("vol_ratio_buy") or 0), score(e)))
     # 固定操作策略（每次必附）
     lines += ["", OPER_RULE]
     push("%s %s（%d只）" % (MODEL_LABEL, today, len(cands)), "\n".join(lines))
