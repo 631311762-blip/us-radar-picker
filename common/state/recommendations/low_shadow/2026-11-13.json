@@ -1,0 +1,159 @@
+{
+  "date": "2026-11-13",
+  "model": "low_shadow",
+  "count": 6,
+  "picks": [
+    {
+      "code": "301259",
+      "name": "艾布鲁",
+      "close": 15.22,
+      "score": 83.08,
+      "board": "",
+      "raw": {
+        "symbol": "301259",
+        "name": "艾布鲁",
+        "date": "2026-11-13",
+        "close": 15.22,
+        "upper_amp": 0.0988,
+        "upper_to_body": 5.67,
+        "vol_ratio": 2.942,
+        "pos_pct": 0.1199,
+        "amount": 175403651.0,
+        "pct_chg": 0.33,
+        "ma20": 15.28,
+        "low_20": 13.59,
+        "comp_path": false,
+        "auditor": "未知",
+        "score": 83.08
+      }
+    },
+    {
+      "code": "920699",
+      "name": "海达尔",
+      "close": 41.5,
+      "score": 75.38,
+      "board": "",
+      "raw": {
+        "symbol": "920699",
+        "name": "海达尔",
+        "date": "2026-11-13",
+        "close": 41.5,
+        "upper_amp": 0.087,
+        "upper_to_body": 2.16,
+        "vol_ratio": 2.209,
+        "pos_pct": 0.0293,
+        "amount": 67716338.0,
+        "pct_chg": -2.47,
+        "ma20": 46.42,
+        "low_20": 40.32,
+        "comp_path": false,
+        "auditor": "未知",
+        "score": 75.38
+      }
+    },
+    {
+      "code": "300374",
+      "name": "中铁装配",
+      "close": 9.65,
+      "score": 68.46,
+      "board": "",
+      "raw": {
+        "symbol": "300374",
+        "name": "中铁装配",
+        "date": "2026-11-13",
+        "close": 9.65,
+        "upper_amp": 0.0551,
+        "upper_to_body": 3.6,
+        "vol_ratio": 2.667,
+        "pos_pct": 0.0651,
+        "amount": 101119455.0,
+        "pct_chg": -1.33,
+        "ma20": 9.76,
+        "low_20": 9.06,
+        "comp_path": false,
+        "auditor": "未知",
+        "score": 68.46
+      }
+    },
+    {
+      "code": "688660",
+      "name": "电气风电",
+      "close": 7.08,
+      "score": 64.62,
+      "board": "",
+      "raw": {
+        "symbol": "688660",
+        "name": "电气风电",
+        "date": "2026-11-13",
+        "close": 7.08,
+        "upper_amp": 0.0627,
+        "upper_to_body": 4.5,
+        "vol_ratio": 1.626,
+        "pos_pct": 0.0458,
+        "amount": 142181197.0,
+        "pct_chg": -1.39,
+        "ma20": 7.35,
+        "low_20": 6.77,
+        "comp_path": false,
+        "auditor": "未知",
+        "score": 64.62
+      }
+    },
+    {
+      "code": "688171",
+      "name": "纬德信息",
+      "close": 20.33,
+      "score": 59.62,
+      "board": "",
+      "raw": {
+        "symbol": "688171",
+        "name": "纬德信息",
+        "date": "2026-11-13",
+        "close": 20.33,
+        "upper_amp": 0.0843,
+        "upper_to_body": 3.15,
+        "vol_ratio": 2.056,
+        "pos_pct": 0.1201,
+        "amount": 71413659.0,
+        "pct_chg": 3.3,
+        "ma20": 20.48,
+        "low_20": 18.15,
+        "comp_path": false,
+        "auditor": "未知",
+        "score": 59.62
+      }
+    },
+    {
+      "code": "300988",
+      "name": "津荣天宇",
+      "close": 13.94,
+      "score": 56.54,
+      "board": "",
+      "raw": {
+        "symbol": "300988",
+        "name": "津荣天宇",
+        "date": "2026-11-13",
+        "close": 13.94,
+        "upper_amp": 0.0635,
+        "upper_to_body": 2.33,
+        "vol_ratio": 1.858,
+        "pos_pct": 0.0609,
+        "amount": 78478966.0,
+        "pct_chg": -2.31,
+        "ma20": 14.26,
+        "low_20": 13.14,
+        "comp_path": false,
+        "auditor": "未知",
+        "score": 56.54
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 775,
+    "universe": 4606,
+    "dropped": 0
+  },
+  "written_at": "2026-11-13T17:18:42+08:00"
+}

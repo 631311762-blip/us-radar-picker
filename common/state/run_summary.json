@@ -1,6 +1,55 @@
 {
-  "generated_at": "2026-11-12T23:23:26+08:00",
-  "results": [],
+  "generated_at": "2026-11-13T18:02:45+08:00",
+  "results": [
+    {
+      "name": "shanshui",
+      "label": "善水模型 v10",
+      "exit": 0,
+      "seconds": 116.1
+    },
+    {
+      "name": "low_shadow",
+      "label": "低位上影线模型",
+      "exit": 0,
+      "seconds": 3.7
+    },
+    {
+      "name": "low_shadow2",
+      "label": "低位上影模型2（双栏拆分·低位栏）",
+      "exit": 0,
+      "seconds": 18.8
+    },
+    {
+      "name": "lingpei",
+      "label": "领湃模型 B_V2",
+      "exit": 0,
+      "seconds": 57.1
+    },
+    {
+      "name": "kaizhong",
+      "label": "凯众模型 v4",
+      "exit": 0,
+      "seconds": 13.0
+    },
+    {
+      "name": "yidian",
+      "label": "易点模型",
+      "exit": 0,
+      "seconds": 209.0
+    },
+    {
+      "name": "powei",
+      "label": "破位后上涨模型（假破位收复）",
+      "exit": 0,
+      "seconds": 30.9
+    },
+    {
+      "name": "zhushanglang",
+      "label": "主升浪 V4",
+      "exit": 0,
+      "seconds": 2312.9
+    }
+  ],
   "settlements": [
     {
       "model": "shanshui",
@@ -16,9 +65,9 @@
     },
     {
       "model": "low_shadow2",
-      "batches": 1,
-      "samples": 0,
-      "win_rate": null
+      "batches": 2,
+      "samples": 74,
+      "win_rate": 0.0405
     },
     {
       "model": "lingpei",
@@ -28,8 +77,8 @@
     },
     {
       "model": "kaizhong",
-      "batches": 2,
-      "samples": 12,
+      "batches": 3,
+      "samples": 14,
       "win_rate": 0.0
     },
     {
@@ -40,7 +89,7 @@
     },
     {
       "model": "powei",
-      "batches": 0,
+      "batches": 1,
       "samples": 0,
       "win_rate": null
     }

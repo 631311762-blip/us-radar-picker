@@ -1,12 +1,12 @@
 {
   "model": "kaizhong",
-  "generated_at": "2026-11-12T23:23:26+08:00",
-  "batches": 2,
-  "samples": 12,
+  "generated_at": "2026-11-13T18:02:45+08:00",
+  "batches": 3,
+  "samples": 14,
   "win_rate": 0.0,
   "by_horizon": {
     "t1": {
-      "samples": 12,
+      "samples": 14,
       "win_rate": 0.0,
       "avg_return": 0.0
     },
@@ -92,6 +92,18 @@
       "code": "300113",
       "name": "顺网科技",
       "date": "2026-11-11",
+      "t1": 0.0
+    },
+    {
+      "code": "002148",
+      "name": "北纬科技",
+      "date": "2026-11-12",
+      "t1": 0.0
+    },
+    {
+      "code": "300629",
+      "name": "新劲刚",
+      "date": "2026-11-12",
       "t1": 0.0
     }
   ]

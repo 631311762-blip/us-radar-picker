@@ -1,0 +1,65 @@
+{
+  "date": "2026-11-13",
+  "model": "shanshui",
+  "count": 2,
+  "picks": [
+    {
+      "code": "002840",
+      "name": "华统股份",
+      "close": 8.12,
+      "score": 37.5,
+      "board": "深市主板",
+      "raw": {
+        "code": "002840",
+        "name": "华统股份",
+        "board": "深市主板",
+        "price": 8.12,
+        "pct": 2.9150823827629853,
+        "turnover": 1.51,
+        "market_cap_yi": 63.05027849,
+        "prev_close": 7.84,
+        "trial_high": 8.32,
+        "trial_idx": 29,
+        "span": 30,
+        "drawdown": 16.1,
+        "close_gap": -2.4,
+        "vol_ratio_pull": 0.378,
+        "vr20_now": 1.78,
+        "score": 37.5
+      }
+    },
+    {
+      "code": "301077",
+      "name": "星华新材",
+      "close": 22.12,
+      "score": 33.5,
+      "board": "创业板",
+      "raw": {
+        "code": "301077",
+        "name": "星华新材",
+        "board": "创业板",
+        "price": 22.12,
+        "pct": 10.434348477284072,
+        "turnover": 1.42,
+        "market_cap_yi": 34.32193975,
+        "prev_close": 19.66,
+        "trial_high": 22.5,
+        "trial_idx": 35,
+        "span": 24,
+        "drawdown": 15.0,
+        "close_gap": -1.69,
+        "vol_ratio_pull": 0.674,
+        "vr20_now": 6.82,
+        "score": 33.5
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 775,
+    "universe": 4606,
+    "dropped": 0
+  },
+  "written_at": "2026-11-13T17:18:38+08:00"
+}

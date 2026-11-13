@@ -1,0 +1,105 @@
+{
+  "date": "2026-11-13",
+  "model": "lingpei",
+  "count": 5,
+  "picks": [
+    {
+      "code": "002430",
+      "name": "杭氧股份",
+      "close": null,
+      "score": 80.81,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 80.81,
+        "gap_days": 23,
+        "drop_from_peak": 0.1021,
+        "dev60": 0.006,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-13",
+        "code": "002430",
+        "name": "杭氧股份"
+      }
+    },
+    {
+      "code": "002531",
+      "name": "天顺风能",
+      "close": null,
+      "score": 76.61,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 76.61,
+        "gap_days": 26,
+        "drop_from_peak": 0.2049,
+        "dev60": 0.0198,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-08",
+        "code": "002531",
+        "name": "天顺风能"
+      }
+    },
+    {
+      "code": "920005",
+      "name": "鼎佳精密",
+      "close": null,
+      "score": 57.37,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 57.37,
+        "gap_days": 29,
+        "drop_from_peak": 0.1105,
+        "dev60": 0.0244,
+        "near_ma": "MA60",
+        "trial_date": "2026-09-28",
+        "code": "920005",
+        "name": "鼎佳精密"
+      }
+    },
+    {
+      "code": "002093",
+      "name": "国脉科技",
+      "close": null,
+      "score": 54.57,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 54.57,
+        "gap_days": 29,
+        "drop_from_peak": 0.1324,
+        "dev60": 0.0298,
+        "near_ma": "MA60",
+        "trial_date": "2026-09-28",
+        "code": "002093",
+        "name": "国脉科技"
+      }
+    },
+    {
+      "code": "002238",
+      "name": "天威视讯",
+      "close": null,
+      "score": 48.21,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 48.21,
+        "gap_days": 25,
+        "drop_from_peak": 0.1613,
+        "dev60": 0.0457,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-09",
+        "code": "002238",
+        "name": "天威视讯"
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 775,
+    "universe": 4606,
+    "dropped": 0
+  },
+  "written_at": "2026-11-13T17:19:44+08:00"
+}

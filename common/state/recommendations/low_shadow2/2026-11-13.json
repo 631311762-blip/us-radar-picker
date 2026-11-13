@@ -1,0 +1,113 @@
+{
+  "date": "2026-11-13",
+  "model": "low_shadow2",
+  "count": 7,
+  "picks": [
+    {
+      "code": "300774",
+      "name": "倍杰特",
+      "close": 7.55,
+      "score": 74.6,
+      "board": "",
+      "raw": {
+        "code": "300774",
+        "name": "倍杰特",
+        "close": 7.55,
+        "score": 74.6,
+        "board": ""
+      }
+    },
+    {
+      "code": "300345",
+      "name": "华民股份",
+      "close": 5.8,
+      "score": 69.5,
+      "board": "",
+      "raw": {
+        "code": "300345",
+        "name": "华民股份",
+        "close": 5.8,
+        "score": 69.5,
+        "board": ""
+      }
+    },
+    {
+      "code": "000048",
+      "name": "京基智农",
+      "close": 13.64,
+      "score": 67.6,
+      "board": "",
+      "raw": {
+        "code": "000048",
+        "name": "京基智农",
+        "close": 13.64,
+        "score": 67.6,
+        "board": ""
+      }
+    },
+    {
+      "code": "688702",
+      "name": "盛科通信-U",
+      "close": 229.0,
+      "score": 59.4,
+      "board": "",
+      "raw": {
+        "code": "688702",
+        "name": "盛科通信-U",
+        "close": 229.0,
+        "score": 59.4,
+        "board": ""
+      }
+    },
+    {
+      "code": "301165",
+      "name": "锐捷网络",
+      "close": 82.5,
+      "score": 54.7,
+      "board": "",
+      "raw": {
+        "code": "301165",
+        "name": "锐捷网络",
+        "close": 82.5,
+        "score": 54.7,
+        "board": ""
+      }
+    },
+    {
+      "code": "688828",
+      "name": "国仪公司-U",
+      "close": 70.3,
+      "score": 53.1,
+      "board": "",
+      "raw": {
+        "code": "688828",
+        "name": "国仪公司-U",
+        "close": 70.3,
+        "score": 53.1,
+        "board": ""
+      }
+    },
+    {
+      "code": "688433",
+      "name": "华曙高科",
+      "close": 67.5,
+      "score": 52.8,
+      "board": "",
+      "raw": {
+        "code": "688433",
+        "name": "华曙高科",
+        "close": 67.5,
+        "score": 52.8,
+        "board": ""
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 775,
+    "universe": 4606,
+    "dropped": 0
+  },
+  "written_at": "2026-11-13T17:19:02+08:00"
+}
