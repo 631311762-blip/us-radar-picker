@@ -119,6 +119,30 @@ def _norm(bars):
 
 
 # ============================ 形态检测 ============================
+def _support(win):
+    """从一段 K 线窗口识别「多触点水平支撑地板」。返回 (S, 是否有效)。
+    要求：窗口振幅 <= RANGE_MAX（真横盘）且 low 在地板 [S*0.98,S*1.03] 触点数 >= TOUCH_MIN，
+    且有一定天数曾在地板上方 10% 以上成交（区分纯单触底 / 阴跌）。"""
+    RANGE_MAX = CONST["RANGE_MAX"]; TOUCH_MIN = CONST["TOUCH_MIN"]
+    lows = [x["low"] for x in win]; highs = [x["high"] for x in win]
+    lo_all = min(lows); hi_all = max(highs); mid = (lo_all + hi_all) / 2
+    if mid <= 0 or (hi_all - lo_all) / mid > RANGE_MAX:
+        return None, False
+    best = None; bestcnt = 0
+    for k in range(0, 26):
+        cand = lo_all + (hi_all - lo_all) * 0.02 * k
+        if cand > lo_all + (hi_all - lo_all) * 0.55:
+            break
+        cnt = sum(1 for x in win if cand * 0.98 <= x["low"] <= cand * 1.03)
+        if cnt > bestcnt:
+            bestcnt = cnt; best = cand
+    if best is None or bestcnt < TOUCH_MIN:
+        return None, False
+    above = sum(1 for x in win if x["high"] >= best * 1.10)
+    if above < len(win) * 0.05:   # 放宽：真横盘须有少量时间明显高于地板（区分纯单触底）
+        return None, False
+    return best, True
+
 def detect(bars, const=None):
     """返回该股票所有「假破位+收复」事件。events 含支撑/破位日/信号日/量比/各周期收益/距今。"""
     c = const or CONST
@@ -148,29 +172,32 @@ def detect(bars, const=None):
                 bestcnt = cnt; best = cand
         if best is None or bestcnt < TOUCH_MIN:
             t += 1; continue
-        S = best
-        above = sum(1 for x in win if x["high"] >= S * 1.10)
-        if above < len(win) * 0.25:   # 必须在支撑上方明显成交过（真横盘，非阴跌）
-            t += 1; continue
+        S0 = best
         # 破位（扫描放宽到末根：收复本就能扫到末根，故破位也应允许扫到最近，
         #        以支持「刚发生且已收复」的近期信号，如破位后 2 日即回）
         break_idx = None
         for i in range(t, min(t + 15, N)):
-            if bars[i]["close"] < S * BREAK_PCT:
+            if bars[i]["close"] < S0 * BREAK_PCT:
                 break_idx = i; break
         if break_idx is None:
             t += 1; continue
+        # ── 用「破位之前的窗口」重新锚定支撑（核心修复：杜绝破位后大涨污染振幅）──
+        S, ok = _support(bars[break_idx - WIN:break_idx])
+        if not ok:
+            t = break_idx + 1; continue
+        if not (bars[break_idx]["close"] < S * BREAK_PCT):
+            t = break_idx + 1; continue
         # 收复（可到末根，以支持「刚收复」的当日信号）
         reclaim_idx = None
         for i in range(break_idx + 1, min(break_idx + RECLAIM_WIN + 1, N)):
             if bars[i]["close"] >= S * RECLAIM_PCT:
                 reclaim_idx = i; break
         if reclaim_idx is None:
-            t += 1; continue
+            t = break_idx + 1; continue
         # 破位→收复间隔硬上限：不得大于 MAX_GAP 个交易日（≈两周内必须回来）
         gap = reclaim_idx - break_idx
         if gap > MAX_GAP:
-            t += 1; continue
+            t = break_idx + 1; continue
         sig = reclaim_idx; sig_close = bars[sig]["close"]
         # 收复日形态质量：必须「实体长阳 + 上影短」，排除小短线/十字/阴线/长上引冲高回落假收复
         rb = bars[sig]
@@ -205,7 +232,7 @@ def detect(bars, const=None):
             "peak10": peak(10), "peak20": peak(20), "dd20": dd(20),
             "op": op, "hold3_ret": op.get("hold3_ret"),
         })
-        t = sig + 25
+        t = sig + 1   # 步进越过收复日：避免同一结构里相邻破位日重复映射同一收复（消重），又不漏后续独立破位
     return events
 
 
