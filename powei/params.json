@@ -7,9 +7,10 @@
     "BREAK_PCT": 0.98,
     "RECLAIM_WIN": 12,
     "RECLAIM_PCT": 1.0,
+    "MAX_GAP": 10,
     "MAX_AGE": 3,
     "TOP_N": 30,
     "KLINE_COUNT": 330
   },
-  "updated_at": "2026-11-13 08:24"
+  "updated_at": "2026-11-13 22:20"
 }

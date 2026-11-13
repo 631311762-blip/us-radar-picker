@@ -73,8 +73,9 @@ CONST = {
     "RANGE_MAX": 0.40,  # 横盘最大振幅 (hi-lo)/mid
     "TOUCH_MIN": 3,     # 支撑最小触点次数（多触点地板）
     "BREAK_PCT": 0.98,  # 破位阈值：收盘 < 支撑 * 0.98
-    "RECLAIM_WIN": 12,  # 破位后收复窗口（交易日）
+    "RECLAIM_WIN": 12,  # 破位后收复扫描窗口（交易日，上限宽松于 MAX_GAP）
     "RECLAIM_PCT": 1.00,# 收复阈值：收盘 >= 支撑 * 1.00
+    "MAX_GAP": 10,      # 破位→收复间隔硬上限（交易日，≈两周内必须回来；越快越优）
     "MAX_AGE": 3,       # 仅输出近 N 个交易日发生收复的信号
     "TOP_N": 30,        # 进入推荐台账 / 推送的前 N 只
     "KLINE_COUNT": 330, # 拉取的 K 线根数
@@ -121,6 +122,7 @@ def detect(bars, const=None):
     c = const or CONST
     WIN = c["WIN"]; RANGE_MAX = c["RANGE_MAX"]; TOUCH_MIN = c["TOUCH_MIN"]
     BREAK_PCT = c["BREAK_PCT"]; RECLAIM_WIN = c["RECLAIM_WIN"]; RECLAIM_PCT = c["RECLAIM_PCT"]
+    MAX_GAP = c["MAX_GAP"]
     if len(bars) < WIN + 20:
         return []
     N = len(bars)
@@ -162,6 +164,10 @@ def detect(bars, const=None):
                 reclaim_idx = i; break
         if reclaim_idx is None:
             t += 1; continue
+        # 破位→收复间隔硬上限：不得大于 MAX_GAP 个交易日（≈两周内必须回来）
+        gap = reclaim_idx - break_idx
+        if gap > MAX_GAP:
+            t += 1; continue
         sig = reclaim_idx; sig_close = bars[sig]["close"]
         avgvol = sum(x["volume"] for x in win[-20:]) / 20
         def ret(n):
@@ -178,6 +184,7 @@ def detect(bars, const=None):
         events.append({
             "support": round(S, 2), "break_day": bars[break_idx]["day"],
             "sig_day": bars[sig]["day"], "sig_close": round(sig_close, 2), "age": age,
+            "break_to_sig": gap,
             "vol_ratio": round(bars[sig]["volume"] / avgvol, 2) if avgvol else None,
             "r5": ret(5), "r10": ret(10), "r20": ret(20),
             "peak10": peak(10), "peak20": peak(20), "dd20": dd(20),
@@ -198,6 +205,10 @@ def score(e):
     opd = e.get("op") or {}
     if isinstance(opd, dict) and opd.get("buy_vol_ok"):
         s += 3          # 买点缩量承接（量能确认），更优
+    # 破位→收复间隔越短质量越优：gap 越小加分越多（gap=1 满分，超过 MAX_GAP 已被过滤）
+    g = e.get("break_to_sig")
+    if isinstance(g, int):
+        s += max(0, 10 - g) * 1   # 1 日即回 +9，10 日回 +0
     return s
 
 
@@ -329,13 +340,14 @@ def write_state(cands, today):
     cs = os.path.join(ARCHIVE_DIR, "%s.csv" % today)
     with open(cs, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
-        w.writerow(["排名", "代码", "名称", "支撑", "破位日", "收复信号日",
+        w.writerow(["排名", "代码", "名称", "支撑", "破位日", "收复信号日", "破位→收复间隔(日)",
                     "距今交易日", "量比", "评分", "R5%", "R10%", "R20%", "PEAK20%", "DD20%",
                     "操作买点", "触发条件", "卖出日", "买点量比(提示日)", "管三天收益%"])
         for i, e in enumerate(cands, 1):
             op = e.get("op") or {}
             w.writerow([i, e["code"], e.get("name", ""), e["support"], e["break_day"],
-                        e["sig_day"], e["age"], e.get("vol_ratio"),
+                        e["sig_day"], e.get("break_to_sig"),
+                        e["age"], e.get("vol_ratio"),
                         score(e),
                         round((e.get("r5") or 0) * 100, 1),
                         round((e.get("r10") or 0) * 100, 1),
@@ -353,6 +365,7 @@ def write_state(cands, today):
         "top": [{"rank": i, "code": e["code"], "name": e.get("name", ""),
                  "support": e["support"], "break_day": e["break_day"],
                  "sig_day": e["sig_day"], "age": e["age"],
+                 "break_to_sig": e.get("break_to_sig"),
                  "vol_ratio": e.get("vol_ratio"), "score": score(e),
                  "op": e.get("op")}
                 for i, e in enumerate(cands[:CONST["TOP_N"]], 1)],
@@ -370,7 +383,8 @@ def write_state(cands, today):
             f.write(json.dumps({"date": today, "model": MODEL_NAME,
                                 "code": e["code"], "name": e.get("name", ""),
                                 "sig_day": e["sig_day"], "sig_close": e.get("close"),
-                                "support": e["support"], "score": score(e)},
+                                "support": e["support"], "break_to_sig": e.get("break_to_sig"),
+                                "score": score(e)},
                                ensure_ascii=False) + "\n")
     log("状态已写盘：%s / %s / %s" % (js, SUMMARY_FILE, HISTORY_FILE))
 
@@ -421,7 +435,8 @@ def run_review(ctx, max_age=None, top_n=None):
         "code": e["code"], "name": e.get("name", ""), "board": e.get("board", ""),
         "close": e.get("close"), "score": score(e),
         "support": e["support"], "break_day": e["break_day"], "sig_day": e["sig_day"],
-        "age": e["age"], "vol_ratio": e.get("vol_ratio"),
+        "age": e["age"], "break_to_sig": e.get("break_to_sig"),
+        "vol_ratio": e.get("vol_ratio"),
         "r5": e.get("r5"), "r10": e.get("r10"), "r20": e.get("r20"),
         "op": e.get("op"), "hold3_ret": e.get("hold3_ret"),
         "model": MODEL_NAME,
