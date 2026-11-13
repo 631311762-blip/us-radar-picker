@@ -53,6 +53,17 @@ def render(pool, lixin_blocked=None, maxn=8):
         # build() 过滤后 pool 本就不含这些票，这里是开关关闭/异常时的双重保险。
         if r.get("shape_bad"):
             continue
+        # 2026-11-13：立信审计票同样不进观察榜（流水线离线排除集）。
+        # 双重保险：即使打分阶段闸门被关闭/异常降级，只要名单可用就拦下。
+        if r.get("lixin_bad"):
+            continue
+        try:
+            import lixin_gate
+            # 推送内容一律用 list_loaded()：不受打分阶段 LIXIN_GATE 开关影响
+            if lixin_gate.list_loaded() and lixin_gate.is_excluded(r.get("code", "")):
+                continue
+        except Exception:
+            pass
         if not _buyable(r):
             continue
         cands.append(r)

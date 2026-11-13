@@ -281,10 +281,28 @@ def build(topn=6):
             return 1
         return 2
 
-    # 记录「无闸门时」的主榜候选序，供形态剔除名单聚焦到原本会进榜的票
+    # 记录「无闸门时」的主榜候选序，供形态/立信剔除名单聚焦到原本会进榜的票
     pre_seq = sorted([x for x in rows if buyable(x)],
                      key=lambda x: (_tier(x), -x["score"]))[:16]
     pre_rank = {x["code"]: i for i, x in enumerate(pre_seq)}
+
+    # ── 立信硬闸门（2026-11-13 用户反馈「中重科技是立信的，不该推送」）──────
+    #    消费统一流水线共同前置层产出的 common/state/lixin_exclude.json，
+    #    在【横截面打分之后】对【全部 rows】做离线硬过滤。
+    #    · 不依赖联网公告 → 东财 502 / audit 缓存不入库时仍然生效，堵住 UNKNOWN 放行
+    #    · 与流水线口径完全一致（同一份全市场名单），非只查候选前几十只
+    #    · 位置与形态闸门同级：分数仍由全市场 n_universe 只算出，闸门只做
+    #      出榜前硬过滤，不改分数 / 权重 / 排序 / 板块配额 / 交易规则
+    #    · 不触碰 model2.P / factor_fit.json / holdout.json / 任何状态文件
+    #    · LIXIN_GATE=off 可回退；名单缺失或异常降级放行并告警，绝不阻断主闭环
+    lixin_excluded = []
+    try:
+        import lixin_gate
+        rows, lixin_excluded = lixin_gate.apply(rows)
+        if lixin_excluded:
+            print(f"  立信闸门高分剔除：{'、'.join(x['name'] for x in lixin_excluded[:4])}")
+    except Exception as e:
+        print("  [警告] 立信闸门异常，本次跳过该过滤：", e)
 
     # ── 形态闸门（2026-11-09 用户要求：剔除「破位反弹」错筛）──────────────
     #    位置必须在【横截面打分之后】：每只票的分数仍由全市场 n_universe 只的
@@ -305,8 +323,30 @@ def build(topn=6):
 
     def apply_audit(cand):
         aud = audit_check.main([x["code"] for x in cand], verbose=False)
-        blocked = [x for x in cand if aud.get(x["code"], {}).get("status") == "LIXIN"]
-        ok = [x for x in cand if aud.get(x["code"], {}).get("status") != "LIXIN"]
+        # 2026-11-13 修复：东财公告接口 502 / 云端无审计缓存时，audit_check 会把
+        # 大量票判为 UNKNOWN。旧逻辑「只剔 LIXIN、UNKNOWN 当通过」正是中重科技
+        # 漏进主榜的直接原因。这里再叠加流水线离线排除集做双保险：
+        #   命中流水线名单 → 无论联网审计返回什么都剔除；
+        #   UNKNOWN 票若不在名单中 → 仍放行，但打印醒目降级告警供人工察觉。
+        try:
+            import lixin_gate
+            gate_on = lixin_gate.available()
+        except Exception:
+            gate_on = False
+        n_unknown = sum(1 for x in cand
+                        if aud.get(x["code"], {}).get("status") == "UNKNOWN")
+        if n_unknown:
+            print(f"  [审计降级] 本次 {n_unknown}/{len(cand)} 只候选联网审计返回 UNKNOWN"
+                  f"（公告接口异常/缓存缺失）；离线立信排除集"
+                  f"{'已启用兜底' if gate_on else '不可用，请立即核查'}")
+
+        def _bad(x):
+            if aud.get(x["code"], {}).get("status") == "LIXIN":
+                return True
+            return gate_on and lixin_gate.is_excluded(x["code"])
+
+        blocked = [x for x in cand if _bad(x)]
+        ok = [x for x in cand if not _bad(x)]
         for x in ok:
             x["firm"] = aud.get(x["code"], {}).get("firm", "")
         return ok, blocked          # 不再在函数内截断，由调用方按需截取
@@ -366,9 +406,21 @@ def build(topn=6):
     shape_shown = sorted(
         shape_excluded,
         key=lambda x: (pre_rank.get(x["code"], 999), -(x.get("score") or 0)))[:12]
+    # 立信剔除名单：同样优先「原本会进榜」的高分票，让用户直接看到
+    # 「中重科技这类票已被拦下」。并入 blocked 展示（语义同为立信一票否决），按代码去重。
+    lixin_shown = sorted(
+        lixin_excluded,
+        key=lambda x: (pre_rank.get(x["code"], 999), -(x.get("score") or 0)))[:12]
+    blocked_all, seen_code = [], set()
+    for b in blk1 + blk2 + lixin_shown:
+        if b["code"] not in seen_code:
+            seen_code.add(b["code"])
+            blocked_all.append(b)
     return dict(allpicks=all_picks, latpicks=final, cybpicks=[],
-                blocked=blk1 + blk2, shape_excluded=shape_shown,
+                blocked=blocked_all, shape_excluded=shape_shown,
                 shape_excluded_total=len(shape_excluded),
+                lixin_excluded=lixin_shown,
+                lixin_excluded_total=len(lixin_excluded),
                 base_date=base_date, universe=n_universe, pool=rows)
 
 
@@ -442,10 +494,15 @@ def record(r):
                reasons=x.get("shape_reasons", []),
                evidence=x.get("shape_evidence", {}))
           for x in r.get("shape_excluded", [])]
+    # 立信剔除名单精简落盘（2026-11-13：流水线离线排除集命中依据）
+    lx = [dict(code=x["code"], name=x["name"], score=x["score"],
+               reason=x.get("lixin_reason", ""))
+          for x in r.get("lixin_excluded", [])]
     out = dict(base_date=r["base_date"], universe=r["universe"],
                generated=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
                PICKS=r["latpicks"], blocked=r["blocked"],
-               shape_excluded=sx)
+               shape_excluded=sx, lixin_excluded=lx,
+               lixin_excluded_total=r.get("lixin_excluded_total", len(lx)))
     json.dump(out, open(os.path.join(HERE, "今日推荐.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
 

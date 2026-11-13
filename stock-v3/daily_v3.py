@@ -119,6 +119,27 @@ def main():
         print(f"【第二步】用 {ver} 权重给全市场打分选股")
         print("=" * 78)
         r = R.build(topn)
+
+        # ── ②③b 推送前最终硬闸门（2026-11-13 用户：「立信审计票不该推送给我」）
+        #    无条件生效：只要流水线共同前置层产出的 lixin_exclude.json 存在，
+        #    主榜里出现名单内个股就直接 ABORT —— 不 record、不推送、不污染台账。
+        #    这是独立于打分阶段 LIXIN_GATE 的最后一道防线，专门堵住
+        #    「联网审计降级为 UNKNOWN → 被当成通过」这一类静默漏筛。
+        try:
+            import lixin_gate
+            if lixin_gate.guard_enabled() and lixin_gate.list_loaded():
+                bad = lixin_gate.main_picks_hit(r["latpicks"])
+                if bad:
+                    _info = lixin_gate.info()
+                    raise RuntimeError(
+                        "主榜含流水线立信排除集内个股，拒绝记录与推送："
+                        + "、".join(f"{p['name']}({p['code']})" for p in bad)
+                        + f"（排除集 {_info['n']} 只，更新于 {_info['updated']}）")
+        except RuntimeError:
+            raise
+        except Exception as e:
+            print("  [警告] 推送前立信终检异常（不影响主流程）：", e)
+
         R.show(r)
         if "--norecord" not in sys.argv:   # 调试用：跳过预测记录写入，不污染结算口径
             R.record(r)
@@ -209,6 +230,17 @@ def main():
     md.append("")
     if blocked:
         md.append("### 已剔除（年报审计机构为立信，一票否决）")
+        # 2026-11-13：并入统一流水线共同前置层的离线立信排除集，
+        # 东财公告接口异常导致联网审计降级时仍能拦住（堵住 UNKNOWN 放行）。
+        try:
+            import lixin_gate as _lg
+            if _lg.list_loaded():
+                _i = _lg.info()
+                md.append(f"　口径：联网公告审计 + 流水线离线排除集（{_i['n']} 只，"
+                          f"更新于 {_i['updated']}），命中任一即剔除；"
+                          "主榜出榜前另有最终硬闸门复核。")
+        except Exception:
+            pass
         md.append("　" + "、".join(f"{b['name']}({b['code']})" for b in blocked))
         md.append("")
 
