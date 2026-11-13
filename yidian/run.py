@@ -619,7 +619,7 @@ def main():
         log("板块口径：%s｜样本 %d（创业板 %d + 科创板 %d）"
             % (("三板块（含北交所）" if INCLUDE_BJ else
                 "仅创业板/科创板，已剔除北交所 %d 只" % meta.get("bj_excluded", 0)),
-               meta["total"], meta["cyb"], meta["kcb"]))
+               meta["total"], meta.get("cyb", 0), meta.get("kcb", 0)))
     except Exception as e:
         log("[FAIL] 数据获取失败：%s" % e)
         pushplus("易点模型 · 数据获取告警", "样本枚举失败：%s" % e, token)
