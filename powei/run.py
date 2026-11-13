@@ -76,6 +76,8 @@ CONST = {
     "RECLAIM_WIN": 12,  # 破位后收复扫描窗口（交易日，上限宽松于 MAX_GAP）
     "RECLAIM_PCT": 1.00,# 收复阈值：收盘 >= 支撑 * 1.00
     "MAX_GAP": 10,      # 破位→收复间隔硬上限（交易日，≈两周内必须回来；越快越优）
+    "RECLAIM_BODY_MIN": 0.03,  # 收复日实体最小涨幅（长阳底线；排除小短线/十字/阴线收复）
+    "RECLAIM_UPPER_MAX": 0.40, # 收复日上影/振幅 上限（排除长上影冲高回落假收复）
     "MAX_AGE": 3,       # 仅输出近 N 个交易日发生收复的信号
     "TOP_N": 30,        # 进入推荐台账 / 推送的前 N 只
     "KLINE_COUNT": 330, # 拉取的 K 线根数
@@ -122,7 +124,7 @@ def detect(bars, const=None):
     c = const or CONST
     WIN = c["WIN"]; RANGE_MAX = c["RANGE_MAX"]; TOUCH_MIN = c["TOUCH_MIN"]
     BREAK_PCT = c["BREAK_PCT"]; RECLAIM_WIN = c["RECLAIM_WIN"]; RECLAIM_PCT = c["RECLAIM_PCT"]
-    MAX_GAP = c["MAX_GAP"]
+    MAX_GAP = c["MAX_GAP"]; RECLAIM_BODY_MIN = c["RECLAIM_BODY_MIN"]; RECLAIM_UPPER_MAX = c["RECLAIM_UPPER_MAX"]
     if len(bars) < WIN + 20:
         return []
     N = len(bars)
@@ -170,6 +172,18 @@ def detect(bars, const=None):
         if gap > MAX_GAP:
             t += 1; continue
         sig = reclaim_idx; sig_close = bars[sig]["close"]
+        # 收复日形态质量：必须「实体长阳 + 上影短」，排除小短线/十字/阴线/长上引冲高回落假收复
+        rb = bars[sig]
+        rb_open, rb_close, rb_high, rb_low = rb["open"], rb["close"], rb["high"], rb["low"]
+        rb_body = rb_close - rb_open
+        rb_rng = rb_high - rb_low
+        rb_up = rb_high - max(rb_open, rb_close)      # 上影长度
+        if rb_rng <= 0 or rb_open <= 0:
+            t += 1; continue
+        if rb_body / rb_open < RECLAIM_BODY_MIN:       # 实体不够长（小短线/十字/阴线收复）
+            t += 1; continue
+        if rb_up / rb_rng > RECLAIM_UPPER_MAX:         # 上影过长（冲高回落假收复）
+            t += 1; continue
         avgvol = sum(x["volume"] for x in win[-20:]) / 20
         def ret(n):
             j = min(sig + n, N - 1)
