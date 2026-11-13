@@ -28,6 +28,11 @@ PREFIX_CYB = ("300", "301", "302")
 PREFIX_KCB = ("688", "689")
 PREFIX_BJ = ("43", "83", "87", "88", "92")
 FS_CYB, FS_KCB, FS_BJ = "m:0+t:80", "m:1+t:23", "m:0+t:81"
+# 2026-11-13 用户确认：因子回溯显示北交所 T+5 -1.68% / 胜率 34.05%，显著拖累，
+# 故从样本剔除，仅保留创业板 + 科创板（其余阈值、评分、硬条件一律不变）。
+# 设回 True 即恢复三板块口径。统一过滤在 main() 取数后执行，覆盖「自有枚举」与
+# 「共同前置层 adapter 注入样本池」两条路径，因此无需改动公共 common/adapter.py。
+INCLUDE_BJ = False
 DD90_MIN = 0.15            # 90日回撤 ≥15%
 DD90_BASIS = "prev_close"  # 90日回撤基准价（折中口径，2026-11-13 用户确认）：
                            #   prev_close = 提示点【前一日收盘】（默认）—— 启动大阳线不再
@@ -49,7 +54,8 @@ TOP_N = 6                  # 评分取前 6 推送
 BUY_LOW = 0.975            # 买点 = 收盘×0.975 ~ 收盘
 STOP_LOSS, TARGET = -0.05, 0.07
 MARKDOWN_LIMIT = 900       # 正文 ≤900 字
-MIN_UNIVERSE = 2000        # 样本明显偏小视为数据源异常
+MIN_UNIVERSE = 1500        # 样本明显偏小视为数据源异常；剔除北交所后正常约 1977
+                           # （创业板约 1372 + 科创板约 605），留约 25% 余量
 # ===========================================================
 
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -128,7 +134,8 @@ def build_universe():
     raw = []
     raw += fetch_board(FS_CYB, "创业板")
     raw += fetch_board(FS_KCB, "科创板")
-    raw += fetch_board(FS_BJ, "北交所/三板全量")
+    if INCLUDE_BJ:
+        raw += fetch_board(FS_BJ, "北交所/三板全量")
 
     cyb, kcb, bj = [], [], []
     seen = set()
@@ -158,7 +165,7 @@ def build_universe():
             rec["board"] = "创业板"; cyb.append(rec)
         elif code.startswith(PREFIX_KCB):
             rec["board"] = "科创板"; kcb.append(rec)
-        elif code.startswith(PREFIX_BJ):
+        elif INCLUDE_BJ and code.startswith(PREFIX_BJ):
             rec["board"] = "北交所"; bj.append(rec)
         else:
             continue
@@ -170,6 +177,27 @@ def build_universe():
     log("样本总量 %d（创业板/科创板 %d = 创业板 %d + 科创板 %d；北交所 %d）"
         % (meta["total"], meta["cyb_kcb"], meta["cyb"], meta["kcb"], meta["bj"]))
     return cyb + kcb + bj, meta
+
+
+def apply_board_scope(universe, meta):
+    """统一板块口径（2026-11-13 起剔除北交所）。
+
+    数据可能来自自有 build_universe()，也可能来自共同前置层 adapter 注入的
+    「创业板+科创板+北交所」样本池（adapter 会整体替换 build_universe）。
+    因此在 main() 取数之后统一过滤一次，保证任何路径都不会选到北交所标的，
+    同时重算 meta 计数，使归档 / summary / index / 推送正文口径一致。
+    """
+    if INCLUDE_BJ:
+        return universe, meta
+    before = len(universe)
+    universe = [r for r in universe if r.get("board") != "北交所"]
+    cyb = sum(1 for r in universe if r.get("board") == "创业板")
+    kcb = sum(1 for r in universe if r.get("board") == "科创板")
+    meta = dict(meta)
+    meta.update({"total": len(universe), "cyb": cyb, "kcb": kcb,
+                 "cyb_kcb": cyb + kcb, "bj": 0,
+                 "bj_excluded": before - len(universe)})
+    return universe, meta
 
 
 # ---------- 2. 日K ----------
@@ -478,6 +506,7 @@ def archive(all_q, top, meta, audit_removed, watch_pool, review_res, state):
             w.writerow(q)
     entry = {"date": TODAY, "sample_total": meta["total"],
              "cyb_kcb": meta["cyb_kcb"], "bj": meta["bj"],
+             "include_bj": INCLUDE_BJ, "bj_excluded": meta.get("bj_excluded", 0),
              "qualified": len(all_q), "audit_veto": audit_removed,
              "top6": [{"code": t["code"], "name": t["name"], "score": t["score"]} for t in top],
              "json": os.path.basename(jf), "csv": os.path.basename(cf),
@@ -527,8 +556,10 @@ def pushplus(title, content, token):
 
 def build_markdown(top, meta, audit_removed, review_res, cum_rate, qualified_count):
     L = ["## 易点模型推荐 · %s" % TODAY, "",
-         "样本 %d（创业板/科创板 %d，北交所 %d）｜合格 %d｜审计否决 %d"
-         % (meta["total"], meta["cyb_kcb"], meta["bj"], qualified_count, audit_removed), ""]
+         "样本 %d（创业板 %d / 科创板 %d；%s）｜合格 %d｜审计否决 %d"
+         % (meta["total"], meta.get("cyb", 0), meta.get("kcb", 0),
+            (("含北交所 %d" % meta.get("bj", 0)) if meta.get("bj") else "已剔除北交所"),
+            qualified_count, audit_removed), ""]
     r = review_res
     if r["samples"]:
         L.append("昨日复盘 %d 只：达标 %d / 止损 %d / 观察 %d；累计胜率 %s"
@@ -583,6 +614,12 @@ def main():
 
     try:
         universe, meta = build_universe()
+        # 统一板块口径：无论数据来自自有枚举还是共同前置层，都在此剔除北交所。
+        universe, meta = apply_board_scope(universe, meta)
+        log("板块口径：%s｜样本 %d（创业板 %d + 科创板 %d）"
+            % (("三板块（含北交所）" if INCLUDE_BJ else
+                "仅创业板/科创板，已剔除北交所 %d 只" % meta.get("bj_excluded", 0)),
+               meta["total"], meta["cyb"], meta["kcb"]))
     except Exception as e:
         log("[FAIL] 数据获取失败：%s" % e)
         pushplus("易点模型 · 数据获取告警", "样本枚举失败：%s" % e, token)
@@ -707,6 +744,7 @@ def main():
         "qualified_count": len(qualified), "audit_veto_count": audit_removed,
         "yin_removed": yin_removed, "require_yang": REQUIRE_YANG,
         "dd90_basis": DD90_BASIS, "dd90_min": DD90_MIN,
+        "include_bj": INCLUDE_BJ, "bj_excluded": meta.get("bj_excluded", 0),
         "top": [{"name": t["name"], "code": t["code"], "board": t["board"],
                  "status": t["status"], "startup_day": t["startup_day"],
                  "score": t["score"], "close": t["close"], "chg_pct": t["chg_pct"],
