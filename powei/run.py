@@ -33,6 +33,10 @@
 
 模型定性：高胜率「博反弹」信号（反弹几乎必到，但持有收益弱），
 务必配合「支撑下 3~5% 止损 / +8~12% 止盈」使用；本脚本仅做研究，非投资建议。
+
+操作策略（「管三天」，每次推荐必附，详见 OPER_RULE / op_plan）：
+    提示日=收复信号日；T+1 缩量小涨即买；T+1 上影/绿阴则第三日开盘低位买；
+    买入后第 3 日强制卖出（固定持有 ≤3 日）。
 """
 import argparse
 import csv
@@ -170,12 +174,14 @@ def detect(bars, const=None):
             seg = bars[sig + 1:sig + n + 1]
             return (min(x["low"] for x in seg) / sig_close - 1) if seg else None
         age = (N - 1) - sig   # 距最新交易日多少个交易日
+        op = op_plan(bars, sig)   # 操作策略（管三天）
         events.append({
             "support": round(S, 2), "break_day": bars[break_idx]["day"],
             "sig_day": bars[sig]["day"], "sig_close": round(sig_close, 2), "age": age,
             "vol_ratio": round(bars[sig]["volume"] / avgvol, 2) if avgvol else None,
             "r5": ret(5), "r10": ret(10), "r20": ret(20),
             "peak10": peak(10), "peak20": peak(20), "dd20": dd(20),
+            "op": op, "hold3_ret": op.get("hold3_ret"),
         })
         t = sig + 25
     return events
@@ -190,6 +196,89 @@ def score(e):
         if e["vol_ratio"] < 1.0:  s += 2          # 缩量收复同样认可（研究结论）
     if e.get("peak20") is not None and e["peak20"] > 0.10: s += 3
     return s
+
+
+# ============================ 操作策略（本模型「管三天」） ============================
+# 每次推荐都附此策略；提示日=收复信号日，依据 T+1 形态定买点，买入后第 3 日强制卖出。
+OPER_RULE = """**操作策略（本模型「管三天」，每次推荐必附）**
+- 提示日 = 收复信号日（重新站回支撑之日）。
+- 提示日后第二天（T+1）判断买入与否：
+  · 若 **缩量小涨** → 当天可买；
+  · 若 **上影线 / 绿阴线**（诱空）→ 等第三天（T+2）**开盘低位**买入。
+- **买入后第三天必须卖出**（固定持有 ≤3 日，不恋战）。
+- 风控：跌破支撑下 3~5% 止损；到达 +8~12% 或放量滞涨可提前止盈。"""
+
+# T+1 形态识别阈值
+UPPER_SHADOW_RATIO = 0.5   # 上影 >= 0.5×实体 视为「带上影」
+UPPER_SHADOW_MIN = 0.008   # 上影 >= 0.8% 开盘价 才计入
+SMALL_UP_MAX = 0.03         # 小涨：涨幅 <= 3%
+
+
+def op_plan(bars, sig):
+    """依据提示日(sig)后第一根 K 线(T+1)给出买入决策、卖出日与「管三天」收益。
+
+    返回 dict（带 model 无关的操作计划），run_review 会把它随候选一起落盘/推送。
+    """
+    n = len(bars)
+    t1 = sig + 1
+    if t1 >= n:
+        return {"buy_offset": 1, "buy_day": "提示日+1（第二天）", "trigger": "待 T+1 成型",
+                "sell_day": "买入后第 3 日", "t1_shape": "N/A", "vol_ratio_t1": None,
+                "hold3_ret": None, "note": "T+1 尚未出现，次日再判。"}
+    b1, bs = bars[t1], bars[sig]
+    vol_shrink = b1["volume"] < bs["volume"]
+    vol_ratio_t1 = round(b1["volume"] / bs["volume"], 2) if bs["volume"] else None
+    up = b1["close"] > b1["open"]
+    pct = (b1["close"] - b1["open"]) / b1["open"] if b1["open"] else 0
+    small_up = up and (0 < pct <= SMALL_UP_MAX)
+    body_hi = max(b1["open"], b1["close"])
+    upper = b1["high"] - body_hi
+    body = abs(b1["close"] - b1["open"])
+    has_upper = upper >= UPPER_SHADOW_RATIO * body and upper >= UPPER_SHADOW_MIN * b1["open"]
+    is_green = b1["close"] < b1["open"]   # 中国习惯：收<开为绿（阴线）
+
+    if vol_shrink and small_up:
+        buy_offset, trigger = 1, "缩量小涨"
+    elif has_upper or is_green:
+        buy_offset, trigger = 2, "上影线/绿阴线"
+    else:
+        buy_offset, trigger = 1, "其它（次日观察，满足缩量小涨即买；若收上影/阴线则转第三日低开买）"
+
+    shape = []
+    shape.append("缩量" if vol_shrink else "放量")
+    if is_green:
+        shape.append("绿阴")
+    elif small_up:
+        shape.append("小涨")
+    elif up:
+        shape.append("上涨")
+    else:
+        shape.append("小跌")
+    if has_upper:
+        shape.append("带上影")
+    t1_shape = "、".join(shape)
+
+    # 卖出日 = 买入日 + 3；计算「管三天」持有收益（数据足够时）
+    sell_offset = buy_offset + 3
+    buy_i = min(sig + buy_offset, n - 1)
+    sell_i = min(sig + sell_offset, n - 1)
+    hold3_ret = None
+    if sell_i > buy_i:
+        entry = bars[buy_i]["open"] if buy_offset == 2 else bars[buy_i]["close"]
+        hold3_ret = round(bars[sell_i]["close"] / entry - 1, 4)
+
+    return {
+        "buy_offset": buy_offset,
+        "buy_day": "提示日+%d（%s）" % (buy_offset, "第二天" if buy_offset == 1 else "第三天开盘"),
+        "trigger": trigger,
+        "sell_day": "买入后第 3 日（提示日+%d）" % sell_offset,
+        "t1_shape": t1_shape,
+        "t1_day": b1["day"],
+        "vol_ratio_t1": vol_ratio_t1,
+        "hold3_ret": hold3_ret,
+        "note": "T+1(%s): %s；%s → %s；买入后第 3 日卖出。" % (
+            b1["day"], t1_shape, trigger, "提示日+%d" % buy_offset),
+    }
 
 
 # ============================ 推送（PushPlus, 与仓库统一） ============================
@@ -224,8 +313,10 @@ def write_state(cands, today):
     with open(cs, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         w.writerow(["排名", "代码", "名称", "支撑", "破位日", "收复信号日",
-                    "距今交易日", "量比", "评分", "R5%", "R10%", "R20%", "PEAK20%", "DD20%"])
+                    "距今交易日", "量比", "评分", "R5%", "R10%", "R20%", "PEAK20%", "DD20%",
+                    "操作买点", "触发条件", "卖出日", "管三天收益%"])
         for i, e in enumerate(cands, 1):
+            op = e.get("op") or {}
             w.writerow([i, e["code"], e.get("name", ""), e["support"], e["break_day"],
                         e["sig_day"], e["age"], e.get("vol_ratio"),
                         score(e),
@@ -233,7 +324,10 @@ def write_state(cands, today):
                         round((e.get("r10") or 0) * 100, 1),
                         round((e.get("r20") or 0) * 100, 1),
                         round((e.get("peak20") or 0) * 100, 1),
-                        round((e.get("dd20") or 0) * 100, 1)])
+                        round((e.get("dd20") or 0) * 100, 1),
+                        op.get("buy_day", ""), op.get("trigger", ""),
+                        op.get("sell_day", ""),
+                        round((e.get("hold3_ret") or 0) * 100, 1) if e.get("hold3_ret") is not None else ""])
     # summary.json（机器可读）
     summary = {
         "date": today, "model": MODEL_NAME, "label": MODEL_LABEL,
@@ -241,7 +335,8 @@ def write_state(cands, today):
         "top": [{"rank": i, "code": e["code"], "name": e.get("name", ""),
                  "support": e["support"], "break_day": e["break_day"],
                  "sig_day": e["sig_day"], "age": e["age"],
-                 "vol_ratio": e.get("vol_ratio"), "score": score(e)}
+                 "vol_ratio": e.get("vol_ratio"), "score": score(e),
+                 "op": e.get("op")}
                 for i, e in enumerate(cands[:CONST["TOP_N"]], 1)],
         "generated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
@@ -310,6 +405,7 @@ def run_review(ctx, max_age=None, top_n=None):
         "support": e["support"], "break_day": e["break_day"], "sig_day": e["sig_day"],
         "age": e["age"], "vol_ratio": e.get("vol_ratio"),
         "r5": e.get("r5"), "r10": e.get("r10"), "r20": e.get("r20"),
+        "op": e.get("op"), "hold3_ret": e.get("hold3_ret"),
         "model": MODEL_NAME,
     } for e in picks]
     n = ctx.record(rec) if rec else 0
@@ -328,12 +424,16 @@ def _push_report(cands, today):
     lines = ["### %s · 每日候选（%s）" % (MODEL_LABEL, today),
              "> 仅列近 **%d** 交易日发生「收复支撑」的候选，共 **%d** 只。博反弹信号，须严格止盈止损，非投资建议。" % (CONST["MAX_AGE"], len(cands)),
              "",
-             "| 排名 | 代码 | 名称 | 支撑 | 破位日 | 收复日 | 距今 | 量比 | 评分 |",
-             "|---|---|---|---|---|---|---|---|---|"]
+             "| 排名 | 代码 | 名称 | 支撑 | 破位日 | 收复日 | 距今 | 量比 | 评分 | 操作(管三天) |",
+             "|---|---|---|---|---|---|---|---|---|---|"]
     for i, e in enumerate(cands, 1):
-        lines.append("| %d | %s | %s | %.2f | %s | %s | %d | %s | %d |" % (
+        op = e.get("op") or {}
+        op_txt = "%s｜%s" % (op.get("buy_day", ""), op.get("trigger", "")) if op else ""
+        lines.append("| %d | %s | %s | %.2f | %s | %s | %d | %s | %d | %s |" % (
             i, e["code"], e.get("name", ""), e["support"], e["break_day"],
-            e["sig_day"], e["age"], e.get("vol_ratio"), score(e)))
+            e["sig_day"], e["age"], e.get("vol_ratio"), score(e), op_txt))
+    # 固定操作策略（每次必附）
+    lines += ["", OPER_RULE]
     push("%s %s（%d只）" % (MODEL_LABEL, today, len(cands)), "\n".join(lines))
 
 
@@ -368,6 +468,36 @@ def run_backtest(ctx):
         out["T+%d" % h] = {"samples": n,
                             "win_rate": round(acc[h]["w"] / n, 3) if n else None,
                             "avg_return": round(acc[h]["sum"] / n, 4) if n else None}
+
+    # 新增：按操作策略「管三天」回溯（提示日 → T+1/T+2 买 → 买入后第 3 日卖）
+    rule = {"n": 0, "win": 0, "sum": 0.0, "buy_t1": 0, "buy_t2": 0, "detail": []}
+    for r in rows:
+        bars = _norm(ctx.kline(r["code"], count=CONST["KLINE_COUNT"]))
+        if not bars:
+            continue
+        idx = next((i for i, b in enumerate(bars) if b["day"] >= r["sig_day"]), None)
+        if idx is None:
+            continue
+        plan = op_plan(bars, idx)
+        if not plan:
+            continue
+        bo = plan["buy_offset"]
+        buy_i = min(idx + bo, len(bars) - 1)
+        sell_i = min(idx + bo + 3, len(bars) - 1)   # 买入后第 3 日
+        if sell_i <= buy_i:
+            continue
+        entry = bars[buy_i]["open"] if bo == 2 else bars[buy_i]["close"]
+        ret = bars[sell_i]["close"] / entry - 1
+        rule["n"] += 1; rule["sum"] += ret
+        if ret > 0: rule["win"] += 1
+        if bo == 1: rule["buy_t1"] += 1
+        else: rule["buy_t2"] += 1
+    out["rule_3day"] = {
+        "samples": rule["n"],
+        "buy_on_t1": rule["buy_t1"], "buy_on_t2": rule["buy_t2"],
+        "win_rate": round(rule["win"] / rule["n"], 3) if rule["n"] else None,
+        "avg_return": round(rule["sum"] / rule["n"], 4) if rule["n"] else None,
+    }
     with open(os.path.join(STATE_DIR, "backtest.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
     log("回溯完成：%s" % json.dumps(out, ensure_ascii=False))

@@ -1,0 +1,272 @@
+{
+  "date": "2026-11-12",
+  "model": "powei",
+  "label": "破位后上涨模型（假破位收复）",
+  "count": 12,
+  "picks": [
+    {
+      "code": "sz002154",
+      "name": "报 喜 鸟",
+      "board": "",
+      "close": null,
+      "score": 22,
+      "support": 3.7,
+      "break_day": "2026-10-26",
+      "sig_day": "2026-11-11",
+      "age": 0,
+      "vol_ratio": 4.07,
+      "r5": 0.0,
+      "r10": 0.0,
+      "r20": 0.0,
+      "op": {
+        "buy_day": "提示日+1（第二天）",
+        "trigger": "待 T+1 成型",
+        "sell_day": "买入后第 3 日"
+      },
+      "hold3_ret": null,
+      "model": "powei"
+    },
+    {
+      "code": "sh603012",
+      "name": "创力集团",
+      "board": "",
+      "close": null,
+      "score": 20,
+      "support": 7.94,
+      "break_day": "2026-10-26",
+      "sig_day": "2026-11-11",
+      "age": 0,
+      "vol_ratio": 0.68,
+      "r5": 0.0,
+      "r10": 0.0,
+      "r20": 0.0,
+      "op": {
+        "buy_day": "提示日+1（第二天）",
+        "trigger": "待 T+1 成型",
+        "sell_day": "买入后第 3 日"
+      },
+      "hold3_ret": null,
+      "model": "powei"
+    },
+    {
+      "code": "sh688109",
+      "name": "品茗科技",
+      "board": "",
+      "close": null,
+      "score": 19,
+      "support": 69.0,
+      "break_day": "2026-10-23",
+      "sig_day": "2026-11-10",
+      "age": 1,
+      "vol_ratio": 2.1,
+      "r5": -0.013999999999999999,
+      "r10": -0.013999999999999999,
+      "r20": -0.013999999999999999,
+      "op": {
+        "buy_day": "提示日+2（第三天开盘）",
+        "trigger": "上影线/绿阴线",
+        "sell_day": "买入后第 3 日（提示日+5）"
+      },
+      "hold3_ret": null,
+      "model": "powei"
+    },
+    {
+      "code": "sh688326",
+      "name": "经纬恒润",
+      "board": "",
+      "close": null,
+      "score": 19,
+      "support": 61.97,
+      "break_day": "2026-10-23",
+      "sig_day": "2026-11-10",
+      "age": 1,
+      "vol_ratio": 9.48,
+      "r5": -0.011000000000000001,
+      "r10": -0.011000000000000001,
+      "r20": -0.011000000000000001,
+      "op": {
+        "buy_day": "提示日+2（第三天开盘）",
+        "trigger": "上影线/绿阴线",
+        "sell_day": "买入后第 3 日（提示日+5）"
+      },
+      "hold3_ret": null,
+      "model": "powei"
+    },
+    {
+      "code": "sz002664",
+      "name": "信质集团",
+      "board": "",
+      "close": null,
+      "score": 19,
+      "support": 14.97,
+      "break_day": "2026-10-26",
+      "sig_day": "2026-11-10",
+      "age": 1,
+      "vol_ratio": 4.41,
+      "r5": 0.009000000000000001,
+      "r10": 0.009000000000000001,
+      "r20": 0.009000000000000001,
+      "op": {
+        "buy_day": "提示日+2（第三天开盘）",
+        "trigger": "上影线/绿阴线",
+        "sell_day": "买入后第 3 日（提示日+5）"
+      },
+      "hold3_ret": null,
+      "model": "powei"
+    },
+    {
+      "code": "sh600333",
+      "name": "长春燃气",
+      "board": "",
+      "close": null,
+      "score": 16,
+      "support": 6.12,
+      "break_day": "2026-10-22",
+      "sig_day": "2026-11-09",
+      "age": 2,
+      "vol_ratio": 2.65,
+      "r5": -0.008,
+      "r10": -0.008,
+      "r20": -0.008,
+      "op": {
+        "buy_day": "提示日+1（第二天）",
+        "trigger": "缩量小涨",
+        "sell_day": "买入后第 3 日（提示日+4）"
+      },
+      "hold3_ret": 0.01,
+      "model": "powei"
+    },
+    {
+      "code": "sh603966",
+      "name": "法兰泰克",
+      "board": "",
+      "close": null,
+      "score": 14,
+      "support": 7.24,
+      "break_day": "2026-10-26",
+      "sig_day": "2026-11-09",
+      "age": 2,
+      "vol_ratio": 0.99,
+      "r5": 0.05,
+      "r10": 0.05,
+      "r20": 0.05,
+      "op": {
+        "buy_day": "提示日+2（第三天开盘）",
+        "trigger": "上影线/绿阴线",
+        "sell_day": "买入后第 3 日（提示日+5）"
+      },
+      "hold3_ret": null,
+      "model": "powei"
+    },
+    {
+      "code": "sz002321",
+      "name": "华英农业",
+      "board": "",
+      "close": null,
+      "score": 14,
+      "support": 1.82,
+      "break_day": "2026-10-22",
+      "sig_day": "2026-11-09",
+      "age": 2,
+      "vol_ratio": 0.87,
+      "r5": 0.005,
+      "r10": 0.005,
+      "r20": 0.005,
+      "op": {
+        "buy_day": "提示日+1（第二天）",
+        "trigger": "缩量小涨",
+        "sell_day": "买入后第 3 日（提示日+4）"
+      },
+      "hold3_ret": -0.005,
+      "model": "powei"
+    },
+    {
+      "code": "sh600089",
+      "name": "特变电工",
+      "board": "",
+      "close": null,
+      "score": 13,
+      "support": 18.76,
+      "break_day": "2026-10-21",
+      "sig_day": "2026-11-06",
+      "age": 3,
+      "vol_ratio": 2.72,
+      "r5": -0.032,
+      "r10": -0.032,
+      "r20": -0.032,
+      "op": {
+        "buy_day": "提示日+2（第三天开盘）",
+        "trigger": "上影线/绿阴线",
+        "sell_day": "买入后第 3 日（提示日+5）"
+      },
+      "hold3_ret": -0.02,
+      "model": "powei"
+    },
+    {
+      "code": "sz300217",
+      "name": "东方电热",
+      "board": "",
+      "close": null,
+      "score": 13,
+      "support": 4.1,
+      "break_day": "2026-10-21",
+      "sig_day": "2026-11-06",
+      "age": 3,
+      "vol_ratio": 8.24,
+      "r5": 0.023,
+      "r10": 0.023,
+      "r20": 0.023,
+      "op": {
+        "buy_day": "提示日+2（第三天开盘）",
+        "trigger": "上影线/绿阴线",
+        "sell_day": "买入后第 3 日（提示日+5）"
+      },
+      "hold3_ret": 0.002,
+      "model": "powei"
+    },
+    {
+      "code": "sz000998",
+      "name": "隆平高科",
+      "board": "",
+      "close": null,
+      "score": 11,
+      "support": 8.13,
+      "break_day": "2026-10-22",
+      "sig_day": "2026-11-06",
+      "age": 3,
+      "vol_ratio": 0.4,
+      "r5": -0.025,
+      "r10": -0.025,
+      "r20": -0.025,
+      "op": {
+        "buy_day": "提示日+2（第三天开盘）",
+        "trigger": "上影线/绿阴线",
+        "sell_day": "买入后第 3 日（提示日+5）"
+      },
+      "hold3_ret": -0.013999999999999999,
+      "model": "powei"
+    },
+    {
+      "code": "sz301498",
+      "name": "乖宝宠物",
+      "board": "",
+      "close": null,
+      "score": 11,
+      "support": 37.46,
+      "break_day": "2026-10-22",
+      "sig_day": "2026-11-06",
+      "age": 3,
+      "vol_ratio": 0.87,
+      "r5": -0.064,
+      "r10": -0.064,
+      "r20": -0.064,
+      "op": {
+        "buy_day": "提示日+2（第三天开盘）",
+        "trigger": "上影线/绿阴线",
+        "sell_day": "买入后第 3 日（提示日+5）"
+      },
+      "hold3_ret": -0.017,
+      "model": "powei"
+    }
+  ]
+}
