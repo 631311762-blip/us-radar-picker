@@ -29,6 +29,13 @@ PREFIX_KCB = ("688", "689")
 PREFIX_BJ = ("43", "83", "87", "88", "92")
 FS_CYB, FS_KCB, FS_BJ = "m:0+t:80", "m:1+t:23", "m:0+t:81"
 DD90_MIN = 0.15            # 90日回撤 ≥15%
+DD90_BASIS = "prev_close"  # 90日回撤基准价（折中口径，2026-11-13 用户确认）：
+                           #   prev_close = 提示点【前一日收盘】（默认）—— 启动大阳线不再
+                           #     把回撤「自我修复」到不足15%，同时仍要求股价处于低位；
+                           #   open / low = 当日开盘 / 当日最低；
+                           #   close      = 当日收盘（旧口径，会被启动阳线自我修复，已弃用）；
+                           #   max_dd     = 90日最大回撤(峰值后谷值)，筛选力过低，不推荐。
+                           # 只改此常量即可切换口径，push 后 yidian.yml 自动生效。
 R5_MAX = 0.45              # 近5日涨幅 ≤45%
 CHG_MIN, CHG_MAX = 0.5, 22.0     # 当日涨幅 0.5-22%（百分数）
 TURN_MIN, TURN_MAX = 2.0, 35.0   # 换手 2-35%（百分数）
@@ -215,6 +222,22 @@ def check_trading_day(sample):
 
 
 # ---------- 3. 硬性条件 ----------
+def dd90_ref(bars, win):
+    """90日回撤基准价。折中口径取「提示点前一日收盘」：
+    启动当天的大阳线不会把回撤自我修复掉，又比「90日最大回撤」严格
+    （用最近一个交易日的位置，而非区间内任意最低点），保留洗盘充分的筛选意图。"""
+    if DD90_BASIS == "close":
+        return bars[-1]["close"]
+    if DD90_BASIS == "open":
+        return bars[-1]["open"]
+    if DD90_BASIS == "low":
+        return bars[-1]["low"]
+    if DD90_BASIS == "max_dd":
+        k = max(range(len(win)), key=lambda i: win[i]["high"])
+        return min(b["low"] for b in win[k:])
+    return bars[-2]["close"] if len(bars) >= 2 else bars[-1]["close"]  # prev_close
+
+
 def hard_filter(rec, bars):
     if len(bars) < 61:
         return None
@@ -244,7 +267,8 @@ def hard_filter(rec, bars):
         return None
     win = bars[-90:] if len(bars) >= 90 else bars
     hi = max(b["high"] for b in win)
-    dd90 = (hi - c) / hi if hi > 0 else 0.0
+    ref = dd90_ref(bars, win)
+    dd90 = (hi - ref) / hi if hi > 0 else 0.0
     if dd90 < DD90_MIN:
         return None
     r5 = c / bars[-6]["close"] - 1.0 if len(bars) >= 6 else 0.0
@@ -256,7 +280,8 @@ def hard_filter(rec, bars):
         return None
     d = dict(rec)
     d.update({"close": c, "open": o, "entity_pct": round(entity_pct, 2),
-              "dd90": dd90, "r5": r5, "ma20": ma20, "ma5": ma5,
+              "dd90": dd90, "dd90_ref": round(ref, 2), "dd90_basis": DD90_BASIS,
+              "r5": r5, "ma20": ma20, "ma5": ma5,
               "ma5_prev": ma5_prev, "ma60": ma60, "dist_ma20": dist,
               "ma5_up": ma5_up, "below_ma60": below_ma60,
               "high90": hi, "bars": bars})
@@ -442,7 +467,8 @@ def archive(all_q, top, meta, audit_removed, watch_pool, review_res, state):
     json.dump(payload, open(jf, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     cols = ["code", "name", "board", "close", "open", "entity_pct", "chg_pct",
             "turn_pct", "vr", "price",
-            "dd90", "r5", "ma20", "dist_ma20", "ma5_up", "below_ma60",
+            "dd90", "dd90_ref", "dd90_basis",
+            "r5", "ma20", "dist_ma20", "ma5_up", "below_ma60",
             "mktcap", "float_mktcap", "audit_firm", "score", "status",
             "startup_day", "buy_low", "buy_high", "stop_loss", "target"]
     with open(cf, "w", encoding="utf-8-sig", newline="") as f:
@@ -520,6 +546,9 @@ def build_markdown(top, meta, audit_removed, review_res, cum_rate, qualified_cou
                  (t["buy_low"], t["buy_high"], t["stop_loss"], t["target"], t["audit_firm"]))
     L += ["", "买点=收盘×0.975~收盘，止损 -5%，目标 +7%。",
           "提示点均为阳线（收盘>开盘），已剔除阴线/十字星/高开低走大阴线。",
+          "90日回撤按%s计（折中口径），避免启动阳线自我修复。"
+          % {"prev_close": "启动前一日收盘", "open": "当日开盘", "low": "当日最低",
+             "close": "当日收盘", "max_dd": "90日最大回撤"}.get(DD90_BASIS, DD90_BASIS),
           "状态：已启动/临界/筑底/观察；观察池含下轨缩量、上影试盘。",
           "", "*统计研究，不构成投资建议。*"]
     txt = "\n".join(L)
@@ -677,6 +706,7 @@ def main():
         "ok": True, "date": TODAY, "meta": meta,
         "qualified_count": len(qualified), "audit_veto_count": audit_removed,
         "yin_removed": yin_removed, "require_yang": REQUIRE_YANG,
+        "dd90_basis": DD90_BASIS, "dd90_min": DD90_MIN,
         "top": [{"name": t["name"], "code": t["code"], "board": t["board"],
                  "status": t["status"], "startup_day": t["startup_day"],
                  "score": t["score"], "close": t["close"], "chg_pct": t["chg_pct"],
