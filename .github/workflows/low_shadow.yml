@@ -1,10 +1,12 @@
 name: 低位上影线模型每日流程
 
+# 2026-11-13（用户要求 2 / 3）：本模型（严格上影线版，low_shadow）由统一
+# 流水线（北京 16:05）每日自动执行，取消独立 schedule（原北京 16:30）。
+# 仅留 workflow_dispatch：手动调试 + 供 fallback-2300.yml 在主流水线当日
+# 失败时按自身代码兜底产出。low_shadow2 是另一个独立模型，见其同名 workflow。
+
 on:
-  schedule:
-    # UTC 08:30 = 北京时间 16:30，周一至周五收盘后
-    - cron: "30 8 * * 1-5"
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -16,7 +18,8 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    # 兜底路径无共享 K 线缓存，需自行抓取全市场，放宽预算
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -28,10 +31,11 @@ jobs:
         working-directory: low_shadow
         run: pip install -r requirements.txt
 
-      - name: 运行低位上影线模型
+      - name: 运行低位上影线模型（自身代码路径）
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           STATE_DIR: low_shadow/state
+          TZ: Asia/Shanghai
         working-directory: low_shadow
         run: |
           mkdir -p state
@@ -43,5 +47,6 @@ jobs:
           git config user.name "lowshadow-bot"
           git config user.email "lowshadow-bot@users.noreply.github.com"
           git add low_shadow
-          git commit -m "low_shadow state: $(date -u +%F)" || echo "无状态变更"
+          git commit -m "low_shadow state: $(date -u +%F) [skip ci]" || echo "无状态变更"
+          git pull --rebase origin main || true
           git push || echo "推送状态失败（不影响选股）"

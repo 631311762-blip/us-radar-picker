@@ -57,8 +57,9 @@
     {
       "name": "high_shadow",
       "label": "高位上影线模型（风险观察名单）",
+      "cmd": "python3 high_shadow/high_shadow_screener.py --mode review",
       "enabled": false,
-      "_note": "云盘自动化运行（与 GitHub Actions 流水线分开定时），消费合并流水线 common/state/universe.json 样本池（ST+立信剔除），在选股入口强制生效；不在本 runner 内执行，故 enabled=false。"
+      "_note": "2026-11-13 用户确认「迁移代码进仓库再纳入」。原为云盘自动化独立定时，消费合并流水线 common/state/universe.json 样本池（ST+立信剔除）。接入骨架已建好：.github/workflows/high_shadow.yml（23点兜底路径）+ high_shadow/README.md（数据契约）。因入口脚本尚未迁移，暂保持 enabled=false，避免 run_all.py 执行不存在的文件；代码按契约放入 high_shadow/ 后把 enabled 改 true 即纳入 16:05 统一流水线，并记得停掉云盘原定时。"
     }
   ]
 }

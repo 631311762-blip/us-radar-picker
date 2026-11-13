@@ -1,10 +1,11 @@
 name: 领湃模型每日流程
 
+# 2026-11-13（用户要求 2 / 3）：领湃由统一流水线（北京 16:05）每日自动执行，
+# 取消独立 schedule（原北京 16:35）。仅留 workflow_dispatch：手动调试 +
+# 供 fallback-2300.yml 在主流水线当日失败时按自身代码兜底产出。
+
 on:
-  schedule:
-    # UTC 08:35 = 北京时间 16:35，周一至周五收盘后
-    - cron: "35 8 * * 1-5"
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -16,7 +17,8 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # 兜底路径无共享 K 线缓存，需自行抓取全市场，放宽预算
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -28,10 +30,11 @@ jobs:
         working-directory: lingpei
         run: pip install -r requirements.txt
 
-      - name: 运行领湃三步流程
+      - name: 运行领湃三步流程（自身代码路径）
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           STATE_DIR: lingpei/state
+          TZ: Asia/Shanghai
         working-directory: lingpei
         run: |
           mkdir -p state
@@ -43,5 +46,6 @@ jobs:
           git config user.name "lingpei-bot"
           git config user.email "lingpei-bot@users.noreply.github.com"
           git add lingpei
-          git commit -m "lingpei state: $(date -u +%F)" || echo "无状态变更"
+          git commit -m "lingpei state: $(date -u +%F) [skip ci]" || echo "无状态变更"
+          git pull --rebase origin main || true
           git push || echo "推送状态失败（不影响选股）"

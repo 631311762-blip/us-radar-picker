@@ -1,17 +1,18 @@
 name: 易点模型每日流程
 
+# =========================================================================
+# 2026-11-13 收敛说明（用户要求 2 / 3）
+# -------------------------------------------------------------------------
+# 易点已登记在 common/registry.json，由统一流水线 a-share-pipeline.yml
+# 于北京 16:05 每日自动执行。原独立 schedule（北京 16:45）会让易点同一天
+# 跑两遍；原 push 触发会在改动 yidian/ 时再叠一次。两者均已取消。
+#
+# 仅保留 workflow_dispatch：手动调试 + 供 fallback-2300.yml（北京 23:00）
+# 在主流水线当日失败时调用，按自身代码独立产出。
+# =========================================================================
+
 on:
-  schedule:
-    # UTC 08:45 = 北京时间 16:45，周一至周五收盘后（错开善水16:10/低位上影16:30/领湃16:35）
-    - cron: "45 8 * * 1-5"
-  workflow_dispatch:
-  push:
-    # 后续对脚本 / 依赖 / 本工作流的任何更改，push 即自动生效并验证一次；
-    # 只监听代码文件，不含 yidian/state/**，且 GITHUB_TOKEN 的回写 push 不会再触发，杜绝循环。
-    paths:
-      - "yidian/run.py"
-      - "yidian/requirements.txt"
-      - ".github/workflows/yidian.yml"
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -23,7 +24,8 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    # 兜底路径无共享 K 线缓存，需自行抓取全市场，放宽预算
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -35,7 +37,7 @@ jobs:
         working-directory: yidian
         run: pip install -r requirements.txt
 
-      - name: 运行易点模型选股
+      - name: 运行易点模型选股（自身代码路径）
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           STATE_DIR: yidian/state
@@ -51,6 +53,6 @@ jobs:
           git config user.name "yidian-bot"
           git config user.email "yidian-bot@users.noreply.github.com"
           git add yidian/state
-          git commit -m "yidian state: $(date -u +%F)" || echo "无状态变更"
+          git commit -m "yidian state: $(date -u +%F) [skip ci]" || echo "无状态变更"
           git pull --rebase origin main || true
           git push || echo "推送状态失败（不影响选股）"

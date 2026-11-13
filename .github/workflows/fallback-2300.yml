@@ -1,0 +1,169 @@
+name: A股模型 23点独立兜底
+
+# =========================================================================
+# 2026-11-13 新增（用户要求 3）
+# -------------------------------------------------------------------------
+# 目标：合并流水线（北京 16:05）当日没成功时，23:00 让各模型按「自身运行
+#       代码」独立产出；流水线成功则整条跳过，绝不重复运行。
+#
+# 判断依据：查统一流水线 workflow(412216318) 的运行记录
+#   - 近 18 小时内有 conclusion=success  -> skip（结果已出）
+#   - 有 in_progress / queued 在途       -> skip（只是延迟，避免双跑）
+#   - 其余（失败 / 取消 / 漏跑）         -> dispatch 各模型独立流程
+#   - 查询 API 异常                      -> dispatch（产出优先，宁重勿漏）
+#
+# 为什么用「近 18 小时」而不是「当天日期」：
+#   GitHub 的 schedule 实测会延迟约 1 小时，23:00 的点火可能落到次日 00:xx
+#   （北京时间），按日期比对会把「昨天已成功」误判成「今天没跑」而重复跑。
+#   主流水线 cron 在 UTC 08:05、watchdog 补跑在 UTC 09:20，18h 窗口足以
+#   覆盖两者，又不会把前一天的成功算进来。
+#
+# 防循环 / 防重复：
+#   - 被拉起的 9 个 workflow 全部只保留 workflow_dispatch，不带 schedule/push；
+#   - GITHUB_TOKEN 触发的 dispatch 不会再触发本工作流；
+#   - 串行 dispatch + 间隔，降低瞬时并发对行情网关的冲击；
+#   - concurrency 保证同一时刻只有一个兜底实例。
+# =========================================================================
+
+on:
+  schedule:
+    # UTC 15:00 = 北京时间 23:00，周一~周五
+    - cron: '0 15 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: '忽略主流水线成功状态，强制拉起全部模型（调试用）'
+        type: boolean
+        default: false
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: fallback-2300
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      decision: ${{ steps.decide.outputs.decision }}
+      reason: ${{ steps.decide.outputs.reason }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      FORCE: ${{ github.event.inputs.force }}
+    steps:
+      - name: 判断当日主流水线是否已成功
+        id: decide
+        run: |
+          python3 - <<'PY'
+          import os, json, urllib.request, datetime
+
+          repo = os.environ['REPO']
+          tok = os.environ['GH_TOKEN']
+          force = str(os.environ.get('FORCE', 'false')).lower() == 'true'
+          now = datetime.datetime.now(datetime.timezone.utc)
+          window = datetime.timedelta(hours=18)
+          wf_id = '412216318'   # A股模型统一流水线（共同前置层）
+
+          decision, reason = 'dispatch', '未查到当日成功记录'
+          try:
+              url = ('https://api.github.com/repos/%s/actions/workflows/%s/runs?per_page=100'
+                     % (repo, wf_id))
+              req = urllib.request.Request(url, headers={
+                  'Authorization': 'Bearer ' + tok,
+                  'Accept': 'application/vnd.github+json',
+                  'User-Agent': 'fallback-2300',
+              })
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  runs = json.load(resp)['workflow_runs']
+
+              has_success, has_running = False, False
+              for r in runs:
+                  created = datetime.datetime.fromisoformat(
+                      r['created_at'].replace('Z', '+00:00'))
+                  age = now - created
+                  st, con = r['status'], r.get('conclusion')
+                  if st in ('in_progress', 'queued', 'pending', 'requested'):
+                      has_running = True
+                      print('在途: run %s %s @ %s' % (r['id'], st, r['created_at']))
+                      continue
+                  if st == 'completed' and con == 'success' and datetime.timedelta(0) <= age <= window:
+                      has_success = True
+                      print('近18h已成功: run %s @ %s' % (r['id'], r['created_at']))
+                      break
+
+              if force:
+                  decision, reason = 'dispatch', '手动 force=true 强制兜底'
+              elif has_success:
+                  decision, reason = 'skip', '主流水线近18h已成功，跳过兜底'
+              elif has_running:
+                  decision, reason = 'skip', '主流水线仍在途，避免双跑'
+              else:
+                  decision, reason = 'dispatch', '主流水线当日失败/取消/漏跑，启动兜底'
+          except Exception as e:
+              decision, reason = 'dispatch', '查询失败(%s)，产出优先故启动兜底' % e
+              print('WARN 查询主流水线状态异常: %s' % e)
+
+          print('DECISION=%s  REASON=%s' % (decision, reason))
+          out = os.environ.get('GITHUB_OUTPUT')
+          if out:
+              with open(out, 'a', encoding='utf-8') as fh:
+                  fh.write('decision=%s\n' % decision)
+                  fh.write('reason=%s\n' % reason)
+          summary = os.environ.get('GITHUB_STEP_SUMMARY')
+          if summary:
+              with open(summary, 'a', encoding='utf-8') as fh:
+                  fh.write('## 23点兜底判定\n\n- 结论：`%s`\n- 原因：%s\n'
+                           '- 判定时刻(UTC)：%s\n'
+                           % (decision, reason, now.strftime('%Y-%m-%d %H:%M:%S')))
+          PY
+
+  fallback:
+    needs: check
+    if: needs.check.outputs.decision == 'dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      REASON: ${{ needs.check.outputs.reason }}
+    steps:
+      - name: 串行拉起 9 个模型的独立流程
+        run: |
+          set -u
+          echo "兜底触发原因：$REASON"
+          # 与 common/registry.json 中 9 个模型一一对应。
+          # high_shadow.yml 在代码迁移完成前会自行检测并正常跳过。
+          WFS="shanshui.yml lingpei.yml low_shadow.yml low_shadow2.yml \
+               kaizhong.yml yidian.yml powei.yml high_shadow.yml stock-v3-daily.yml"
+          OK=0; FAIL=0
+          for wf in $WFS; do
+            echo "---- dispatch $wf ----"
+            if gh api -X POST "repos/$REPO/actions/workflows/$wf/dispatches" -f ref=main; then
+              echo "OK   $wf"; OK=$((OK+1))
+            else
+              echo "FAIL $wf（可能文件尚未同步到 main）"; FAIL=$((FAIL+1))
+            fi
+            sleep 15
+          done
+          echo "兜底派发完成：成功 $OK，失败 $FAIL"
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            {
+              echo "## 23点兜底派发结果"
+              echo ""
+              echo "- 触发原因：$REASON"
+              echo "- 成功派发：$OK 个"
+              echo "- 派发失败：$FAIL 个"
+              echo "- 说明：各模型按自身运行代码独立产出，互不阻塞；"
+              echo "  详情请到 Actions 页查看对应工作流。"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          # 全部失败才标红，部分失败不阻断（其余模型仍已产出）
+          if [ "$OK" -eq 0 ]; then
+            echo "::error::9 个模型全部派发失败，请检查 workflow 文件与 GITHUB_TOKEN 权限"
+            exit 1
+          fi

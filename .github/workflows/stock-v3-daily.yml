@@ -60,7 +60,7 @@ jobs:
             echo "无变更，跳过提交"
             exit 0
           fi
-          git commit -m "daily: 选股结果自动同步 $(TZ=Asia/Shanghai date +%F)"
+          git commit -m "daily: 选股结果自动同步 $(TZ=Asia/Shanghai date +%F) [skip ci]"
           for i in 1 2 3; do
             git fetch origin
             git merge origin/main --no-edit -m "merge: 同步上游改动" || true

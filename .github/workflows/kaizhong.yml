@@ -1,14 +1,21 @@
 name: 凯众模型 v4 每日流程
 
+# =========================================================================
+# 2026-11-13 收敛说明（用户要求 2 / 3）
+# -------------------------------------------------------------------------
+# 凯众已登记在 common/registry.json，由统一流水线 a-share-pipeline.yml
+# 于北京 16:05 在共享前置层内每日自动执行。本 workflow 不再保留任何独立
+# 自动触发（原 push 触发会在改动 kaizhong/ 时与流水线重复跑一遍）。
+#
+# 仅保留 workflow_dispatch，用途：
+#   1) 手动调试；
+#   2) 被 fallback-2300.yml（北京 23:00 兜底）在主流水线当日失败时调用，
+#      按本文件「自身运行代码」独立产出，不依赖统一流水线的调度。
+# 兜底采用串行 dispatch；回写带 [skip ci] + pull --rebase，不产生循环/冲突。
+# =========================================================================
+
 on:
-  # 2026-11-10：已并入 a-share-pipeline（同一 cron 16:05、共享前置层），
-  # 本 workflow 取消 schedule，仅保留手动触发兜底，避免同日重复运行/重复推送。
-  workflow_dispatch:
-  push:
-    # 只要 kaizhong/ 下的脚本或本 workflow 有改动，就自动跑一遍验证
-    paths:
-      - "kaizhong/**"
-      - ".github/workflows/kaizhong.yml"
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -20,7 +27,8 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 兜底路径无共享 K 线缓存，需自行抓取全市场，放宽预算
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -32,7 +40,7 @@ jobs:
         working-directory: kaizhong
         run: pip install -r requirements.txt
 
-      - name: 运行凯众 v4 模型
+      - name: 运行凯众 v4 模型（自身代码路径）
         env:
           FTQQ_KEY: ${{ secrets.FTQQ_KEY }}
           # 仓库实际只配置了 SERVERCHAN_SENDKEY（无 FTQQ_KEY），必须一并透传，
@@ -44,6 +52,7 @@ jobs:
           # 导致读不到已入库的历史台账（表现为「台账共 6 笔」而非 400+ 笔）。
           KZ_DATA_DIR: ${{ github.workspace }}/kaizhong/state
           KZ_TOP: "6"
+          TZ: Asia/Shanghai
         working-directory: kaizhong
         run: |
           mkdir -p state/reports
@@ -55,5 +64,6 @@ jobs:
           git config user.name "kaizhong-bot"
           git config user.email "kaizhong-bot@users.noreply.github.com"
           git add kaizhong/state
-          git commit -m "kaizhong state: $(date -u +%F)" || echo "无状态变更"
+          git commit -m "kaizhong state: $(date -u +%F) [skip ci]" || echo "无状态变更"
+          git pull --rebase origin main || true
           git push || echo "推送状态失败（不影响选股）"
