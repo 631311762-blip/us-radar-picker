@@ -442,17 +442,12 @@ def _push_report(cands, today):
     lines = ["### %s · 每日候选（%s）" % (MODEL_LABEL, today),
              "> 仅列近 **%d** 交易日发生「收复支撑」的候选，共 **%d** 只。博反弹信号，须严格止盈止损，非投资建议。" % (CONST["MAX_AGE"], len(cands)),
              "",
-             "| 排名 | 代码 | 名称 | 支撑 | 破位日 | 收复日 | 距今 | 量比 | 评分 | 操作(管三天) |",
-             "|---|---|---|---|---|---|---|---|---|---|"]
+             "| 排名 | 代码 | 名称 | 支撑 | 破位日 | 收复日 | 距今 | 量比 | 评分 |",
+             "|---|---|---|---|---|---|---|---|---|"]
     for i, e in enumerate(cands, 1):
-        op = e.get("op") or {}
-        vr = op.get("vol_ratio_buy")
-        op_txt = "%s｜%s｜买点量比%s" % (
-            op.get("buy_day", ""), op.get("trigger", ""),
-            ("%.2f" % vr) if vr is not None else "—") if op else ""
-        lines.append("| %d | %s | %s | %.2f | %s | %s | %d | %s | %d | %s |" % (
+        lines.append("| %d | %s | %s | %.2f | %s | %s | %d | %s | %d |" % (
             i, e["code"], e.get("name", ""), e["support"], e["break_day"],
-            e["sig_day"], e["age"], e.get("vol_ratio"), score(e), op_txt))
+            e["sig_day"], e["age"], e.get("vol_ratio"), score(e)))
     # 固定操作策略（每次必附）
     lines += ["", OPER_RULE]
     push("%s %s（%d只）" % (MODEL_LABEL, today, len(cands)), "\n".join(lines))
