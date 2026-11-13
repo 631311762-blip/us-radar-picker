@@ -69,7 +69,7 @@ for _d in (STATE_DIR, ARCHIVE_DIR):
 # ============================ 模型常量（阈值集中）============================
 # 与研究报告 V1.0 一致；改阈值只动这里并 push 即可（流水线下一次自动生效）。
 CONST = {
-    "WIN": 80,          # 支撑观察窗（交易日，约 3-4 个月）
+    "WIN": 50,          # 支撑观察窗（交易日，约 2.5 个月；缩短以兼容 3 个月级横盘，避免回溯到更早崩溃污染振幅）
     "RANGE_MAX": 0.40,  # 横盘最大振幅 (hi-lo)/mid
     "TOUCH_MIN": 3,     # 支撑最小触点次数（多触点地板）
     "BREAK_PCT": 0.98,  # 破位阈值：收盘 < 支撑 * 0.98
@@ -150,9 +150,10 @@ def detect(bars, const=None):
         above = sum(1 for x in win if x["high"] >= S * 1.10)
         if above < len(win) * 0.25:   # 必须在支撑上方明显成交过（真横盘，非阴跌）
             t += 1; continue
-        # 破位
+        # 破位（扫描放宽到末根：收复本就能扫到末根，故破位也应允许扫到最近，
+        #        以支持「刚发生且已收复」的近期信号，如破位后 2 日即回）
         break_idx = None
-        for i in range(t, min(t + 15, N - 12)):
+        for i in range(t, min(t + 15, N)):
             if bars[i]["close"] < S * BREAK_PCT:
                 break_idx = i; break
         if break_idx is None:
