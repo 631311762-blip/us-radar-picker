@@ -81,6 +81,12 @@ CONST = {
     "MAX_AGE": 3,       # 仅输出近 N 个交易日发生收复的信号
     "TOP_N": 30,        # 进入推荐台账 / 推送的前 N 只
     "KLINE_COUNT": 330, # 拉取的 K 线根数
+    # ── 二次确认（二次提示点）── 收复后 1~WIN 日内出现「收涨≥UP + 放量」确认K线，
+    #    表明非单纯反弹、后续上涨概率更高（锚点：幸福蓝海11-06 / 仁信11-09 / 均普10-23）。
+    #    放量基准取并集：≥收复日量 或 ≥破位前20日均量×VOL（兼容收复日本身缩量/巨量两种情形）。
+    "SECOND_CONFIRM_WIN": 5,    # 二次确认扫描窗（收复后交易日）
+    "SECOND_CONFIRM_UP": 0.03,  # 二次确认日收涨阈值（≥3%）
+    "SECOND_CONFIRM_VOL": 1.2,  # 二次确认放量基准（相对破位前20日均量倍数）
 }
 # 回写 params.json 供修正模型读取
 try:
@@ -222,6 +228,22 @@ def detect(bars, const=None):
             seg = bars[sig + 1:sig + n + 1]
             return (min(x["low"] for x in seg) / sig_close - 1) if seg else None
         age = (N - 1) - sig   # 距最新交易日多少个交易日
+        # ── 二次确认（二次提示点）── 收复后 1~WIN 交易日内出现「收涨≥UP + 放量」确认K线
+        second_confirm = None
+        sc_win = c.get("SECOND_CONFIRM_WIN", 5)
+        sc_up = c.get("SECOND_CONFIRM_UP", 0.03)
+        sc_vol = c.get("SECOND_CONFIRM_VOL", 1.2)
+        for j in range(sig + 1, min(sig + 1 + sc_win, N)):
+            cj = bars[j]
+            chg = cj["close"] / bars[j - 1]["close"] - 1 if j > 0 else 0
+            vol_ok = (cj["volume"] >= bars[sig]["volume"]) or (avgvol and cj["volume"] >= avgvol * sc_vol)
+            if chg >= sc_up and vol_ok:
+                second_confirm = {
+                    "day": cj["day"], "gap": j - sig,
+                    "chg": round(chg, 4),
+                    "vol_ratio": round(cj["volume"] / avgvol, 2) if avgvol else None,
+                }
+                break
         op = op_plan(bars, sig)   # 操作策略（管三天）
         events.append({
             "support": round(S, 2), "break_day": bars[break_idx]["day"],
@@ -231,6 +253,7 @@ def detect(bars, const=None):
             "r5": ret(5), "r10": ret(10), "r20": ret(20),
             "peak10": peak(10), "peak20": peak(20), "dd20": dd(20),
             "op": op, "hold3_ret": op.get("hold3_ret"),
+            "second_confirm": second_confirm,
         })
         t = sig + 1   # 步进越过收复日：避免同一结构里相邻破位日重复映射同一收复（消重），又不漏后续独立破位
     return events
@@ -260,6 +283,10 @@ def score(e):
     # 破位→收复间隔越短质量越优：gap 越小加分越多（gap=1 满分，超过 MAX_GAP 已被过滤）
     if isinstance(g, int):
         s += max(0, 10 - g) * 1   # 1 日即回 +9，10 日回 +0
+    # 二次确认（二次提示点）：收复后再现放量上涨确认非单纯反弹，列为第一优先级
+    sc = e.get("second_confirm")
+    if isinstance(sc, dict):
+        s += 15
     return s
 
 
@@ -272,6 +299,7 @@ OPER_RULE = """**操作策略（本模型「管三天」，每次推荐必附）
   · 若 **上影线 / 绿阴线**（诱空）→ 等第三天（T+2）**开盘低位**买入。
 - **买入后第三天必须卖出**（固定持有 ≤3 日，不恋战）。
 - **买点量能（分层参考·非硬过滤）**：回测显示「买点放量 + 破位→收复间隔≤3」组合未来 3 日胜率最高（71.5%），列为**量能精选层（优先关注）**；缩量承接型仍保留但排序靠后。两者均不剔除。
+- **二次确认（二次提示点）**：收复后 1~5 日内再现「放量上涨（收涨≥3%）」即确认非单纯反弹，列为**第一优先级**推送；未出现则作为**观察样本**推送，继续跟踪。
 - 风控：跌破支撑下 3~5% 止损；到达 +8~12% 或放量滞涨可提前止盈。"""
 
 # T+1 形态识别阈值
@@ -508,15 +536,31 @@ def _push_report(cands, today):
         push("%s %s（无信号）" % (MODEL_LABEL, today),
              "### %s\n\n今日无「假破位后收复支撑」候选（近 %d 交易日）。" % (MODEL_LABEL, CONST["MAX_AGE"]))
         return
+    confirmed = [e for e in cands if isinstance(e.get("second_confirm"), dict)]
+    watch = [e for e in cands if not isinstance(e.get("second_confirm"), dict)]
     lines = ["### %s · 每日候选（%s）" % (MODEL_LABEL, today),
-             "> 仅列近 **%d** 交易日发生「收复支撑」的候选，共 **%d** 只。博反弹信号，须严格止盈止损，非投资建议。" % (CONST["MAX_AGE"], len(cands)),
-             "",
-             "| 排名 | 代码 | 名称 | 支撑 | 破位日 | 收复日 | 距今 | 量比 | 评分 |",
-             "|---|---|---|---|---|---|---|---|---|"]
-    for i, e in enumerate(cands, 1):
-        lines.append("| %d | %s | %s | %.2f | %s | %s | %d | %s | %d |" % (
-            i, e["code"], e.get("name", ""), e["support"], e["break_day"],
-            e["sig_day"], e["age"], e.get("vol_ratio"), score(e)))
+             "> 近 **%d** 交易日发生「收复支撑」的候选共 **%d** 只：其中 **第一优先级·二次确认 %d** 只（收复后放量上涨确认，后续上涨概率更高），**观察样本 %d** 只（待确认）。博反弹信号，须严格止盈止损，非投资建议。" % (
+                 CONST["MAX_AGE"], len(cands), len(confirmed), len(watch)),
+             ""]
+    # ── 第一优先级：二次确认 ──
+    if confirmed:
+        lines += ["## 第一优先级 · 二次确认（收复后放量上涨确认）",
+                  "| 排名 | 代码 | 名称 | 支撑 | 破位日 | 收复日 | 二次确认日 | 距今 | 量比 | 评分 |",
+                  "|---|---|---|---|---|---|---|---|---|---|"]
+        for i, e in enumerate(confirmed, 1):
+            sc = e["second_confirm"]
+            lines.append("| %d | %s | %s | %.2f | %s | %s | %s(间隔%d日·涨%.1f%%) | %d | %s | %d |" % (
+                i, e["code"], e.get("name", ""), e["support"], e["break_day"], e["sig_day"],
+                sc["day"], sc["gap"], sc["chg"] * 100, e["age"], e.get("vol_ratio"), score(e)))
+    # ── 观察样本 ──
+    if watch:
+        lines += ["", "## 观察样本（待二次确认）",
+                  "| 排名 | 代码 | 名称 | 支撑 | 破位日 | 收复日 | 距今 | 量比 | 评分 |",
+                  "|---|---|---|---|---|---|---|---|---|"]
+        for i, e in enumerate(watch, 1):
+            lines.append("| %d | %s | %s | %.2f | %s | %s | %d | %s | %d |" % (
+                i, e["code"], e.get("name", ""), e["support"], e["break_day"],
+                e["sig_day"], e["age"], e.get("vol_ratio"), score(e)))
     # 量能精选层（买点放量 + 破位→收复间隔≤3，回测3日胜率71.5%）：优先关注视图
     elite = [e for e in cands
              if isinstance(e.get("op"), dict) and (e["op"].get("vol_ratio_buy") or 0) > 1.0
