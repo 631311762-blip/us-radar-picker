@@ -37,3 +37,9 @@ __pycache__/
 kaizhong/data/
 # 运行期临时标记（本地资料库上传用；云端以 Git 为准）
 cloud_upload_pending.json
+
+# ===== 破位后上涨(powei)离线扫描/回测运行时产物（可重建，绝不可入库）=====
+powei/.scan_cache/
+powei/stocklist.json
+powei/扫描结果_*.md
+powei/scan_results_*.csv
