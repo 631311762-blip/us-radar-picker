@@ -14,6 +14,13 @@ detect()/vol_score()/score() 与云端 model_core.py 逐行一致，仅数据入
     - low_shadow2  : 本模型（低位上影模型2，双栏拆分低位栏口径）
 两者各自登记、各自样本文件、各自回溯参数，互不混用。
 
+可选二次过滤层（2026-11-15，config.filter 驱动）：独立于 detect() 核心信号，
+    - prior2_cum_max=0.0 : 剔除「前两日累计涨跌 > 0」的净涨形态
+    - vol_ratio_min=1.1  : 剔除「当日量/前5日均量 < 1.1」的缩量信号
+    - enabled=false 即一键回滚到分栏原口径；量比上限仍由 volume.ma5_cap 控制
+    依据：全窗口因子研究 2292 条信号，两步合并后 T+5 胜率 53.2%->66.3%、
+          均值 +1.21%->+5.87%；detect()/vol_score()/score() 判定口径零改动。
+
 运行方式（由 common/run_all.py 按 registry.json 调度）：
     python3 low_shadow2/low_shadow2_screener.py --mode review
     python3 low_shadow2/low_shadow2_screener.py --mode review --top 10
@@ -29,6 +36,7 @@ import pandas as pd
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CFG = json.load(open(os.path.join(BASE_DIR, "config.json"), encoding="utf-8"))
 SH, POS, VOL, SC = CFG["shape"], CFG["position"], CFG["volume"], CFG["score"]
+FLT = CFG.get("filter", {})   # 可选二次过滤层；旧版 config 缺该段时为空 dict，向后兼容
 KLINE_COUNT = 160          # 共享K线缓存单只读取根数（低位判定需 >= 61）
 
 # ----------------------------------------------------------------------------
@@ -103,13 +111,16 @@ def detect(df):
         pos_ok = c >= POS["min_ratio"] * hh60
     vol_ok = ((v / vol_ma5) <= VOL["ma5_cap"]) & (vol_ratio_prev >= VOL["prev_min"])
     sig = common & pos_ok & vol_ok
+    # 前两日累计涨跌 = 信号日前1日收盘 / 前3日收盘 - 1（即信号之前两根K线的累计涨跌）。
+    # 仅作为特征列输出给可选过滤层使用，不参与 sig 判定 —— 核心口径逐行不变。
+    prior2_cum = c.shift(1) / c.shift(3).where(lambda s: s > 0) - 1
     out = pd.DataFrame({
         "date": df["date"], "open": o, "close": c, "high": h, "low": l,
         "pct": (c / prec - 1) * 100,
         "upper_body": upper / body, "upper_range": upper / rng,
         "lower_range": lower / rng, "vol_ratio": v / vol_ma5,
         "vol_ratio_prev": vol_ratio_prev, "pos60": c / hh60,
-        "upper_pct": upper_pct, "sig": sig})
+        "upper_pct": upper_pct, "prior2_cum": prior2_cum, "sig": sig})
     return out
 
 
@@ -128,6 +139,34 @@ def score(row):
     s += vol_score(row["vol_ratio"], row["vol_ratio_prev"])
     s += min(abs(row["pos60"] - SC["position_target"]) / SC["position_span"], 1.0) * SC["position_weight"]
     return round(float(s), 1)
+
+
+def pass_filter(row):
+    """可选二次过滤层（config.filter 驱动）—— 独立于 detect() 核心信号。
+
+    enabled=false 时恒通过，等价于分栏原口径，可一键回滚。
+    prior2_cum_max : 前两日累计涨跌上限，0.0 表示剔除「前两日净涨」；
+    vol_ratio_min  : 当日量/前5日均量下限，1.1 表示剔除缩量信号。
+    研究依据：2026-11-15 全窗口因子研究（160 交易日 x 4570 只，2292 条信号，
+    T+3/5/10 按全市场交易日历对齐，剔除窗口内疑似除权与长期停牌）。
+    """
+    if not FLT.get("enabled", False):
+        return True
+    cap = FLT.get("prior2_cum_max")
+    if cap is not None:
+        try:
+            if not (np.isfinite(float(row["prior2_cum"])) and float(row["prior2_cum"]) <= cap):
+                return False
+        except (TypeError, ValueError, KeyError):
+            return False
+    lo = FLT.get("vol_ratio_min")
+    if lo is not None:
+        try:
+            if not (np.isfinite(float(row["vol_ratio"])) and float(row["vol_ratio"]) >= lo):
+                return False
+        except (TypeError, ValueError, KeyError):
+            return False
+    return True
 
 
 # ----------------------------------------------------------------------------
@@ -153,7 +192,7 @@ def main():
 
     uni = get_universe()
     target = pd.Timestamp.now().normalize()
-    picks, scanned, kmiss = [], 0, 0
+    picks, scanned, kmiss, filtered = [], 0, 0, 0
     for x in uni:
         code = str(x.get("symbol") or x.get("code") or "").zfill(6)
         nm = x.get("name", "")
@@ -170,6 +209,10 @@ def main():
         if len(day) == 0 or not bool(day["sig"].iloc[0]):
             continue
         r = day.iloc[0]
+        # 可选二次过滤层：核心 sig 已命中后再做形态/量能过滤，判定逻辑不变
+        if not pass_filter(r):
+            filtered += 1
+            continue
         picks.append({
             "code": code, "name": nm, "close": round(float(r["close"]), 2),
             "score": score(r), "board": "",
@@ -179,7 +222,9 @@ def main():
                 "upper_range": round(float(r["upper_range"]) * 100, 1),
                 "vol_ratio": round(float(r["vol_ratio"]), 2),
                 "vol_ratio_prev": round(float(r["vol_ratio_prev"]), 2),
+                "prior2_cum": round(float(r["prior2_cum"]) * 100, 2),
                 "pos60": round(float(r["pos60"]) * 100, 1),
+                "filter": "v20261115_hard" if FLT.get("enabled", False) else "off",
                 "source": "low_shadow2",
             }})
     picks.sort(key=lambda p: p.get("score") or 0, reverse=True)
@@ -192,8 +237,10 @@ def main():
     else:
         print("[WARN] 无共同前置层，仅打印不写台账（独立调试模式）")
 
-    print("==== 低位上影模型2 · %s · 样本池%d 有效K线%d K线缺失%d 候选%d ===="
-          % (target.strftime("%Y-%m-%d"), len(uni), scanned, kmiss, len(picks)))
+    print("==== 低位上影模型2 · %s · 样本池%d 有效K线%d K线缺失%d 核心信号%d 过滤剔除%d 候选%d (filter=%s) ===="
+          % (target.strftime("%Y-%m-%d"), len(uni), scanned, kmiss,
+             len(picks) + filtered, filtered, len(picks),
+             "on" if FLT.get("enabled", False) else "off"))
     for i, p in enumerate(picks[:args.top], 1):
         print("%d. %s %s 收%s 评分%s 上影/股价%.2f%% 量比(较上日)%s 60日位置%.1f%%"
               % (i, p["code"], p["name"], p["close"], p["score"],
