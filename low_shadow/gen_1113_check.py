@@ -152,7 +152,7 @@ footer{color:var(--sub);font-size:12px;text-align:center;padding:10px 0 24px}
 </style></head><body><div class="wrap">
 <h1>低位上影线模型 · 昨日样本核对</h1>
 <div class="sub">运行日 <b>2026-11-13（周四）</b> · 云端扫描 %(scanned)d 只 · 立信审计剔除 %(veto)d 只 · 符合 8 道硬条件 <b>%(n)d 只</b> · 清单来源：云端 CI 官方归档（东财真实成交额）</div>
-<div class="warn"><b>⚠ 扫描覆盖不全：</b>云端自 11-10 晚起扫描数稳定在 <b>4605~4607</b> 只，而真实全市场 A 股约 <b>5578</b> 只（新浪 <code>hs_a</code> 全量），少约 <b>1000 只</b>。源头是远端「全市场列表降级时回退完整快照」实际回退到了子集。因此这 13 只<b>可能不是真正的全市场完整清单</b>，存在系统性漏号风险，需修复列表降级逻辑后再复核。</div>
+<div class="warn"><b>✓ 样本口径已核实（原「漏号」判断已撤回）：</b>云端扫描 <b>4606</b> 只是<b>剔除立信(784)及 ST/退市/停牌/新股等后的有效池</b>，不是残缺快照。校验：<code>base_universe.json</code> 4607 只与立信排除集交集仅 <b>2 只</b>、ST/退市名称 <b>0 只</b>；5578 − 4607 = 971 ≈ 784 + 187；归档 <code>audit_veto_count=2</code> 与残留 2 只对应，二次保险闭环。<br><b>H5 已于 2026-11-14 落地</b>：按新模型，昨日清单为 <b>10 只</b>（剔除海达尔·北交所、恒丰纸业·沪主板、华大九天·成交额 11.27 亿），全窗口 322 → 123 只。</div>
 
 <div class="card">
 <h2>一、结论：改进后样本确实更低</h2>
@@ -167,7 +167,7 @@ footer{color:var(--sub);font-size:12px;text-align:center;padding:10px 0 24px}
 <thead><tr><th style="text-align:left">改进方案</th><th>全窗样本</th><th>开仓天数</th><th>保留率</th>
 <th>3日命中</th><th>3日均收益</th><th>5日均收益</th><th>昨日留存</th><th>昨日变化</th></tr></thead>
 <tbody>%(cmp)s</tbody></table>
-<div class="warn"><b>⚠ 参数口径提醒：</b>归档 <code>run_20261113_171842.json</code> 里写的 <code>upper_amp_min=0.055 / vol_ratio_min=1.6 / low_pos_max_pct=0.13</code> 是<b>运行末尾</b>被 <code>correct_params()</code> 就地收紧后的值 —— 而筛选发生在收紧之前。所以这 13 只实际仍按 <b>0.045 / 1.5 / 0.15</b> 筛出（清单里概伦电子 0.047、智莱科技 0.050 均低于 0.055 可证）。<b>下一次运行才会真正用 0.055</b>。归档参数与本次筛选口径不一致，属于需修复的记录缺陷。</div>
+<div class="warn"><b>参数口径说明（缺陷已修复）：</b>归档 <code>run_20261113_171842.json</code> 里的 <code>upper_amp_min=0.055 / vol_ratio_min=1.6 / low_pos_max_pct=0.13</code> 是<b>运行末尾</b>被 <code>correct_params()</code> 就地收紧后的值，而筛选发生在收紧之前 —— 这 13 只实际仍按 <b>0.045 / 1.5 / 0.15</b> 筛出（概伦电子 0.047、智莱科技 0.050 均低于 0.055 可证）。<b>2026-11-14 已修复</b>：归档改记筛选时参数快照 <code>params_snapshot</code>、另设 <code>params_after_tune</code> 供审计；加 <code>param_lock=True</code> 与 <code>min_tune_samples=20</code>，人工设定的 0.045 不再被单样本噪声覆盖。</div>
 </div>
 
 <div class="card">

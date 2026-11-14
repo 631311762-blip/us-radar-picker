@@ -84,12 +84,20 @@ ol{font-size:13.5px;padding-left:20px}li{margin:9px 0}b{color:var(--acc)}
 <tr><td>11-09 / 11-10 早</td><td>0.08</td><td>1.5</td><td>0.15</td><td>5575</td><td>1 / 0</td></tr>
 <tr><td>11-11 手动放宽落地</td><td class="pos">0.045</td><td>1.5</td><td>0.15</td><td>4607</td><td>1</td></tr>
 <tr><td>11-13 CI 自动收紧</td><td class="neg">0.055</td><td class="neg">1.6</td><td class="neg">0.13</td><td>4606</td><td>13</td></tr></table>
-<div class="note"><code>correct_params()</code> 判定 win_rate&lt;0.45 就一次收紧三个参数；而官方回溯 <code>latest.json</code> 仅 <b>1 个样本</b>（国瑞科技 11-11，t1 −1.47%），win_rate=0.0 —— <b>用 1 个噪声样本改写了整个生产参数集，并覆盖手动设定的 0.045</b>。另：11-10 晚起云端扫描数从 5514 掉到 4605~4607（列表接口降级回退快照），比全市场 5578 只少约 1000 只，可能漏信号。</div>
+<div class="note"><code>correct_params()</code> 判定 win_rate&lt;0.45 就一次收紧三个参数；而官方回溯 <code>latest.json</code> 仅 <b>1 个样本</b>（国瑞科技 11-11，t1 −1.47%），win_rate=0.0 —— <b>用 1 个噪声样本改写了整个生产参数集，并覆盖手动设定的 0.045</b>。样本口径：4606 为剔除立信/ST 后的有效池（详见末尾「2026-11-14 落地更新」，原「漏号」判断已撤回）。</div>
 <ol style="margin-top:12px"><li><b>自动调参设最小样本门槛</b>（建议 ≥20 个已完成回溯样本），否则参数随机游走；</li>
 <li>一次只调<b>单一参数</b>、加冷却期与 diff 日志，便于归因；</li>
 <li>增加<b>手动锁定开关</b>，保护用户明确设定的阈值；</li>
-<li>修复全市场列表降级，或归档标注「样本不完整」。</li></ol>
+<li><s>修复全市场列表降级</s>：已撤回，4606 为清洗后有效池。</li></ol>
 <div class="note">本次回测全程按<b>仓库代码默认 0.045</b> 运行，与云端 11-13 的 0.055 口径不同；报告结论均基于 0.045。</div>
 </div>
 <div class="sub" style="margin-top:20px">证据文件：bt_oct_result.json / bt_oct_picks.csv / bt_oct_daily.csv / bt_oct_analysis.json / bt_oct_env.json / bt_oct_final.json</div>
+
+<div class="card"><h2>2026-11-14 落地更新（用户确认后执行）</h2>
+<ul style="font-size:13.5px;margin:0;padding-left:20px">
+<li><b>H5 已落地为生产过滤层</b>：原型 8 道硬条件之后新增独立 <code>h5_check()</code> —— 只留创业板/科创板 + 排除当日跌&gt;3% + 排除量比&gt;3 + 排除成交额&gt;10 亿；<code>upper_amp_min=0.045</code> 保持不变。生产函数跑 322 条样本得 <b>123 只</b>，与回测零差异；11-13 <b>13 → 10 只</b>。</li>
+<li><b>参数漂移已修复</b>：<code>param_lock</code> + <code>min_tune_samples=20</code> + 单参数调整 + diff 日志；归档改记<b>筛选时参数快照</b>，另设 <code>params_after_tune</code> 供审计。</li>
+<li><b>样本口径订正（撤回原判断）</b>：4606 只是<b>剔除立信及 ST 等后的有效池</b>，不是残缺快照。快照 4607 只与立信排除集 784 只交集仅 2 只、ST/退市 0 只；5578 − 4607 = 971 ≈ 784 + 187；<code>audit_veto_count=2</code> 与残留 2 只对应。此前「少约 1000 只、可能漏号」有误，<b>无需修复列表降级</b>。</li>
+<li><b>变更边界</b>：未改 8 道硬条件、未改 0.045、未改 <code>candidate_pool=0</code>（仍全量不截断）。</li>
+</ul></div>
 </div></body></html>

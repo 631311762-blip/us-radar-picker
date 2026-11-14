@@ -305,6 +305,18 @@ DEFAULT_PARAMS = {
     "candidate_pool": 0,      # 0=不截断，每只满足模型的股票都进清单（用户要求剔除60上限）
     "env_threshold": 60,      # 合格候选数 >= 此值视为「信号异常放量」告警（非空仓开关）
     "vol_mult": 1.20,         # 保留兼容（旧 env 统计用）
+    # --- H5 精选层（2026-11-14 用户拍板落地）---
+    # 10 月至今 27 交易日全市场回测：基线 322 只 → H5 123 只，
+    # 3 日命中 54.1% / +1.82%，5 日命中 57.5% / +2.61%，且保留凌志软件类低上影票。
+    # 原型 8 道硬条件保持不变，H5 作为其后的独立精选层。
+    "h5_enabled": True,
+    "h5_board_prefix": ["300", "301", "688", "689"],  # 只留创业板/科创板（隐含排除北交所与主板）
+    "h5_max_drop_pct": -3.0,   # 当日跌幅 <= -3% 剔除（破位非试盘，回测 28 只 5 日 -1.83%）
+    "h5_vol_ratio_max": 3.0,   # 量比 > 3 剔除（过度放量，回测 20 只 5 日 -1.68%）
+    "h5_amount_max": 1e9,      # 成交额 > 10 亿剔除（大额票是主要亏损源）
+    # --- 自动调参保护（防单样本噪声驱动参数漂移）---
+    "param_lock": True,        # 人工设定参数（含 H5）不允许被 correct_params 覆盖
+    "min_tune_samples": 20,    # 已完成回溯样本 < 20 时禁止调参
 }
 
 
@@ -475,6 +487,29 @@ def is_low_shadow(feat, params):
 def shadow_diagnose(feat, params):
     """返回未通过的首个硬条件名，用于筛选漏斗复盘。"""
     return _check_shadow(feat, params)[1]
+
+
+def h5_check(symbol, feat, params):
+    """H5 精选层：在原型 8 道硬条件之后叠加的过滤规则。
+
+    10 月至今回测（322 → 123 只，5 日均收益 -0.04% → +2.61%）落地的生产口径：
+      只留创业板/科创板 + 排除当日跌>3% + 排除量比>3 + 排除成交额>10亿。
+    返回 (是否通过, 淘汰原因)；h5_enabled=False 时恒通过（便于 A/B 对照）。
+    """
+    if not params.get("h5_enabled"):
+        return True, "通过"
+    if feat is None:
+        return False, "K线不足"
+    prefixes = tuple(params.get("h5_board_prefix") or ())
+    if prefixes and not str(symbol).startswith(prefixes):
+        return False, "板块(仅创/科)"
+    if feat["pct_chg"] <= params.get("h5_max_drop_pct", -3.0):
+        return False, "当日跌幅>3%"
+    if feat["vol_ratio"] > params.get("h5_vol_ratio_max", 3.0):
+        return False, "量比>3"
+    if feat["amount"] > params.get("h5_amount_max", 1e9):
+        return False, "成交额>10亿"
+    return True, "通过"
 
 
 def pct_rank(values):
@@ -653,6 +688,7 @@ def run_backtest(params):
 
     win_rate = None
     action = "无历史数据"
+    n_recent = 0
     try:
         rows = []
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
@@ -661,10 +697,11 @@ def run_backtest(params):
                 if line:
                     rows.append(json.loads(line))
         recent = rows[-20:]
+        n_recent = len(recent)
         if recent:
             wins = sum(1 for r in recent if r.get("win"))
             win_rate = round(wins / len(recent), 3)
-            action = correct_params(params, win_rate)
+            action = correct_params(params, win_rate, n_recent)
     except Exception as e:  # noqa: BLE001
         log.warning("历史读取失败：%s", e)
 
@@ -675,25 +712,36 @@ def run_backtest(params):
             pass
     log.info("回溯完成：样本 %d，近期胜率 %s，参数动作：%s",
              len(new_hist), win_rate, action)
-    return {"backtest_samples": len(new_hist), "win_rate": win_rate, "action": action}
+    return {"backtest_samples": len(new_hist), "n_recent": n_recent,
+            "win_rate": win_rate, "action": action}
 
 
-def correct_params(params, win_rate):
-    """依据近期胜率修正原型硬条件阈值（收紧/放宽），持久化到 params.json。"""
-    if win_rate is None:
-        return "维持当前参数"
+def correct_params(params, win_rate, n_recent=0):
+    """依据近期胜率修正阈值；带人工锁定与最小样本门槛。
+
+    历史缺陷：仅 1 个回溯样本（胜率 0.0）就一次收紧三个参数，把人工设定的
+    0.045 改写成 0.055，并导致归档参数与本次筛选口径不一致。
+    修正：param_lock=True 时人工参数不被覆盖；样本不足 min_tune_samples 时
+    不调参；调参时一次只动一个参数并打印 diff，便于归因。
+    """
+    if params.get("param_lock"):
+        return "参数已锁定（人工设定，自动调参跳过）"
+    need = params.get("min_tune_samples", 20)
+    if win_rate is None or n_recent < need:
+        return "维持当前参数（回溯样本 %d < %d，样本不足）" % (n_recent, need)
+    before = dict(params)
     if win_rate < 0.45:
-        params["upper_amp_min"] = min(0.15, round(params["upper_amp_min"] + 0.01, 3))
-        params["low_pos_max_pct"] = max(0.05, round(params["low_pos_max_pct"] - 0.02, 3))
-        params["vol_ratio_min"] = min(2.5, round(params["vol_ratio_min"] + 0.1, 2))
-        action = "收紧阈值（胜率偏低）"
+        k = "upper_amp_min"
+        params[k] = min(0.15, round(params[k] + 0.01, 3))
+        action = "收紧阈值（胜率偏低）：%s %.3f→%.3f" % (k, before[k], params[k])
     elif win_rate > 0.60:
-        params["upper_amp_min"] = max(0.045, round(params["upper_amp_min"] - 0.01, 3))
-        params["low_pos_max_pct"] = min(0.30, round(params["low_pos_max_pct"] + 0.02, 3))
-        params["vol_ratio_min"] = max(1.0, round(params["vol_ratio_min"] - 0.1, 2))
-        action = "放宽阈值（胜率偏高）"
+        k = "upper_amp_min"
+        params[k] = max(0.045, round(params[k] - 0.01, 3))
+        action = "放宽阈值（胜率偏高）：%s %.3f→%.3f" % (k, before[k], params[k])
     else:
-        action = "维持当前参数"
+        return "维持当前参数"
+    diff = {k: [before[k], params[k]] for k in before if before.get(k) != params.get(k)}
+    log.info("参数修正 diff：%s", diff)
     save_params(params)
     return action
 
@@ -704,7 +752,11 @@ def correct_params(params, win_rate):
 def run_review(params, top_n=None):
     top_n = top_n or params["top_n"]
     run_date = datetime.now().strftime("%Y-%m-%d")
-    log.info("=== 低位上影线样本 · 收盘后复盘 ===  运行日 %s", run_date)
+    # 归档必须记录「本次筛选实际使用」的参数：run_backtest() 会在筛选之后
+    # 就地修改 params，若直接引用会写出与清单口径不符的参数（历史缺陷）。
+    params_snapshot = dict(params)
+    log.info("=== 低位上影线样本 · 收盘后复盘 ===  运行日 %s  H5=%s",
+             run_date, params.get("h5_enabled"))
 
     universe = get_universe()
     if not universe:
@@ -721,6 +773,7 @@ def run_review(params, top_n=None):
     data_ok = 0
     audited_out = 0
     funnel = {}
+    h5_funnel = {}
     candidates = []
 
     for stk in universe:
@@ -740,6 +793,11 @@ def run_review(params, top_n=None):
                 reason = shadow_diagnose(feat, params)
                 funnel[reason] = funnel.get(reason, 0) + 1
                 continue
+            # H5 精选层：在 8 道硬条件通过者之上再过滤，独立漏斗统计
+            ok_h5, h5_reason = h5_check(sym, feat, params)
+            if not ok_h5:
+                h5_funnel[h5_reason] = h5_funnel.get(h5_reason, 0) + 1
+                continue
             candidates.append({
                 "symbol": sym, "name": stk.get("name", ""),
                 "date": feat["date"], "close": feat["close"],
@@ -758,14 +816,15 @@ def run_review(params, top_n=None):
             log.debug("处理 %s 异常，跳过：%s", stk.get("symbol"), e)
             continue
 
-    # 全市场合格清单：8 道硬条件全部通过者，不截断
+    # 全市场合格清单：8 道硬条件 + H5 精选层全部通过者，不截断
+    log.info("H5 精选层漏斗：%s", h5_funnel)
     qualified = rank_candidates(candidates)
     n_qualified = len(qualified)
     # 候选池：candidate_pool<=0 表示不截断（每只满足模型的股票都进清单）；>0 才取前N
     pool = qualified if not params["candidate_pool"] else qualified[:params["candidate_pool"]]
 
     if n_qualified == 0:
-        position = "空仓（全市场无符合 8 道硬条件的信号）"
+        position = "空仓（全市场无符合 8 道硬条件 + H5 精选的信号）"
     elif n_qualified >= params["env_threshold"]:
         position = "正常推个股（信号数达门槛，疑似口径/行情异常，请复核）"
     else:
@@ -783,8 +842,11 @@ def run_review(params, top_n=None):
         "qualified_count": n_qualified,   # 全市场符合条件总数
         "candidate_pool": params["candidate_pool"],
         "position": position,
-        "funnel": funnel,
-        "params": params,
+        "funnel": funnel,                 # 8 道硬条件淘汰数
+        "h5_funnel": h5_funnel,           # H5 精选层淘汰数
+        "h5_enabled": params_snapshot.get("h5_enabled"),
+        "params": params_snapshot,        # 本次筛选实际使用的参数
+        "params_after_tune": dict(params),  # 回溯调参后的状态（供审计，不影响本次结果）
         "top_samples": pool[:top_n],
         "backtest": backtest,
     }
@@ -809,7 +871,7 @@ def run_review(params, top_n=None):
     L.append("- 样本总数：**%d 只（全市场 A 股全量扫描，非抽样）**" % total)
     L.append("- 有效K线标的：%d 只" % data_ok)
     L.append("- 立信审计剔除：%d 只（一票否决）" % audited_out)
-    L.append("- 符合 8 道硬条件：**%d 只**（全量清单见下方）" % n_qualified)
+    L.append("- 符合 8 道硬条件 + H5 精选：**%d 只**（全量清单见下方）" % n_qualified)
     L.append("- 满足模型清单：%d 只（已剔除 60 上限，每只满足的都列出）" % n_qualified)
     L.append("- 仓位状态：**%s**" % position)
     L.append("---")
@@ -820,9 +882,10 @@ def run_review(params, top_n=None):
                      % (i, c["symbol"], c["name"], c["score"], c["close"],
                         c["upper_amp"], c["upper_to_body"], c["vol_ratio"], c["pos_pct"]))
     else:
-        L.append("空仓提示：今日全市场无同时满足 8 道硬条件的标的，保持空仓观望。")
+        L.append("空仓提示：今日全市场无同时满足 8 道硬条件 + H5 精选的标的，保持空仓观望。")
     L.append("---")
-    L.append("- 筛选漏斗（各硬条件淘汰数）：%s" % funnel)
+    L.append("- 筛选漏斗（8 道硬条件淘汰数）：%s" % funnel)
+    L.append("- H5 精选层（启用：%s，淘汰数）：%s" % (params.get("h5_enabled"), h5_funnel))
     if backtest:
         L.append("- 近期胜率：%s（回溯样本 %d）" % (backtest.get("win_rate"), backtest.get("backtest_samples")))
         L.append("- 参数动作：%s" % backtest.get("action"))

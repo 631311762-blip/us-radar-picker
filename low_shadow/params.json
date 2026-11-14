@@ -1,0 +1,30 @@
+{
+  "upper_amp_min": 0.045,
+  "upper_to_body_min": 2.0,
+  "body_abs_max_pct": 0.07,
+  "vol_ratio_min": 1.5,
+  "low_pos_max_pct": 0.15,
+  "below_ma20": true,
+  "min_amount": 50000000.0,
+  "shadow_comp_enabled": true,
+  "comp_shadow_min": 0.06,
+  "comp_upper_to_body_min": 3.5,
+  "comp_low_pos_max_pct": 0.05,
+  "lookback": 120,
+  "top_n": 6,
+  "candidate_pool": 0,
+  "env_threshold": 60,
+  "vol_mult": 1.2,
+  "h5_enabled": true,
+  "h5_board_prefix": [
+    "300",
+    "301",
+    "688",
+    "689"
+  ],
+  "h5_max_drop_pct": -3.0,
+  "h5_vol_ratio_max": 3.0,
+  "h5_amount_max": 1000000000.0,
+  "param_lock": true,
+  "min_tune_samples": 20
+}
