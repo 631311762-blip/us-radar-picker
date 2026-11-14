@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>低位上影线 · 昨日样本核对 2026-11-13</title>
+<style>
+:root{--bg:#f7f6f2;--card:#fff;--ink:#1f2328;--sub:#6b7280;--line:#e5e2d9;
+--acc:#b8893c;--ok:#c0392b;--no:#b9b5aa;--rec:#fdf6e6;--up:#c0392b;--down:#1e8449}
+*{box-sizing:border-box}body{margin:0;padding:28px;background:var(--bg);color:var(--ink);
+font:14px/1.65 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:24px;margin:0 0 6px;letter-spacing:.5px}
+.sub{color:var(--sub);font-size:13px;margin-bottom:22px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;
+padding:20px 22px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.03)}
+h2{font-size:16px;margin:0 0 4px;border-left:3px solid var(--acc);padding-left:10px}
+.note{color:var(--sub);font-size:12.5px;margin:6px 0 14px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#faf9f5;color:var(--sub);font-weight:600;font-size:12px;
+padding:9px 8px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}
+td{padding:8px;border-bottom:1px solid #f0eee7;text-align:center}
+tr:last-child td{border-bottom:none}
+.idx{color:var(--sub);width:32px}.code{font-family:ui-monospace,Menlo,monospace;color:#334}
+.nm{text-align:left;white-space:nowrap}.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.sc{font-weight:700;color:var(--acc)}
+.up{color:var(--up);font-weight:600}.down{color:var(--down);font-weight:600}.flat{color:var(--sub)}
+.mk{font-weight:700;width:36px}.mk.ok{color:var(--ok);background:#fdf1ef}.mk.no{color:var(--no)}
+.grp th:nth-child(-n+10){background:#faf9f5}
+tr.rec{background:var(--rec)}
+.desc{display:block;color:var(--sub);font-size:11.5px;font-weight:400;margin-top:2px}
+.hi{font-weight:700;color:var(--acc)}
+.chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.chip{flex:1 1 250px;background:#faf9f5;border:1px solid var(--line);border-radius:8px;
+padding:10px 12px;font-size:12px}
+.chip b{color:var(--acc);font-size:13px}.chip em{color:var(--sub);font-style:normal;float:right}
+.chip span{display:block;color:#444;margin-top:5px;line-height:1.6}
+.warn{background:#fff8ec;border:1px solid #ecd9ae;border-radius:8px;padding:14px 16px;
+font-size:13px;color:#6b5327;margin-top:14px}
+.big{font-size:20px;font-weight:700;color:var(--acc)}
+.kv{display:flex;gap:26px;flex-wrap:wrap;margin:10px 0 4px}
+.kv div{background:#faf9f5;border:1px solid var(--line);border-radius:8px;padding:10px 16px}
+.kv b{display:block;font-size:18px;color:var(--acc)}
+.kv span{font-size:12px;color:var(--sub)}
+footer{color:var(--sub);font-size:12px;text-align:center;padding:10px 0 24px}
+</style></head><body><div class="wrap">
+<h1>低位上影线模型 · 昨日样本核对</h1>
+<div class="sub">运行日 <b>2026-11-13（周四）</b> · 云端扫描 4606 只 · 立信审计剔除 2 只 · 符合 8 道硬条件 <b>13 只</b> · 清单来源：云端 CI 官方归档（东财真实成交额）</div>
+<div class="warn"><b>⚠ 扫描覆盖不全：</b>云端自 11-10 晚起扫描数稳定在 <b>4605~4607</b> 只，而真实全市场 A 股约 <b>5578</b> 只（新浪 <code>hs_a</code> 全量），少约 <b>1000 只</b>。源头是远端「全市场列表降级时回退完整快照」实际回退到了子集。因此这 13 只<b>可能不是真正的全市场完整清单</b>，存在系统性漏号风险，需修复列表降级逻辑后再复核。</div>
+
+<div class="card">
+<h2>一、结论：改进后样本确实更低</h2>
+<div class="kv">
+<div><b>322 → 238</b><span>温和方案 H2（−26%）</span></div>
+<div><b>322 → 123</b><span>推荐方案 H5（−62%）</span></div>
+<div><b>322 → 60</b><span>G4 / F1（−81%）</span></div>
+<div><b>322 → 30</b><span>极致 C8（−91%）</span></div>
+</div>
+<div class="note">口径：2026-10-08 ~ 11-13 共 27 个交易日、全市场逐日扫描，基线 322 条入选样本；下表各方案为在同一批样本上叠加过滤，规则已复现并与回测报告数字逐项校验一致。</div>
+<table>
+<thead><tr><th style="text-align:left">改进方案</th><th>全窗样本</th><th>开仓天数</th><th>保留率</th>
+<th>3日命中</th><th>3日均收益</th><th>5日均收益</th><th>昨日留存</th><th>昨日变化</th></tr></thead>
+<tbody><tr class=''><td class='nm'><b>基线</b><span class='desc'>当前生产模型（上影≥0.045）</span></td><td class='num'>322</td><td class='num'>27</td><td class='num'>100.0%</td><td class='num'>45.0%</td><td class='num'>+0.46%</td><td class='num'>-0.04%</td><td class='num hi'>13</td><td class='num'>13 → 13</td></tr>
+<tr class=''><td class='nm'><b>F1</b><span class='desc'>上影 ≥ 0.08</span></td><td class='num'>60</td><td class='num'>17</td><td class='num'>18.6%</td><td class='num'>46.4%</td><td class='num'>+1.44%</td><td class='num'>+1.29%</td><td class='num hi'>3</td><td class='num'>13 → 3</td></tr>
+<tr class=''><td class='nm'><b>G3</b><span class='desc'>成交额 1~10 亿 + 排除北交所/跌&gt;3%/量比&gt;3</span></td><td class='num'>167</td><td class='num'>25</td><td class='num'>51.9%</td><td class='num'>52.3%</td><td class='num'>+1.48%</td><td class='num'>+1.35%</td><td class='num hi'>6</td><td class='num'>13 → 6</td></tr>
+<tr class=''><td class='nm'><b>G4</b><span class='desc'>成交额 3~10 亿 + 排除北交所/跌&gt;3%</span></td><td class='num'>60</td><td class='num'>18</td><td class='num'>18.6%</td><td class='num'>55.4%</td><td class='num'>+2.84%</td><td class='num'>+2.72%</td><td class='num hi'>2</td><td class='num'>13 → 2</td></tr>
+<tr class=''><td class='nm'><b>H2</b><span class='desc'>保留 0.045 + 排除北交所/跌&gt;3%/量比&gt;3/额&gt;10 亿</span></td><td class='num'>238</td><td class='num'>27</td><td class='num'>73.9%</td><td class='num'>48.4%</td><td class='num'>+1.14%</td><td class='num'>+0.80%</td><td class='num hi'>11</td><td class='num'>13 → 11</td></tr>
+<tr class='rec'><td class='nm'><b>H5</b><span class='desc'>H2 + 只留创业板/科创板（推荐）</span></td><td class='num'>123</td><td class='num'>23</td><td class='num'>38.2%</td><td class='num'>54.1%</td><td class='num'>+1.82%</td><td class='num'>+2.61%</td><td class='num hi'>10</td><td class='num'>13 → 10</td></tr>
+<tr class=''><td class='nm'><b>C8</b><span class='desc'>上影≥0.08 + 额≥2 亿 + 排除北交所（极致收益）</span></td><td class='num'>30</td><td class='num'>13</td><td class='num'>9.3%</td><td class='num'>48.3%</td><td class='num'>+2.94%</td><td class='num'>+3.86%</td><td class='num hi'>0</td><td class='num'>13 → 0</td></tr></tbody></table>
+<div class="warn"><b>⚠ 参数口径提醒：</b>归档 <code>run_20261113_171842.json</code> 里写的 <code>upper_amp_min=0.055 / vol_ratio_min=1.6 / low_pos_max_pct=0.13</code> 是<b>运行末尾</b>被 <code>correct_params()</code> 就地收紧后的值 —— 而筛选发生在收紧之前。所以这 13 只实际仍按 <b>0.045 / 1.5 / 0.15</b> 筛出（清单里概伦电子 0.047、智莱科技 0.050 均低于 0.055 可证）。<b>下一次运行才会真正用 0.055</b>。归档参数与本次筛选口径不一致，属于需修复的记录缺陷。</div>
+</div>
+
+<div class="card">
+<h2>二、昨日 13 只完整清单（按评分降序）</h2>
+<div class="note">右侧为各改进方案是否保留该股：✓ 保留 / — 剔除。评分是当日候选池内分位排名，跨日不可比。本表成交额采用<b>云端官方归档（东财真实值）</b>；10 月回测用的是新浪备用源估算值（成交量 × 典型价，约 +2% 偏差），因此边界票判定略有差异 —— 例如理工导航官方 0.984 亿 &lt; 1 亿门槛，在 G3 下被剔除，而回测估算 1.01 亿会保留。<b>本表以官方真实值为准</b>。</div>
+<table class="grp">
+<thead><tr><th>#</th><th>代码</th><th style="text-align:left">名称</th><th>评分</th><th>上影/开</th>
+<th>上影/实体</th><th>量比</th><th>成交额</th><th>距20日低</th><th>当日涨跌</th>
+<th>基线</th><th>F1</th><th>G3</th><th>G4</th><th>H2</th><th>H5</th><th>C8</th></tr></thead>
+<tbody><tr><td class='idx'>1</td><td class='code'>301259</td><td class='nm'>艾布鲁</td><td class='num sc'>83.08</td><td class='num'>0.0988</td><td class='num'>5.67</td><td class='num'>2.942</td><td class='num'>1.75 亿</td><td class='num'>11.99%</td><td class='num up'>+0.33%</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk no">—</td></tr>
+<tr><td class='idx'>2</td><td class='code'>920699</td><td class='nm'>海达尔</td><td class='num sc'>75.38</td><td class='num'>0.0870</td><td class='num'>2.16</td><td class='num'>2.209</td><td class='num'>0.68 亿</td><td class='num'>2.93%</td><td class='num down'>-2.47%</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk no">—</td></tr>
+<tr><td class='idx'>3</td><td class='code'>300374</td><td class='nm'>中铁装配</td><td class='num sc'>68.46</td><td class='num'>0.0551</td><td class='num'>3.60</td><td class='num'>2.667</td><td class='num'>1.01 亿</td><td class='num'>6.51%</td><td class='num down'>-1.33%</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk no">—</td></tr>
+<tr><td class='idx'>4</td><td class='code'>688660</td><td class='nm'>电气风电</td><td class='num sc'>64.62</td><td class='num'>0.0627</td><td class='num'>4.50</td><td class='num'>1.626</td><td class='num'>1.42 亿</td><td class='num'>4.58%</td><td class='num down'>-1.39%</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk no">—</td></tr>
+<tr><td class='idx'>5</td><td class='code'>688171</td><td class='nm'>纬德信息</td><td class='num sc'>59.62</td><td class='num'>0.0843</td><td class='num'>3.15</td><td class='num'>2.056</td><td class='num'>0.71 亿</td><td class='num'>12.01%</td><td class='num up'>+3.30%</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk no">—</td></tr>
+<tr><td class='idx'>6</td><td class='code'>300988</td><td class='nm'>津荣天宇</td><td class='num sc'>56.54</td><td class='num'>0.0635</td><td class='num'>2.33</td><td class='num'>1.858</td><td class='num'>0.78 亿</td><td class='num'>6.09%</td><td class='num down'>-2.31%</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk no">—</td></tr>
+<tr><td class='idx'>7</td><td class='code'>600356</td><td class='nm'>恒丰纸业</td><td class='num sc'>53.46</td><td class='num'>0.0573</td><td class='num'>52.00</td><td class='num'>1.562</td><td class='num'>0.82 亿</td><td class='num'>8.86%</td><td class='num up'>+0.22%</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk no">—</td></tr>
+<tr><td class='idx'>8</td><td class='code'>301269</td><td class='nm'>华大九天</td><td class='num sc'>50.77</td><td class='num'>0.0503</td><td class='num'>5.44</td><td class='num'>1.663</td><td class='num'>11.27 亿</td><td class='num'>6.84%</td><td class='num up'>+2.00%</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk no">—</td></tr>
+<tr><td class='idx'>9</td><td class='code'>300820</td><td class='nm'>英杰电气</td><td class='num sc'>44.62</td><td class='num'>0.0640</td><td class='num'>4.00</td><td class='num'>1.568</td><td class='num'>5.18 亿</td><td class='num'>14.65%</td><td class='num down'>-0.32%</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk no">—</td></tr>
+<tr><td class='idx'>10</td><td class='code'>300771</td><td class='nm'>智莱科技</td><td class='num sc'>41.92</td><td class='num'>0.0500</td><td class='num'>2.36</td><td class='num'>2.128</td><td class='num'>0.94 亿</td><td class='num'>9.59%</td><td class='num up'>+2.11%</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk no">—</td></tr>
+<tr><td class='idx'>11</td><td class='code'>301316</td><td class='nm'>慧博云通</td><td class='num sc'>41.15</td><td class='num'>0.0508</td><td class='num'>3.16</td><td class='num'>1.895</td><td class='num'>4.36 亿</td><td class='num'>12.13%</td><td class='num up'>+0.26%</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk no">—</td></tr>
+<tr><td class='idx'>12</td><td class='code'>688282</td><td class='nm'>理工导航</td><td class='num sc'>34.62</td><td class='num'>0.0542</td><td class='num'>2.48</td><td class='num'>1.879</td><td class='num'>0.98 亿</td><td class='num'>14.88%</td><td class='num up'>+0.48%</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk no">—</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk no">—</td></tr>
+<tr><td class='idx'>13</td><td class='code'>688206</td><td class='nm'>概伦电子</td><td class='num sc'>25.77</td><td class='num'>0.0470</td><td class='num'>2.40</td><td class='num'>1.618</td><td class='num'>2.34 亿</td><td class='num'>10.31%</td><td class='num down'>-1.12%</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk ok">✓</td><td class="mk no">—</td><td class="mk ok">✓</td><td class="mk ok">✓</td><td class="mk no">—</td></tr></tbody></table>
+</div>
+
+<div class="card">
+<h2>三、若改进方案落地，昨天会推哪些</h2>
+<div class="chips"><div class='chip'><b>基线</b> <em>13 只</em><br><span>301259 艾布鲁、920699 海达尔、300374 中铁装配、688660 电气风电、688171 纬德信息、300988 津荣天宇、600356 恒丰纸业、301269 华大九天、300820 英杰电气、300771 智莱科技、301316 慧博云通、688282 理工导航、688206 概伦电子</span></div>
+<div class='chip'><b>F1</b> <em>3 只</em><br><span>301259 艾布鲁、920699 海达尔、688171 纬德信息</span></div>
+<div class='chip'><b>G3</b> <em>6 只</em><br><span>301259 艾布鲁、300374 中铁装配、688660 电气风电、300820 英杰电气、301316 慧博云通、688206 概伦电子</span></div>
+<div class='chip'><b>G4</b> <em>2 只</em><br><span>300820 英杰电气、301316 慧博云通</span></div>
+<div class='chip'><b>H2</b> <em>11 只</em><br><span>301259 艾布鲁、300374 中铁装配、688660 电气风电、688171 纬德信息、300988 津荣天宇、600356 恒丰纸业、300820 英杰电气、300771 智莱科技、301316 慧博云通、688282 理工导航、688206 概伦电子</span></div>
+<div class='chip'><b>H5</b> <em>10 只</em><br><span>301259 艾布鲁、300374 中铁装配、688660 电气风电、688171 纬德信息、300988 津荣天宇、300820 英杰电气、300771 智莱科技、301316 慧博云通、688282 理工导航、688206 概伦电子</span></div>
+<div class='chip'><b>C8</b> <em>0 只</em><br><span>（空仓）</span></div></div>
+<div class="note" style="margin-top:14px">H5（推荐）在昨日保留 10 只，仅剔除海达尔（北交所）、恒丰纸业（沪主板）、华大九天（成交额 11.27 亿 > 10 亿）。C8 在昨日为 <b>空仓</b>：唯一上影≥0.08 且非北交所的艾布鲁成交额 1.75 亿 &lt; 2 亿门槛，被同时剔除。</div>
+</div>
+
+<footer>低位上影线样本 · 收盘后模型 | 核对页生成于 2026-11-14 | 证据：qualified_20261113_171842.json / bt_oct_result.json / bt_oct_report.md</footer>
+</div></body></html>
