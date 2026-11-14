@@ -56,6 +56,11 @@ STOP_LOSS, TARGET = -0.05, 0.07
 MARKDOWN_LIMIT = 900       # 正文 ≤900 字
 MIN_UNIVERSE = 1500        # 样本明显偏小视为数据源异常；剔除北交所后正常约 1977
                            # （创业板约 1372 + 科创板约 605），留约 25% 余量
+# 2026-11-14 用户确认：自评分因子回溯（2026-11-13）后正式启用新评分。
+# robust_v1 = 稳健版（低换手/不追高/量比温和/贴近MA20/小涨幅/小实体），
+#             验证段每日Top6 T+5 由旧评分 -1.40% 改善至 -0.07%、胜率 37.46%→46.42%。
+# 旧公式完整保留为 score_legacy()，仅用于对照与回滚；硬条件/阈值一律未改。
+SCORE_VERSION = "robust_v1"
 # ===========================================================
 
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -385,9 +390,34 @@ def audit_one(code):
 
 
 # ---------- 5. 评分 / 状态 / 启动天数 ----------
+def _clip01(x):
+    return min(1.0, max(0.0, float(x)))
+
+
 def score(d):
-    """按口径恢复的可复现打分（0-100）：偏好回撤充分、量能温和放大、
-    贴近MA20、未过度追高、MA5拐头。原脚本公式不可考，故采用透明加权。"""
+    """稳健版评分 robust_v1（2026-11-14 起正式启用，见 SCORE_VERSION）。
+
+    依据 2026-11-13 因子回溯：2330 只 / 320 根日K / 232 个提示日 / 22268 个历史信号，
+    训练段定方向与权重、验证段样本外检验。结论是旧公式把「高量比、高换手、深回撤」
+    当作加分项，而这些越高 T+3/T+5 反而越弱；真正稳定有效的是「越低越好」的 6 个因子。
+    权重合计 100：低换手24 / 近5日不追高24 / 量比温和16 / 贴近MA20 15 /
+                  当日涨幅偏小11 / 阳线实体不过大10
+    90日回撤仅保留为硬条件（≥15%），不再参与打分；MA5拐头、价低于MA60 近乎无预测力，
+    股价/板块在训练与验证段方向翻转，故均不计分。
+    """
+    s = 0.0
+    s += 24 * (1 - _clip01((d["turn_pct"] - 2.0) / 12.0))       # 低换手
+    s += 24 * (1 - _clip01(max(d["r5"], 0.0) / 0.35))            # 近5日不追高
+    s += 16 * (1 - _clip01((d["vr"] - 1.4) / 2.6))               # 量比温和
+    s += 15 * (1 - _clip01(d["dist_ma20"] / 0.12))                # 贴近MA20
+    s += 11 * (1 - _clip01((d["chg_pct"] - 0.5) / 12.0))         # 当日涨幅偏小
+    s += 10 * (1 - _clip01((d["entity_pct"] - 0.5) / 7.0))       # 阳线实体不过大
+    return round(min(100.0, s), 2)
+
+
+def score_legacy(d):
+    """旧评分（2026-11-14 前使用，已弃用，仅供对照/回滚）。偏好回撤充分、
+    量能温和放大、贴近MA20、未过度追高、MA5拐头；回溯显示方向与后续收益相反。"""
     s = 0.0
     s += 22 * min(1.0, (d["dd90"] - 0.15) / 0.20)                 # 回撤深度
     s += 16 * min(1.0, (d["vr"] - 1.4) / 1.6)                     # 量比
@@ -507,6 +537,7 @@ def archive(all_q, top, meta, audit_removed, watch_pool, review_res, state):
     entry = {"date": TODAY, "sample_total": meta["total"],
              "cyb_kcb": meta["cyb_kcb"], "bj": meta["bj"],
              "include_bj": INCLUDE_BJ, "bj_excluded": meta.get("bj_excluded", 0),
+             "score_version": SCORE_VERSION,
              "qualified": len(all_q), "audit_veto": audit_removed,
              "top6": [{"code": t["code"], "name": t["name"], "score": t["score"]} for t in top],
              "json": os.path.basename(jf), "csv": os.path.basename(cf),
@@ -745,6 +776,7 @@ def main():
         "yin_removed": yin_removed, "require_yang": REQUIRE_YANG,
         "dd90_basis": DD90_BASIS, "dd90_min": DD90_MIN,
         "include_bj": INCLUDE_BJ, "bj_excluded": meta.get("bj_excluded", 0),
+        "score_version": SCORE_VERSION,
         "top": [{"name": t["name"], "code": t["code"], "board": t["board"],
                  "status": t["status"], "startup_day": t["startup_day"],
                  "score": t["score"], "close": t["close"], "chg_pct": t["chg_pct"],
