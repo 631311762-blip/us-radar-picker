@@ -1,0 +1,95 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>低位上影线模型 · 10月回测与改进点</title>
+<style>
+:root{--bg:#fbfaf7;--card:#fff;--fg:#20242b;--mut:#6b7280;--bd:#e5e2d9;--acc:#b8863b;--ff:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+@media(prefers-color-scheme:dark){:root{--bg:#171a1f;--card:#21252c;--fg:#e8e6e1;--mut:#9aa1ab;--bd:#343a44;--acc:#d6a85a}}
+*{box-sizing:border-box}body{background:var(--bg);color:var(--fg);font-family:var(--ff);margin:0;padding:28px;line-height:1.65}
+.wrap{max-width:900px;margin:0 auto}h1{font-size:24px;margin:0 0 6px;letter-spacing:.3px}
+.sub{color:var(--mut);font-size:13px;margin-bottom:22px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:20px;margin:16px 0;box-shadow:0 1px 3px rgba(0,0,0,.03)}
+h2{font-size:17px;margin:0 0 14px;padding-left:10px;border-left:3px solid var(--acc)}
+.ttl{font-size:13px;fill:var(--mut);font-weight:600}.lbl{font-size:12px;fill:var(--fg)}.val{font-size:12px;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 10px;border-bottom:1px solid var(--bd);text-align:right}
+th:first-child,td:first-child{text-align:left}th{color:var(--mut);font-weight:600;background:rgba(128,128,128,.05)}
+tr:last-child td{border-bottom:none}.pos{color:#d94b4b;font-weight:700}.neg{color:#2e9e6b;font-weight:700}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+.kpi{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;text-align:center}
+.kpi .n{font-size:22px;font-weight:800;display:block}.kpi .t{font-size:11px;color:var(--mut);margin-top:4px}
+.note{font-size:12px;color:var(--mut);background:rgba(128,128,128,.06);border-radius:8px;padding:12px;margin-top:12px}
+ol{font-size:13.5px;padding-left:20px}li{margin:9px 0}b{color:var(--acc)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:720px){.grid2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
+</style></head><body><div class="wrap">
+<h1>低位上影线模型 · 10 月至今逐日全市场回测</h1>
+<div class="sub">2026-10-08 ~ 2026-11-13 · 27 个交易日 · 全市场 5578 只 · 参数 upper_amp_min=0.045 / 不截断 · 数据源：新浪备用源（东财网关 502）</div>
+
+<div class="kpis">
+<div class="kpi"><span class="n">322</span><div class="t">累计入选样本</div></div>
+<div class="kpi"><span class="n">45.0%</span><div class="t">3 日准确率</div></div>
+<div class="kpi"><span class="n neg">−0.04%</span><div class="t">5 日平均收益</div></div>
+<div class="kpi"><span class="n pos">+1.30%</span><div class="t">5 日超额(等权)</div></div>
+</div>
+
+<div class="card"><h2>结论：绝对收益低，但选股逻辑有正 alpha</h2>
+<p style="font-size:13.5px;margin:0 0 12px">5 日平均收益 <b>−0.04%</b>（中位 −0.81%）、10 日 <b>−1.12%</b>，用户判断属实。但同期全市场等权 5 日 −1.34%、10 日 −2.88%，上证几乎全月在 MA20 之下 —— 模型相对等权超额 <b>+1.25% / +1.30% / +1.76%</b>（3/5/10 日）。<b>根因是缺少环境择时 + 持有期过长，不是选股条件失效。</b>之前 7 日回测的 +4~5% 恰好落在 10-30~11-09 的好行情窗口。</p>
+<table><tr><th>周期</th><th>样本</th><th>准确率</th><th>平均</th><th>中位数</th><th>等权基准</th><th>超额</th></tr>
+<tr><td>1 日</td><td>309</td><td>51.8%</td><td class="pos">+0.62%</td><td>+0.26%</td><td>−0.31%</td><td class="pos">+0.93%</td></tr>
+<tr><td>3 日</td><td>298</td><td>45.0%</td><td class="pos">+0.46%</td><td class="neg">−0.89%</td><td>−0.79%</td><td class="pos">+1.25%</td></tr>
+<tr><td>5 日</td><td>291</td><td>45.4%</td><td class="neg">−0.04%</td><td class="neg">−0.81%</td><td>−1.34%</td><td class="pos">+1.30%</td></tr>
+<tr><td>10 日</td><td>260</td><td>41.9%</td><td class="neg">−1.12%</td><td class="neg">−2.09%</td><td>−2.88%</td><td class="pos">+1.76%</td></tr></table>
+<div class="note">中位数持续为负、均值靠少数大涨票撑起（凌志软件后续 +10% 即典型长尾），多数样本是小亏。</div>
+</div>
+
+<div class="card"><h2>收益随持有期单调衰减 → 建议缩短持有 / 加止盈</h2>
+<svg viewBox="0 0 760 166" width="100%" style="font-family:var(--ff)"><text x="8" y="18" class="ttl">平均收益 (%) · 正红负绿</text><line x1="433.0" y1="28" x2="433.0" y2="154" stroke="var(--bd)" stroke-dasharray="3 3"/><text x="168" y="49" class="lbl" text-anchor="end">1 日</text><rect x="433.0" y="36" width="137.8" height="17" rx="3" fill="#d94b4b" opacity="0.85"/><text x="576.8" y="49" class="val" text-anchor="start" fill="#d94b4b">+0.62%</text><text x="168" y="79" class="lbl" text-anchor="end">3 日</text><rect x="433.0" y="66" width="102.3" height="17" rx="3" fill="#d94b4b" opacity="0.85"/><text x="541.3" y="79" class="val" text-anchor="start" fill="#d94b4b">+0.46%</text><text x="168" y="109" class="lbl" text-anchor="end">5 日</text><rect x="424.1" y="96" width="8.9" height="17" rx="3" fill="#2e9e6b" opacity="0.85"/><text x="418.1" y="109" class="val" text-anchor="end" fill="#2e9e6b">-0.04%</text><text x="168" y="139" class="lbl" text-anchor="end">10 日</text><rect x="184.0" y="126" width="249.0" height="17" rx="3" fill="#2e9e6b" opacity="0.85"/><text x="178.0" y="139" class="val" text-anchor="end" fill="#2e9e6b">-1.12%</text></svg>
+</div>
+
+<div class="grid2">
+<div class="card"><h2>上影幅度分层（5日）</h2><svg viewBox="0 0 430 166" width="100%" style="font-family:var(--ff)"><text x="8" y="18" class="ttl">5 日平均收益 (%)</text><line x1="268.0" y1="28" x2="268.0" y2="154" stroke="var(--bd)" stroke-dasharray="3 3"/><text x="168" y="49" class="lbl" text-anchor="end">上影 0.045~0.06</text><rect x="240.5" y="36" width="27.5" height="17" rx="3" fill="#2e9e6b" opacity="0.85"/><text x="234.5" y="49" class="val" text-anchor="end" fill="#2e9e6b">-0.68%</text><text x="168" y="79" class="lbl" text-anchor="end">上影 0.06~0.08</text><rect x="268.0" y="66" width="4.0" height="17" rx="3" fill="#d94b4b" opacity="0.85"/><text x="278.0" y="79" class="val" text-anchor="start" fill="#d94b4b">+0.10%</text><text x="168" y="109" class="lbl" text-anchor="end">上影 0.08~0.12</text><rect x="268.0" y="96" width="71.9" height="17" rx="3" fill="#d94b4b" opacity="0.85"/><text x="345.9" y="109" class="val" text-anchor="start" fill="#d94b4b">+1.78%</text><text x="168" y="139" class="lbl" text-anchor="end">上影 ≥0.12</text><rect x="184.0" y="126" width="84.0" height="17" rx="3" fill="#2e9e6b" opacity="0.85"/><text x="178.0" y="139" class="val" text-anchor="end" fill="#2e9e6b">-2.08%</text></svg></div>
+<div class="card"><h2>成交额分层（5日）</h2><svg viewBox="0 0 430 166" width="100%" style="font-family:var(--ff)"><text x="8" y="18" class="ttl">5 日平均收益 (%)</text><line x1="268.0" y1="28" x2="268.0" y2="154" stroke="var(--bd)" stroke-dasharray="3 3"/><text x="168" y="49" class="lbl" text-anchor="end">成交额 5000万~1亿</text><rect x="249.9" y="36" width="18.1" height="17" rx="3" fill="#2e9e6b" opacity="0.85"/><text x="243.9" y="49" class="val" text-anchor="end" fill="#2e9e6b">-0.86%</text><text x="168" y="79" class="lbl" text-anchor="end">成交额 1~3亿</text><rect x="268.0" y="66" width="10.5" height="17" rx="3" fill="#d94b4b" opacity="0.85"/><text x="284.5" y="79" class="val" text-anchor="start" fill="#d94b4b">+0.50%</text><text x="168" y="109" class="lbl" text-anchor="end">成交额 3~10亿</text><rect x="268.0" y="96" width="38.6" height="17" rx="3" fill="#d94b4b" opacity="0.85"/><text x="312.6" y="109" class="val" text-anchor="start" fill="#d94b4b">+1.84%</text><text x="168" y="139" class="lbl" text-anchor="end">成交额 ≥10亿</text><rect x="184.0" y="126" width="84.0" height="17" rx="3" fill="#2e9e6b" opacity="0.85"/><text x="178.0" y="139" class="val" text-anchor="end" fill="#2e9e6b">-4.00%</text></svg></div>
+<div class="card"><h2>时段 / 市场环境（5日）</h2><svg viewBox="0 0 430 136" width="100%" style="font-family:var(--ff)"><text x="8" y="18" class="ttl">5 日平均收益 (%)</text><line x1="268.0" y1="28" x2="268.0" y2="124" stroke="var(--bd)" stroke-dasharray="3 3"/><text x="168" y="49" class="lbl" text-anchor="end">10月上(10/08~17)</text><rect x="195.2" y="36" width="72.8" height="17" rx="3" fill="#2e9e6b" opacity="0.85"/><text x="189.2" y="49" class="val" text-anchor="end" fill="#2e9e6b">-4.44%</text><text x="168" y="79" class="lbl" text-anchor="end">10月下(10/20~31)</text><rect x="268.0" y="66" width="18.5" height="17" rx="3" fill="#d94b4b" opacity="0.85"/><text x="292.5" y="79" class="val" text-anchor="start" fill="#d94b4b">+1.13%</text><text x="168" y="109" class="lbl" text-anchor="end">11月上(11/02~13)</text><rect x="268.0" y="96" width="84.0" height="17" rx="3" fill="#d94b4b" opacity="0.85"/><text x="358.0" y="109" class="val" text-anchor="start" fill="#d94b4b">+5.12%</text></svg></div>
+<div class="card"><h2>板块分层（5日）</h2><svg viewBox="0 0 430 166" width="100%" style="font-family:var(--ff)"><text x="8" y="18" class="ttl">5 日平均收益 (%)</text><line x1="268.0" y1="28" x2="268.0" y2="154" stroke="var(--bd)" stroke-dasharray="3 3"/><text x="168" y="49" class="lbl" text-anchor="end">主板 60/00</text><rect x="227.1" y="36" width="40.9" height="17" rx="3" fill="#2e9e6b" opacity="0.85"/><text x="221.1" y="49" class="val" text-anchor="end" fill="#2e9e6b">-1.14%</text><text x="168" y="79" class="lbl" text-anchor="end">创业板 30</text><rect x="268.0" y="66" width="34.8" height="17" rx="3" fill="#d94b4b" opacity="0.85"/><text x="308.8" y="79" class="val" text-anchor="start" fill="#d94b4b">+0.97%</text><text x="168" y="109" class="lbl" text-anchor="end">科创板 688</text><rect x="268.0" y="96" width="67.8" height="17" rx="3" fill="#d94b4b" opacity="0.85"/><text x="341.8" y="109" class="val" text-anchor="start" fill="#d94b4b">+1.89%</text><text x="168" y="139" class="lbl" text-anchor="end">北交所</text><rect x="184.0" y="126" width="84.0" height="17" rx="3" fill="#2e9e6b" opacity="0.85"/><text x="178.0" y="139" class="val" text-anchor="end" fill="#2e9e6b">-2.34%</text></svg></div>
+</div>
+
+<div class="card"><h2>改进方案量化对比（5 日平均收益）</h2>
+<svg viewBox="0 0 760 226" width="100%" style="font-family:var(--ff)"><text x="8" y="18" class="ttl">5 日平均收益 (%) · 各改进方案</text><line x1="433.0" y1="28" x2="433.0" y2="214" stroke="var(--bd)" stroke-dasharray="3 3"/><text x="168" y="49" class="lbl" text-anchor="end">基线 当前模型</text><rect x="430.4" y="36" width="2.6" height="17" rx="3" fill="#2e9e6b" opacity="0.85"/><text x="424.4" y="49" class="val" text-anchor="end" fill="#2e9e6b">-0.04%</text><text x="168" y="79" class="lbl" text-anchor="end">H2 保留0.045+过滤</text><rect x="433.0" y="66" width="51.6" height="17" rx="3" fill="#d94b4b" opacity="0.85"/><text x="490.6" y="79" class="val" text-anchor="start" fill="#d94b4b">+0.80%</text><text x="168" y="109" class="lbl" text-anchor="end">G3 1~10亿+过滤</text><rect x="433.0" y="96" width="87.1" height="17" rx="3" fill="#d94b4b" opacity="0.85"/><text x="526.1" y="109" class="val" text-anchor="start" fill="#d94b4b">+1.35%</text><text x="168" y="139" class="lbl" text-anchor="end">H5 H2+双创板块</text><rect x="433.0" y="126" width="168.4" height="17" rx="3" fill="#d94b4b" opacity="0.85"/><text x="607.4" y="139" class="val" text-anchor="start" fill="#d94b4b">+2.61%</text><text x="168" y="169" class="lbl" text-anchor="end">G4 3~10亿</text><rect x="433.0" y="156" width="175.5" height="17" rx="3" fill="#d94b4b" opacity="0.85"/><text x="614.5" y="169" class="val" text-anchor="start" fill="#d94b4b">+2.72%</text><text x="168" y="199" class="lbl" text-anchor="end">C8 回调0.08+2亿</text><rect x="433.0" y="186" width="249.0" height="17" rx="3" fill="#d94b4b" opacity="0.85"/><text x="688.0" y="199" class="val" text-anchor="start" fill="#d94b4b">+3.86%</text></svg>
+<table style="margin-top:10px"><tr><th>方案</th><th>样本</th><th>开仓天</th><th>3日命中/收益</th><th>5日命中/收益</th></tr>
+<tr><td>基线（当前模型）</td><td>322</td><td>27</td><td>45.0% / +0.46%</td><td>45.4% / −0.04%</td></tr>
+<tr><td>H2 保留0.045+过滤</td><td>238</td><td>27</td><td>48.4% / +1.14%</td><td>48.6% / +0.80%</td></tr>
+<tr><td>G3 1~10亿+过滤</td><td>167</td><td>25</td><td>52.3% / +1.48%</td><td>54.2% / +1.35%</td></tr>
+<tr><td>H5 = H2 + 双创板块</td><td>123</td><td>23</td><td>54.1% / +1.82%</td><td>57.5% / +2.61%</td></tr>
+<tr><td>G4 3~10亿</td><td>60</td><td>18</td><td>55.4% / +2.84%</td><td>58.9% / +2.72%</td></tr>
+<tr><td>C8 回调0.08+成交额2亿</td><td>30</td><td>13</td><td>48.3% / +2.94%</td><td>48.3% / +3.86%</td></tr></table>
+<div class="note">C8 收益最高但仅 30 只样本，分段看 10 月上 6 只仍亏 −8.41%、11 月上仅 3 只 +19.48% —— 形态过滤<b>无法替代择时</b>，且会把凌志软件(0.0488)排除。</div>
+</div>
+
+<div class="card"><h2>推荐改进点（按稳健性排序）</h2><ol>
+<li><b>首选 H5 / H2（保留 0.045 与凌志类）</b>：叠加「成交额 ≤10亿 + 排除北交所 + 排除当日跌&gt;3% + 量比≤3」，可选只留创业板/科创板。H5 得 3 日 +1.82%、5 日 <b>+2.61%</b>（123 只样本、23 天开仓，凌志仍在）；不限板块的 H2 样本最充足（238 只、5 日 +0.80%）。</li>
+<li><b>极致收益 C8</b>：上影回调 0.08 + 成交额≥2亿 + 排除北交所，5 日 <b>+3.86%</b>；代价是样本仅 30 只、10 月上仍亏、凌志被排除。</li>
+<li><b>执行层</b>：考核窗口 5 日 → 3 日，T+1~T+3 设 +3~5% 止盈；不要持有超过 3 日。</li>
+<li><b>成交额加上下限</b>：3~10亿区间 5 日 +1.84%（命中 57.8%），而 ≥10亿 是 −4.00%、5000万~1亿 是 −0.86%。建议下限提到 1~2 亿并加上限 10 亿。</li>
+<li><b>剔除劣质子集</b>：北交所（3 日 −7.11%）、当日跌&gt;3%（−2.12%）、量比≥3（−1.68%）均为负贡献。</li>
+<li><b>废弃「每日 Top6」截断</b>：实测 5 日 −0.03%、中位 −1.44%，比不截断更差。分位评分是日内相对排名，而每日样本 1~54 只，跨日不可比。改全市场统一评分或绝对阈值加权。</li>
+<li><b>清理死参数</b>：322 只全部走主路径，<code>is_comp</code> 恒 False，<code>shadow_comp_enabled</code> 与 3 个 <code>comp_*</code> 已被 0.045 门槛完全覆盖，属死代码。</li>
+<li><b>环境择时另立指标</b>：<code>env_threshold=60</code> 全期从未触发（最多 54 只/日）；上证 5 日动量&gt;0 仅 16 只、站上 MA20 仅 1 天可开仓。建议改用全市场涨跌家数比 / 等权动量，并用更长窗口验证。</li>
+</ol></div>
+
+<div class="card"><h2>风险与口径</h2>
+<div class="note">仅 27 个交易日、322 条样本，最优组合收益集中在 10 月下~11 月上，C5/C2 等组合仅 4~11 只 —— <b>in-sample 分层，需 3~6 个月窗口或样本外验证后再改生产参数</b>。东财 push2 网关 11-12 起全族 502，本次用新浪备用源（10-30 五只代表票与东财前复权归档逐位一致）；不复权对短周期收益有轻微除权噪声，已剔除 72 只疑似异常票；立信排除集为当前 784 只版本。<b>本次仅分析，未修改任何生产参数或代码。</b></div></div>
+
+<div class="card"><h2>重要发现：云端参数被 1 个样本自动改写</h2>
+<p style="font-size:13.5px;margin:0 0 12px"><b>口径交叉验证通过</b>：本次回测 11-13 入选 <b>13 只</b>，与云端 CI 官方归档的 13 只<b>代码/名称逐一完全一致</b>（艾布鲁、海达尔、中铁装配、电气风电、纬德信息、津荣天宇、恒丰纸业、华大九天、英杰电气、智莱科技、慧博云通、理工导航、概伦电子），立信剔除也同为 2 只 —— 备用源可信。</p>
+<table><tr><th>日期</th><th>upper_amp_min</th><th>vol_ratio_min</th><th>low_pos_max_pct</th><th>扫描数</th><th>合格</th></tr>
+<tr><td>11-09 / 11-10 早</td><td>0.08</td><td>1.5</td><td>0.15</td><td>5575</td><td>1 / 0</td></tr>
+<tr><td>11-11 手动放宽落地</td><td class="pos">0.045</td><td>1.5</td><td>0.15</td><td>4607</td><td>1</td></tr>
+<tr><td>11-13 CI 自动收紧</td><td class="neg">0.055</td><td class="neg">1.6</td><td class="neg">0.13</td><td>4606</td><td>13</td></tr></table>
+<div class="note"><code>correct_params()</code> 判定 win_rate&lt;0.45 就一次收紧三个参数；而官方回溯 <code>latest.json</code> 仅 <b>1 个样本</b>（国瑞科技 11-11，t1 −1.47%），win_rate=0.0 —— <b>用 1 个噪声样本改写了整个生产参数集，并覆盖手动设定的 0.045</b>。另：11-10 晚起云端扫描数从 5514 掉到 4605~4607（列表接口降级回退快照），比全市场 5578 只少约 1000 只，可能漏信号。</div>
+<ol style="margin-top:12px"><li><b>自动调参设最小样本门槛</b>（建议 ≥20 个已完成回溯样本），否则参数随机游走；</li>
+<li>一次只调<b>单一参数</b>、加冷却期与 diff 日志，便于归因；</li>
+<li>增加<b>手动锁定开关</b>，保护用户明确设定的阈值；</li>
+<li>修复全市场列表降级，或归档标注「样本不完整」。</li></ol>
+<div class="note">本次回测全程按<b>仓库代码默认 0.045</b> 运行，与云端 11-13 的 0.055 口径不同；报告结论均基于 0.045。</div>
+</div>
+<div class="sub" style="margin-top:20px">证据文件：bt_oct_result.json / bt_oct_picks.csv / bt_oct_daily.csv / bt_oct_analysis.json / bt_oct_env.json / bt_oct_final.json</div>
+</div></body></html>
