@@ -444,17 +444,18 @@ def build_push(hits, last_date, tracked_n, fmap, cal, rv, new_n, dup_n):
              f"5 日内重复去重 {dup_n} 笔；取评分前 {min(TOP, len(hits))} 只推送）")
     L.append("")
     if hits:
-        L.append("| 标的 | 推荐标注 | 首推日 | 触发价 | 所需量(万手) | 止损 | 收盘 | 涨幅 | 量比 | 题材 | 超额倾向 |")
-        L.append("|---|---|---|---|---|---|---|---|---|---|---|")
+        # 推送表单按用户要求精简：只保留 推荐标注 / 首推日 / 当日涨幅 / 题材 / 超额倾向。
+        # 触发价、所需量、止损、收盘、量比等行情数据由用户自行在同花顺查看，
+        # 完整明细仍保留在报告与台账（build_report / build_ledger）中。
+        L.append("| 标的 | 推荐标注 | 首推日 | 当日涨幅 | 题材 | 超额倾向 |")
+        L.append("|---|---|---|---|---|---|")
         for h in hits[:TOP]:
             tg, fd = rec.tag_of(h["code"], last_date, fmap, cal)
             theme = (h.get("concepts", "").split(",")[0] if h.get("concepts") else "") \
                     or h.get("industry", "") or "—"
-            stop = round(float(h["last_close"]) * (1 - sh.STANCE["stop_loss"]), 2)
             star, _, _ = excess_tag(h)
-            L.append(f"| {h['name']}({z6(h['code'])}) | **{tg}** | {fd} | {h['trigger']} | "
-                     f"{h['req_vol_wan']} | {stop} | {h['last_close']} | {h['chg']}% | "
-                     f"{h['vol_x']} | {theme} | {star} |")
+            L.append(f"| {h['name']}({z6(h['code'])}) | **{tg}** | {fd} | {h['chg']}% | "
+                     f"{theme} | {star} |")
         L.append("")
         L.append("> " + excess_note())
     else:
