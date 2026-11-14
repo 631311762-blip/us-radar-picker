@@ -36,7 +36,9 @@ cat > "$HOOK" <<'HOOK_EOF'
 #!/usr/bin/env bash
 # 自动同步：提交后推送当前分支到 origin
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-if [ -n "$branch" ]; then
+# rebase / cherry-pick 期间处于 detached HEAD，abbrev-ref 返回 "HEAD"，
+# 此时 git push origin HEAD 会失败；跳过即可，rebase 结束后显式 push 仍会同步。
+if [ -n "$branch" ] && [ "$branch" != "HEAD" ]; then
   git push --quiet origin "$branch" \
     || echo "[post-commit] 自动推送失败，请手动: git push origin $branch"
 fi
