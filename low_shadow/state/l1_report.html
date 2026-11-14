@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L1 大盘环境标注 + 推荐意见 · 落地说明</title>
+<style>
+:root{
+  --bg:#0f1319; --panel:#171d26; --panel2:#1d2530; --ink:#e8edf4; --sub:#9aa8b8;
+  --line:#2a3442; --grid:#2a3442; --acc:#d6a85a; --up:#e0504a; --down:#3fa36b;
+  --r3:#5b8def; --r5:#d6a85a; --r10:#9b7fd4;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+ font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+ line-height:1.7;padding:32px 18px 60px}
+.wrap{max-width:1000px;margin:0 auto}
+h1{font-size:27px;margin:0 0 8px;letter-spacing:.5px}
+h2{font-size:19px;margin:38px 0 14px;padding-left:12px;border-left:3px solid var(--acc)}
+.sub{color:var(--sub);font-size:14px;margin-bottom:20px}
+.badge{display:inline-block;background:rgba(63,163,107,.16);color:#6fd39a;
+ border:1px solid rgba(63,163,107,.45);border-radius:20px;padding:3px 14px;font-size:13px;
+ font-weight:600;margin-left:10px;vertical-align:middle}
+.lead{background:linear-gradient(135deg,rgba(214,168,90,.12),rgba(214,168,90,.02));
+ border:1px solid rgba(214,168,90,.35);border-radius:12px;padding:16px 20px;margin:18px 0 6px;
+ font-size:15px}
+.lead b{color:var(--acc)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.kpi-k{font-size:12px;color:var(--sub);letter-spacing:.5px}
+.kpi-v{font-size:24px;font-weight:700;margin:4px 0 2px}
+.kpi-s{font-size:12px;color:var(--sub)}
+.kpi.regime-bad .kpi-v{color:var(--down)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 24px;margin:14px 0}
+.card h3{margin:0 0 12px;font-size:16px;color:var(--acc)}
+ul.adv{list-style:none;padding:0;margin:0}
+ul.adv li{position:relative;padding:7px 0 7px 20px;border-bottom:1px dashed var(--line);font-size:14.5px}
+ul.adv li:last-child{border-bottom:none}
+ul.adv li:before{content:"";position:absolute;left:2px;top:15px;width:7px;height:7px;
+ border-radius:50%;background:var(--acc)}
+ul.adv strong{color:#ffd98a}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:12px 0}
+th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--sub);font-weight:600;background:var(--panel2)}
+td.pos,.ok{color:#ff8b84;font-weight:600}
+td.neg{color:#6fd39a;font-weight:600}
+.bad{color:#ff8b84;font-weight:600}
+.tag{display:inline-block;padding:2px 10px;border-radius:6px;font-size:12px;font-weight:600}
+.tag-s{background:rgba(91,141,239,.18);color:#8fb2ff}
+.tag-n{background:rgba(154,168,184,.18);color:#c3cedb}
+.tag-w{background:rgba(63,163,107,.18);color:#6fd39a}
+.chart{width:100%;height:auto;display:block;margin:10px 0}
+.ax{fill:var(--sub);font-size:11px}
+.val{font-size:11px;font-weight:700}
+.glab{fill:var(--ink);font-size:12px;font-weight:600}
+.rcards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}
+.rcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.rc-h{font-size:16px;font-weight:700;margin-bottom:10px;color:var(--acc)}
+.rc-s .rc-h{color:#8fb2ff}.rc-n .rc-h{color:#c3cedb}.rc-w .rc-h{color:#6fd39a}
+.rc-i{font-size:13px;margin:8px 0;line-height:1.55}
+.rc-i span{display:inline-block;min-width:38px;color:var(--sub);font-size:12px}
+.rc-i.risk{color:#e6b7a0}
+.note{background:var(--panel2);border-left:3px solid var(--acc);border-radius:0 8px 8px 0;
+ padding:12px 16px;font-size:13.5px;color:var(--sub);margin:14px 0}
+.note b{color:var(--ink)}
+code{background:var(--panel2);padding:1px 6px;border-radius:4px;font-size:12px;color:#cbd7e6}
+.foot{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);color:var(--sub);font-size:12.5px}
+@media(max-width:720px){.grid,.rcards{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>L1 大盘环境标注 + 推荐意见 <span class="badge">ALL PASS · 已落地</span></h1>
+<div class="sub">低位上影线收盘后模型 · 2026-11-14 · 只做 L1，不做 L2 动态筛选 / L3 环境闸门</div>
+
+<div class="lead">
+按你的选择，<b>筛选逻辑、评分逻辑、参数条件完全不动</b>；L1 只把当日大盘环境写进归档与简报，
+并<b>结合市场因素给出可直接执行的推荐意见</b>（仓位、持有/止盈、风险提示、历史依据）。
+环境数据全部为当日收盘后可得，零前视偏差。
+</div>
+
+<h2>一、结合市场因素的推荐意见（示例）</h2>
+<div class="sub">环境取最近一次有效全市场快照（4606 只，等权 −2.074%，弱市）；信号数取 11-13 官方归档真实漏斗（8 道 13 只 / H5 10 只）。</div>
+<div class="grid"><div class="kpi regime-bad"><div class="kpi-k">大盘环境档</div><div class="kpi-v">弱</div><div class="kpi-s">弱</div></div>
+<div class="kpi "><div class="kpi-k">全市场等权涨跌</div><div class="kpi-v">-2.07%</div><div class="kpi-s">4606 只等权</div></div>
+<div class="kpi "><div class="kpi-k">上涨占比</div><div class="kpi-v">13.9%</div><div class="kpi-s">普跌</div></div>
+<div class="kpi "><div class="kpi-k">近 5 日等权动量</div><div class="kpi-v">-0.65%</div><div class="kpi-s">无前视</div></div>
+<div class="kpi "><div class="kpi-k">8 道硬条件通过</div><div class="kpi-v">13 只</div><div class="kpi-s">11-13 实际</div></div>
+<div class="kpi "><div class="kpi-k">H5 精选</div><div class="kpi-v">10 只</div><div class="kpi-s">近 5 日均 6.2 只</div></div></div>
+<div class="card">
+  <h3>模型简报新增段落：市场环境与推荐意见（L1 标注，不影响筛选结果）</h3>
+  <ul class="adv"><li>大盘环境：<strong>弱</strong>（全市场等权 -2.07%，上涨占比 13.9%，普跌）</li>
+<li>信号拥挤度：8 道硬条件通过 <strong>13 只</strong> / H5 精选 <strong>10 只</strong>，近 5 日均 6.2 只</li>
+<li>趋势背景：全市场等权近 5 日 -0.65%</li>
+<li><strong>仓位建议：轻仓试探，等信号拥挤确认</strong></li>
+<li><strong>持有 / 止盈：T+3~5，快进快出</strong></li>
+<li>依据（10-08~11-13 回测，弱档 11 天 / H5 81 只）：3 日命中 60.3% / +2.48%，5 日命中 61.8% / +3.64%，10 日 +2.74%</li>
+<li>风险提示：弱势但信号尚未爆发，尚非反转确认；控制仓位，等基线信号数 ≥16 再加大</li>
+<li>补充：全市场普跌（上涨占比 13.9%）—— 历史看普跌反而利好本模型的超跌反转逻辑</li></ul>
+</div>
+<div class="note"><b>这一天的结论：</b>大盘弱且普跌，但基线信号仅 13 只、未达拥挤阈值 16，
+属于「反转窗口尚未确认」；建议<b>轻仓试探、T+3~5 快进快出</b>，等基线信号数放大再加大仓位。
+若同环境下信号数达到 20 只，意见会自动切换为「可正常至积极参与（超跌反转窗口）」。</div>
+
+<h2>二、推荐意见的历史依据</h2>
+<div class="sub">10-08 ~ 11-13 共 27 个交易日、全市场逐日回测，H5 精选 123 只样本，按大盘环境三档分组。</div>
+<svg viewBox='0 0 760 300' xmlns='http://www.w3.org/2000/svg' class='chart'>
+<rect x='0' y='0' width='760' height='300' fill='var(--panel)' rx='10'/>
+<line x1='62' y1='236.0' x2='722' y2='236.0' stroke='var(--grid)' stroke-width='1'/>
+<text x='54' y='240.0' class='ax' text-anchor='end'>-8%</text>
+<line x1='62' y1='201.0' x2='722' y2='201.0' stroke='var(--grid)' stroke-width='1'/>
+<text x='54' y='205.0' class='ax' text-anchor='end'>-6%</text>
+<line x1='62' y1='166.0' x2='722' y2='166.0' stroke='var(--grid)' stroke-width='1'/>
+<text x='54' y='170.0' class='ax' text-anchor='end'>-4%</text>
+<line x1='62' y1='131.0' x2='722' y2='131.0' stroke='var(--grid)' stroke-width='1'/>
+<text x='54' y='135.0' class='ax' text-anchor='end'>-2%</text>
+<line x1='62' y1='96.0' x2='722' y2='96.0' stroke='var(--grid)' stroke-width='1'/>
+<text x='54' y='100.0' class='ax' text-anchor='end'>0%</text>
+<line x1='62' y1='61.0' x2='722' y2='61.0' stroke='var(--grid)' stroke-width='1'/>
+<text x='54' y='65.0' class='ax' text-anchor='end'>2%</text>
+<line x1='62' y1='26.0' x2='722' y2='26.0' stroke='var(--grid)' stroke-width='1'/>
+<text x='54' y='30.0' class='ax' text-anchor='end'>4%</text>
+<line x1='62' y1='96.0' x2='722' y2='96.0' stroke='var(--ink)' stroke-width='1.5'/>
+<rect x='117' y='66.8' width='26' height='29.2' fill='var(--up)' opacity='.88' rx='3'/>
+<text x='130' y='60.8' class='val' text-anchor='middle' fill='var(--up)'>+1.67</text>
+<rect x='151' y='60.1' width='26' height='35.9' fill='var(--up)' opacity='.88' rx='3'/>
+<text x='164' y='54.1' class='val' text-anchor='middle' fill='var(--up)'>+2.05</text>
+<rect x='185' y='96.0' width='26' height='51.8' fill='var(--down)' opacity='.88' rx='3'/>
+<text x='198' y='161.8' class='val' text-anchor='middle' fill='var(--down)'>-2.96</text>
+<text x='164' y='266' class='glab' text-anchor='middle'>强 档（12 天 / 24 只）</text>
+<text x='164' y='284' class='ax' text-anchor='middle'>柱序：3 日 / 5 日 / 10 日</text>
+<rect x='337' y='96.0' width='26' height='8.4' fill='var(--down)' opacity='.88' rx='3'/>
+<text x='350' y='118.4' class='val' text-anchor='middle' fill='var(--down)'>-0.48</text>
+<rect x='371' y='96.0' width='26' height='11.6' fill='var(--down)' opacity='.88' rx='3'/>
+<text x='384' y='121.5' class='val' text-anchor='middle' fill='var(--down)'>-0.66</text>
+<rect x='405' y='96.0' width='26' height='127.2' fill='var(--down)' opacity='.88' rx='3'/>
+<text x='418' y='237.2' class='val' text-anchor='middle' fill='var(--down)'>-7.27</text>
+<text x='384' y='266' class='glab' text-anchor='middle'>中性 档（4 天 / 18 只）</text>
+<text x='384' y='284' class='ax' text-anchor='middle'>柱序：3 日 / 5 日 / 10 日</text>
+<rect x='557' y='52.6' width='26' height='43.4' fill='var(--up)' opacity='.88' rx='3'/>
+<text x='570' y='46.6' class='val' text-anchor='middle' fill='var(--up)'>+2.48</text>
+<rect x='591' y='32.3' width='26' height='63.7' fill='var(--up)' opacity='.88' rx='3'/>
+<text x='604' y='26.3' class='val' text-anchor='middle' fill='var(--up)'>+3.64</text>
+<rect x='625' y='48.0' width='26' height='48.0' fill='var(--up)' opacity='.88' rx='3'/>
+<text x='638' y='42.0' class='val' text-anchor='middle' fill='var(--up)'>+2.74</text>
+<text x='604' y='266' class='glab' text-anchor='middle'>弱 档（11 天 / 81 只）</text>
+<text x='604' y='284' class='ax' text-anchor='middle'>柱序：3 日 / 5 日 / 10 日</text>
+<rect x='560' y='6' width='12' height='12' fill='var(--up)' rx='2'/>
+<text x='577' y='16' class='ax'>正收益</text>
+<rect x='656' y='6' width='12' height='12' fill='var(--down)' rx='2'/>
+<text x='673' y='16' class='ax'>负收益</text>
+<text x='62' y='16' class='ax'>H5 样本均收益（%）</text>
+</svg>
+<table>
+<thead><tr><th>环境档</th><th>天数</th><th>H5 样本</th><th>3 日命中</th><th>3 日均收益</th>
+<th>5 日命中</th><th>5 日均收益</th><th>10 日均收益</th></tr></thead>
+<tbody><tr><td><span class='tag tag-s'>强</span></td><td>12</td><td>24</td><td>60.9%</td><td class='pos'>+1.67%</td><td>60.0%</td><td class='pos'>+2.05%</td><td class='neg'>-2.96%</td></tr><tr><td><span class='tag tag-n'>中性</span></td><td>4</td><td>18</td><td>22.2%</td><td class='neg'>-0.48%</td><td>38.9%</td><td class='neg'>-0.66%</td><td class='neg'>-7.27%</td></tr><tr><td><span class='tag tag-w'>弱</span></td><td>11</td><td>81</td><td>60.3%</td><td class='pos'>+2.48%</td><td>61.8%</td><td class='pos'>+3.64%</td><td class='pos'>+2.74%</td></tr></tbody>
+</table>
+<div class="note">
+<b>关键规律：</b>全市场等权当日涨跌 ↔ 基线信号数 Pearson <b>−0.708</b> / Spearman <b>−0.782</b>
+（剔除 10-30 后 −0.769）——大盘越弱、符合低位上影线的票越多。
+但<b>「大盘转强才推」的环境闸门实测 5 日 −3.21%，已证伪</b>，所以 L1 不做闸门、不改筛选。
+</div>
+
+<h2>三、信号拥挤度：为什么阈值设为 16</h2>
+<svg viewBox='0 0 760 240' xmlns='http://www.w3.org/2000/svg' class='chart'>
+<rect x='0' y='0' width='760' height='240' fill='var(--panel)' rx='10'/>
+<line x1='62' y1='174.0' x2='722' y2='174.0' stroke='var(--grid)'/>
+<text x='54' y='178.0' class='ax' text-anchor='end'>-1%</text>
+<line x1='62' y1='154.4' x2='722' y2='154.4' stroke='var(--grid)'/>
+<text x='54' y='158.4' class='ax' text-anchor='end'>0%</text>
+<line x1='62' y1='134.7' x2='722' y2='134.7' stroke='var(--grid)'/>
+<text x='54' y='138.7' class='ax' text-anchor='end'>1%</text>
+<line x1='62' y1='115.1' x2='722' y2='115.1' stroke='var(--grid)'/>
+<text x='54' y='119.1' class='ax' text-anchor='end'>2%</text>
+<line x1='62' y1='95.5' x2='722' y2='95.5' stroke='var(--grid)'/>
+<text x='54' y='99.5' class='ax' text-anchor='end'>3%</text>
+<line x1='62' y1='75.8' x2='722' y2='75.8' stroke='var(--grid)'/>
+<text x='54' y='79.8' class='ax' text-anchor='end'>4%</text>
+<line x1='62' y1='56.2' x2='722' y2='56.2' stroke='var(--grid)'/>
+<text x='54' y='60.2' class='ax' text-anchor='end'>5%</text>
+<line x1='62' y1='36.6' x2='722' y2='36.6' stroke='var(--grid)'/>
+<text x='54' y='40.6' class='ax' text-anchor='end'>6%</text>
+<line x1='62' y1='154.4' x2='722' y2='154.4' stroke='var(--ink)' stroke-width='1.5'/>
+<rect x='102' y='126.3' width='96' height='28.1' fill='var(--up)' opacity='.88' rx='4'/>
+<text x='150' y='119.3' class='val' text-anchor='middle' fill='var(--up)'>+1.43%</text>
+<text x='150' y='198' class='glab' text-anchor='middle'>极冷 0~5</text>
+<text x='150' y='216' class='ax' text-anchor='middle'>7 只 / 5 天</text>
+<rect x='258' y='149.7' width='96' height='4.7' fill='var(--up)' opacity='.88' rx='4'/>
+<text x='306' y='142.7' class='val' text-anchor='middle' fill='var(--up)'>+0.24%</text>
+<text x='306' y='198' class='glab' text-anchor='middle'>常态 6~15</text>
+<text x='306' y='216' class='ax' text-anchor='middle'>51 只 / 12 天</text>
+<rect x='414' y='98.0' width='96' height='56.3' fill='var(--up)' opacity='.88' rx='4'/>
+<text x='462' y='91.0' class='val' text-anchor='middle' fill='var(--up)'>+2.87%</text>
+<text x='462' y='198' class='glab' text-anchor='middle'>拥挤 16~30</text>
+<text x='462' y='216' class='ax' text-anchor='middle'>40 只 / 5 天</text>
+<rect x='570' y='39.7' width='96' height='114.7' fill='var(--up)' opacity='.88' rx='4'/>
+<text x='618' y='32.7' class='val' text-anchor='middle' fill='var(--up)'>+5.84%</text>
+<text x='618' y='198' class='glab' text-anchor='middle'>极拥挤 >30</text>
+<text x='618' y='216' class='ax' text-anchor='middle'>25 只 / 1 天</text>
+</svg>
+<div class="note">按当日基线信号数分组后 5 日收益呈 <b>先降后升</b>：
+常态 6~15 只仅 +0.24%，<b>拥挤 16~30 只升至 +2.87%（5 天 / 40 只）</b>，
+极拥挤 &gt;30 只虽达 +5.84%，但<b>仅 1 个交易日 / 25 只样本，噪声大、忌单日满仓</b>。
+因此 <code>CROWD_THRESHOLD = 16</code> 作为「反转窗口确认」线，只用于推荐意见措辞，不拦截任何个股。</div>
+
+<h2>四、三档环境分别怎么给意见</h2>
+<div class="rcards"><div class='rcard rc-s'><div class='rc-h'>强 档</div><div class='rc-i'><span>仓位</span><strong>仓位建议：正常参与（信号稀缺属正常，精选为主，不必凑数）</strong></div><div class='rc-i'><span>持有</span><strong>持有 / 止盈：T+3~5 止盈，勿持有超过 5 日</strong></div><div class='rc-i risk'><span>风险</span>风险提示：强市 10 日收益 −2.96%，反弹不持久；大盘转强时本模型信号天然稀少，残留票需防「没跟上反弹」</div></div><div class='rcard rc-n'><div class='rc-h'>中性 档</div><div class='rc-i'><span>仓位</span><strong>仓位建议：减半仓 / 观望（本模型最差环境）</strong></div><div class='rc-i'><span>持有</span><strong>持有 / 止盈：T+3 内严格止损，不建议持有到 5 日以上</strong></div><div class='rc-i risk'><span>风险</span>风险提示：中性区间全周期亏损：3 日命中仅 22.2%、5 日 −0.66%、10 日 −7.27%</div></div><div class='rcard rc-w'><div class='rc-h'>弱 档</div><div class='rc-i'><span>仓位</span><strong>仓位建议：轻仓试探，等信号拥挤确认</strong></div><div class='rc-i'><span>持有</span><strong>持有 / 止盈：T+3~5，快进快出</strong></div><div class='rc-i risk'><span>风险</span>风险提示：弱势但信号尚未爆发，尚非反转确认；控制仓位，等基线信号数 ≥16 再加大</div></div></div>
+<div class="note">中性档是本模型<b>最差环境</b>（3 日命中 22.2%、5 日 −0.66%、10 日 −7.27%），
+L1 会明确提示「减半仓 / 观望」；强市档则提示「信号稀缺属正常，精选为主，勿持有超过 5 日」，
+因为强市 10 日收益 −2.96%，反弹不持久。</div>
+
+<h2>五、落地改动清单</h2>
+<table>
+<thead><tr><th>文件</th><th>改动</th><th>是否影响筛选</th></tr></thead>
+<tbody>
+<tr><td><code>low_shadow/low_shadow_screener.py</code></td>
+ <td>新增 <code>MARKET_ENV_FILE</code> 常量、<code>env_annotation_enabled</code> 开关、
+ <code>compute_market_env()</code>、<code>env_advice()</code>、历史快照读写；
+ 在 <code>payload</code> / 全量清单 / 中文简报中写入 <code>market_env</code> 与 <code>advice</code>（共 8 处精确替换）</td>
+ <td class="neg">否</td></tr>
+<tr><td><code>low_shadow/params.json</code></td>
+ <td>新增 <code>env_annotation_enabled: true</code></td><td class="neg">否</td></tr>
+<tr><td><code>low_shadow/state/market_env.jsonl</code></td>
+ <td>新建：从 27 日回测面板回补历史环境快照，使 L1 首日即有近 5 日动量与均信号数；
+ 此后每个交易日由模型自动追加（同日去重，保留最近 60 条）</td><td class="neg">否</td></tr>
+<tr><td><code>low_shadow/backfill_market_env.py</code></td>
+ <td>新增：历史快照回补脚本，可重复执行，口径与生产一致</td><td class="neg">否</td></tr>
+<tr><td><code>low_shadow/verify_l1.py</code></td>
+ <td>新增：L1 端到端回归验证，以固定基线提交 <code>abc7938</code> 做 A/B 对照</td><td class="neg">否</td></tr>
+</tbody>
+</table>
+
+<h2>六、验证证据</h2>
+<div class="sub">隔离目录运行，不污染仓库 state / pending / 推送；对 L1 前（abc7938）与 L1 后同一份 4606 只样本池做 A/B。</div>
+<table><thead><tr><th>校验项</th><th>结果</th></tr></thead><tbody><tr><td>筛选/评分/参数函数源码逐字一致</td><td class='ok'>PASS</td></tr>
+<tr><td>A/B payload 核心键全等（13 项）</td><td class='ok'>PASS</td></tr>
+<tr><td>payload 写入 market_env / advice</td><td class='ok'>PASS</td></tr>
+<tr><td>归档 run_*.json 写入环境字段</td><td class='ok'>PASS</td></tr>
+<tr><td>全量清单 qualified_*.json 写入环境字段</td><td class='ok'>PASS</td></tr>
+<tr><td>每日环境快照 market_env.jsonl 落盘</td><td class='ok'>PASS</td></tr>
+<tr><td>中文简报出现「市场环境与推荐意见」段</td><td class='ok'>PASS</td></tr>
+<tr><td>简报包含仓位建议</td><td class='ok'>PASS</td></tr>
+<tr><td>旧版简报不含 L1 段（对照）</td><td class='ok'>PASS</td></tr></tbody></table>
+<details style="margin-top:10px">
+<summary style="cursor:pointer;color:var(--sub);font-size:13.5px">展开：payload 13 个核心键逐项对比</summary>
+<table><thead><tr><th>含义</th><th>字段</th><th>A/B</th></tr></thead><tbody><tr><td>全市场样本总数</td><td><code>total_scanned</code></td><td class='ok'>一致 ✓</td></tr><tr><td>有效 K 线数</td><td><code>data_ok_count</code></td><td class='ok'>一致 ✓</td></tr><tr><td>立信审计剔除数</td><td><code>audit_veto_count</code></td><td class='ok'>一致 ✓</td></tr><tr><td>合格股数</td><td><code>qualified_count</code></td><td class='ok'>一致 ✓</td></tr><tr><td>候选池上限</td><td><code>candidate_pool</code></td><td class='ok'>一致 ✓</td></tr><tr><td>仓位状态</td><td><code>position</code></td><td class='ok'>一致 ✓</td></tr><tr><td>8 道硬条件漏斗</td><td><code>funnel</code></td><td class='ok'>一致 ✓</td></tr><tr><td>H5 精选漏斗</td><td><code>h5_funnel</code></td><td class='ok'>一致 ✓</td></tr><tr><td>H5 开关</td><td><code>h5_enabled</code></td><td class='ok'>一致 ✓</td></tr><tr><td>筛选参数快照</td><td><code>params</code></td><td class='ok'>一致 ✓</td></tr><tr><td>调参后参数</td><td><code>params_after_tune</code></td><td class='ok'>一致 ✓</td></tr><tr><td>前 N 只预览</td><td><code>top_samples</code></td><td class='ok'>一致 ✓</td></tr><tr><td>回溯结果</td><td><code>backtest</code></td><td class='ok'>一致 ✓</td></tr></tbody></table>
+</details>
+
+<h2>七、当前限制与后续</h2>
+<div class="note">
+<b>1. 实时行情：</b>东方财富 <code>push2*.eastmoney.com</code> 网关自 11-12 起稳定返回 502（本轮已再次探测确认），
+因此当前无法产出<b>今日实时全市场清单</b>。模型内置的异常处理会正确触发「行情接口无返回，今日不出股」，
+不会给出错误清单。<br>
+<b>2. 自动产出：</b>统一流水线每个交易日北京时间 16:05 运行，产出后由
+<code>.github/workflows/low_shadow.yml</code> 的「回写状态」步骤 <code>git add low_shadow</code> + commit + push，
+<code>market_env.jsonl</code> 会随之持久化到 GitHub。<br>
+<b>3. 趋势字段：</b>近 5 日动量与均信号数已由历史回补就绪；后续每日自动滚动，无需人工干预。<br>
+<b>4. 明确不做：</b>L2（动态门槛改筛选）、L3（大盘好才推的闸门）均未实施，筛选口径保持 H5 版本不变。
+</div>
+
+<div class="foot">
+数据来源：<code>common/state/universe.json</code>（4606 只）·
+<code>low_shadow/state/env_factor_result.json</code>（27 交易日环境面板）·
+<code>low_shadow/state/run_20261113_171842.json</code>（11-13 官方漏斗）·
+<code>/tmp/l1_verify_result.json</code>（本轮验证结果）。<br>
+验证命令：<code>python3 low_shadow/verify_l1.py</code>；回补命令：<code>python3 low_shadow/backfill_market_env.py</code>。
+</div>
+
+</div></body></html>

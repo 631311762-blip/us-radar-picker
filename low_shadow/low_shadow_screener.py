@@ -76,6 +76,7 @@ ARCHIVE_DIR = os.path.join(BASE_DIR, "state")          # 归档/回溯/参数，
 PENDING_FILE = os.path.join(ARCHIVE_DIR, "pending.json")
 HISTORY_FILE = os.path.join(ARCHIVE_DIR, "history.jsonl")
 PARAMS_FILE = os.path.join(BASE_DIR, "params.json")
+MARKET_ENV_FILE = os.path.join(ARCHIVE_DIR, "market_env.jsonl")  # L1 每日环境快照
 
 # 立信审计体系（名称路径，作为二次保险；主剔除走领湃排除集文件）
 AUDIT_BLACKLIST = {
@@ -317,6 +318,8 @@ DEFAULT_PARAMS = {
     # --- 自动调参保护（防单样本噪声驱动参数漂移）---
     "param_lock": True,        # 人工设定参数（含 H5）不允许被 correct_params 覆盖
     "min_tune_samples": 20,    # 已完成回溯样本 < 20 时禁止调参
+    # --- L1 大盘环境标注（2026-11-14 落地，只加字段/文本，不参与筛选）---
+    "env_annotation_enabled": True,
 }
 
 
@@ -561,6 +564,175 @@ def env_pass(recs, params):
 # ----------------------------------------------------------------------------
 # 推送（PushPlus，与仓库其他模型统一）
 # ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# L1 大盘环境标注与推荐意见（2026-11-14 落地）
+# 只写归档字段与简报文本，不参与任何筛选 / 评分 / 参数决策，零风险。
+# 依据：state/env_factor_result.json（2026-10-08~11-13，27 交易日全市场回测）
+#   · 全市场等权当日涨跌 ↔ 信号数 Pearson -0.708 / Spearman -0.782
+#   · 强 / 中性 / 弱 三档 H5 5 日收益 +2.05% / -0.66% / +3.64%
+#   · 「大盘转强才推」闸门实测 5 日 -3.21%，已证伪 → 本模块不做闸门
+# ----------------------------------------------------------------------------
+# 各环境档历史表现（H5 123 只样本，由 env_factor.py 回测产出）
+ENV_EVIDENCE = {
+    "强":   {"days": 12, "n": 24, "r3_hit": 60.9, "r3": 1.67,
+             "r5_hit": 60.0, "r5": 2.05, "r10": -2.96},
+    "中性": {"days": 4,  "n": 18, "r3_hit": 22.2, "r3": -0.48,
+             "r5_hit": 38.9, "r5": -0.66, "r10": -7.27},
+    "弱":   {"days": 11, "n": 81, "r3_hit": 60.3, "r3": 2.48,
+             "r5_hit": 61.8, "r5": 3.64, "r10": 2.74},
+}
+CROWD_THRESHOLD = 16   # 当日 8 道硬条件通过数 >= 16 视为「信号拥挤」
+
+
+def _load_env_history():
+    """读取每日环境快照（最多保留最近 60 条）。失败返回空列表，不影响主流程。"""
+    try:
+        if not os.path.exists(MARKET_ENV_FILE):
+            return []
+        rows = []
+        with open(MARKET_ENV_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    rows.append(json.loads(line))
+        return rows[-60:]
+    except Exception as e:  # noqa: BLE001
+        log.debug("环境快照读取失败：%s", e)
+        return []
+
+
+def _append_env_history(rec):
+    """追加当日环境快照（同日去重）。失败静默降级，绝不影响出股。"""
+    try:
+        ensure_archive()
+        rows = [r for r in _load_env_history() if r.get("date") != rec.get("date")]
+        rows.append(rec)
+        with open(MARKET_ENV_FILE, "w", encoding="utf-8") as f:
+            for r in rows[-60:]:
+                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    except Exception as e:  # noqa: BLE001
+        log.debug("环境快照写入失败：%s", e)
+
+
+def compute_market_env(universe, run_date):
+    """从全市场样本池直接计算大盘环境（零额外接口、零前视）。
+
+    universe 每行需含 pct（百分数数值，如 -2.07 表示 -2.07%）；
+    common/adapter.universe_for() 与东财 fltt=2 列表均满足该口径。
+    """
+    try:
+        pcts = [float(s["pct"]) for s in universe
+                if isinstance(s.get("pct"), (int, float))]
+    except Exception:  # noqa: BLE001
+        pcts = []
+    if not pcts:
+        return {"available": False, "reason": "样本池无有效涨跌幅字段"}
+
+    eq = sum(pcts) / len(pcts)
+    adv = sum(1 for x in pcts if x > 0)
+    dec = sum(1 for x in pcts if x < 0)
+    flat = len(pcts) - adv - dec
+    adv_ratio = 100.0 * adv / len(pcts)
+    # 环境档与回测口径严格一致：>0 强；[-1, 0] 中性；< -1 弱
+    regime = "强" if eq > 0 else ("弱" if eq < -1.0 else "中性")
+    breadth = ("普涨" if adv_ratio >= 75 else "偏强" if adv_ratio >= 55
+               else "分歧" if adv_ratio >= 40 else "偏弱" if adv_ratio >= 20 else "普跌")
+
+    hist = [r for r in _load_env_history() if r.get("date") != run_date]
+    eq_r5 = None
+    if len(hist) >= 5:
+        z = 1.0
+        for r in hist[-5:]:
+            v = r.get("eq_chg_pct")
+            if isinstance(v, (int, float)):
+                z *= (1 + v / 100.0)
+        eq_r5 = round((z - 1) * 100, 2)
+    past_n = [r.get("n_base") for r in hist[-5:]
+              if isinstance(r.get("n_base"), (int, float))]
+    avg_n5 = round(sum(past_n) / len(past_n), 1) if past_n else None
+
+    return {
+        "available": True, "date": run_date, "universe_n": len(pcts),
+        "eq_chg_pct": round(eq, 3), "adv_count": adv, "dec_count": dec,
+        "flat_count": flat, "adv_ratio_pct": round(adv_ratio, 2),
+        "breadth": breadth, "regime": regime,
+        "eq_r5_pct": eq_r5, "avg_n_base_5d": avg_n5,
+        "history_days": len(hist),
+    }
+
+
+def env_advice(env, n_qualified, n_base):
+    """结合大盘环境档与信号拥挤度给出推荐意见（纯文本，不参与筛选）。"""
+    if not env.get("available"):
+        return {"stance": "维持常规", "holding": "按模型默认执行",
+                "risk": "大盘环境数据不可用（%s），本日不启用环境加权" % env.get("reason", "未知"),
+                "evidence": None, "regime": None, "crowded": False,
+                "lines": ["- 大盘环境：数据不可用（%s），按常规执行"
+                          % env.get("reason", "未知")]}
+
+    rg = env["regime"]
+    ev = ENV_EVIDENCE[rg]
+    crowded = n_base >= CROWD_THRESHOLD
+    avg5 = env.get("avg_n_base_5d")
+    crowd_note = ("，近 5 日均 %s 只" % avg5) if avg5 else ""
+    eq_r5 = env.get("eq_r5_pct")
+
+    if rg == "强":
+        stance = "正常参与（信号稀缺属正常，精选为主，不必凑数）"
+        holding = "T+3~5 止盈，勿持有超过 5 日"
+        risk = "强市 10 日收益 −2.96%，反弹不持久；大盘转强时本模型信号天然稀少，残留票需防「没跟上反弹」"
+    elif rg == "中性":
+        stance = "减半仓 / 观望（本模型最差环境）"
+        holding = "T+3 内严格止损，不建议持有到 5 日以上"
+        risk = "中性区间全周期亏损：3 日命中仅 22.2%、5 日 −0.66%、10 日 −7.27%"
+    else:
+        if crowded:
+            stance = "可正常至积极参与（超跌反转窗口）"
+            holding = "T+5~10，可适当放宽持有；分批建仓、不追高"
+            risk = "弱市拥挤日 5 日命中 61.8%、均收益 +3.64%，10 日仍 +2.74%；极拥挤档仅 1 天，忌单日满仓"
+        else:
+            stance = "轻仓试探，等信号拥挤确认"
+            holding = "T+3~5，快进快出"
+            risk = "弱势但信号尚未爆发，尚非反转确认；控制仓位，等基线信号数 ≥%d 再加大" % CROWD_THRESHOLD
+
+    extra = []
+    if env["breadth"] in ("普跌", "偏弱") and rg == "弱":
+        extra.append("全市场%s（上涨占比 %.1f%%）—— 历史看普跌反而利好本模型的超跌反转逻辑"
+                     % (env["breadth"], env["adv_ratio_pct"]))
+    elif env["breadth"] in ("普涨", "偏强") and rg == "强":
+        extra.append("全市场%s（上涨占比 %.1f%%）—— 注意本模型信号可能极少"
+                     % (env["breadth"], env["adv_ratio_pct"]))
+    if eq_r5 is not None:
+        if eq_r5 <= -3:
+            extra.append("近 5 日全市场等权 %.2f%%，深跌背景，反转弹性较大" % eq_r5)
+        elif eq_r5 >= 2:
+            extra.append("近 5 日全市场等权 +%.2f%%，反弹已持续，谨慎追高" % eq_r5)
+
+    ev_txt = ("依据（10-08~11-13 回测，%s档 %d 天 / H5 %d 只）：3 日命中 %.1f%% / %+.2f%%，"
+              "5 日命中 %.1f%% / %+.2f%%，10 日 %+.2f%%"
+              % (rg, ev["days"], ev["n"], ev["r3_hit"], ev["r3"],
+                 ev["r5_hit"], ev["r5"], ev["r10"]))
+    lines = [
+        "- 大盘环境：**%s**（全市场等权 %+.2f%%，上涨占比 %.1f%%，%s）" % (
+            rg, env["eq_chg_pct"], env["adv_ratio_pct"], env["breadth"]),
+        "- 信号拥挤度：8 道硬条件通过 **%d 只** / H5 精选 **%d 只**%s%s" % (
+            n_base, n_qualified, crowd_note, "，**信号拥挤**" if crowded else ""),
+    ]
+    if eq_r5 is not None:
+        lines.append("- 趋势背景：全市场等权近 5 日 %+.2f%%" % eq_r5)
+    lines += [
+        "- **仓位建议：%s**" % stance,
+        "- **持有 / 止盈：%s**" % holding,
+        "- %s" % ev_txt,
+        "- 风险提示：%s" % risk,
+    ]
+    for x in extra:
+        lines.append("- 补充：%s" % x)
+    return {"stance": stance, "holding": holding, "risk": risk,
+            "evidence": ev, "regime": rg, "crowded": crowded,
+            "lines": lines}
+
+
 def push(title, content):
     token = (os.environ.get("PUSHPLUS_TOKEN") or "").strip()
     if not token:
@@ -636,6 +808,8 @@ def save_full_list(qualified, meta, run_date):
             json.dump({"run_date": run_date,
                        "total_scanned": meta.get("total_scanned"),
                        "qualified_count": len(qualified),
+                       "market_env": meta.get("market_env"),
+                       "advice": meta.get("advice"),
                        "candidates": qualified}, f, ensure_ascii=False, indent=2)
         with open(cpath, "w", encoding="utf-8-sig", newline="") as f:
             w = csv.writer(f)
@@ -769,6 +943,9 @@ def run_review(params, top_n=None):
     if not lixin_ok:
         log.warning("立信排除集尚未生成（请先运行领湃），本日立信剔除为 0")
 
+    env_enabled = bool(params.get("env_annotation_enabled"))
+    env_base = (compute_market_env(universe, run_date) if env_enabled
+                else {"available": False, "reason": "env_annotation_enabled=False"})
     total = len(universe)                 # 全市场样本总数（非抽样）
     data_ok = 0
     audited_out = 0
@@ -831,6 +1008,29 @@ def run_review(params, top_n=None):
         position = "正常推个股"
     log.info("8 道硬条件筛选漏斗：%s", funnel)
 
+    # L1：把当日信号拥挤度并入环境，生成推荐意见（不参与筛选）
+    n_base = n_qualified + sum(h5_funnel.values())
+    if env_enabled:
+        market_env = dict(env_base)
+        market_env.update({
+            "n_qualified": n_qualified, "n_base": n_base,
+            "crowded": n_base >= CROWD_THRESHOLD,
+            "crowd_ratio": (round(n_base / env_base["avg_n_base_5d"], 2)
+                            if env_base.get("avg_n_base_5d") else None),
+        })
+        advice = env_advice(market_env, n_qualified, n_base)
+        _append_env_history({
+            "date": run_date, "eq_chg_pct": env_base.get("eq_chg_pct"),
+            "adv_ratio_pct": env_base.get("adv_ratio_pct"),
+            "regime": env_base.get("regime"),
+            "n_base": n_base, "n_qualified": n_qualified,
+        })
+    else:
+        market_env = {"available": False, "reason": "env_annotation_enabled=False"}
+        advice = env_advice(market_env, n_qualified, n_base)
+    log.info("L1 大盘环境：%s / %s / 仓位=%s", market_env.get("regime"),
+             market_env.get("breadth"), advice["stance"])
+
     backtest = run_backtest(params)
 
     payload = {
@@ -849,6 +1049,8 @@ def run_review(params, top_n=None):
         "params_after_tune": dict(params),  # 回溯调参后的状态（供审计，不影响本次结果）
         "top_samples": pool[:top_n],
         "backtest": backtest,
+        "market_env": market_env,         # L1 大盘环境（只标注，不参与筛选）
+        "advice": advice,                 # L1 结合市场因素的推荐意见
     }
     full_json, full_csv = save_full_list(qualified, payload, run_date)
     payload["full_list_json"] = full_json
@@ -884,6 +1086,10 @@ def run_review(params, top_n=None):
     else:
         L.append("空仓提示：今日全市场无同时满足 8 道硬条件 + H5 精选的标的，保持空仓观望。")
     L.append("---")
+    if env_enabled:
+        L.append("### 市场环境与推荐意见（L1 标注，不影响筛选结果）")
+        L.extend(advice["lines"])
+        L.append("---")
     L.append("- 筛选漏斗（8 道硬条件淘汰数）：%s" % funnel)
     L.append("- H5 精选层（启用：%s，淘汰数）：%s" % (params.get("h5_enabled"), h5_funnel))
     if backtest:

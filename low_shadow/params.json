@@ -26,5 +26,6 @@
   "h5_vol_ratio_max": 3.0,
   "h5_amount_max": 1000000000.0,
   "param_lock": true,
-  "min_tune_samples": 20
+  "min_tune_samples": 20,
+  "env_annotation_enabled": true
 }
