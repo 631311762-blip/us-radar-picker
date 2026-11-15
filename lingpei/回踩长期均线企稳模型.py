@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""回踩长期均线企稳模型 B_V3.1 核心检测 detect_coil_v2（函数名保持不变，兼容下游）。
+"""回踩长期均线企稳模型 B_V3.2 核心检测 detect_coil_v2（函数名保持不变，兼容下游）。
 
 校准基准（三个样本须同时满足）：
   1) 领湃科技 300530 @ 2026-08-21（原始基准）：试盘日 07-27 放量大阳
@@ -38,6 +38,22 @@ V3.1 最小组合（2026-11-15，用户确认落地）：为纳入另外三个�
   V3.1 新增 6118 信号中深破MA60>3%的占 27%，该批 5日胜率 38.1%、平均 -1.11%，仍是主要拖累。
   注意：试盘日取「间距最近」的命中日，放宽后会改变既有样本的试盘日与评分
   （金杯 25.83→34.83、天顺 24.13→16.63），非计算错误。
+
+V3.2 量价企稳过滤（2026-11-16，用户要求加入）：研究六校准样本「提示日前3天→提示日」
+的量价变化，并与试盘日量比联动，发现最显著的共性是「放量试盘 → 缩量回踩 → 提示日再缩量」：
+  六样本 提示日量/40日均量 0.34~0.76（均值0.50），前3日累计涨跌 -7.69%~+0.62%，
+  提示日量/前3日均量 0.58~0.94，试盘日量/提示日量 2.30~5.19，
+  试盘日量比 1.53~4.06，试盘量比/提示日量能倍数 2.83~9.23。
+  对照组 11-09 十只坏形态（从下往上贴线）提示日全部放量：
+  量/40日均量 0.76~1.61（均值1.20）、提示日量/前3日均量 0.74~2.55（均值1.44）、
+  前3日累计涨跌均值 +2.88%、提示日全部上涨 +1.34%~+7.41%。
+  据此落地三条可配置条件（VOL_FILTER_ON 总开关）：
+    C1 SIG_VR40_MAX=0.85 提示日缩量；C2 SHRINK_VS_PREV3_MAX=1.0 相对前3日继续缩量；
+    C4 TRIAL_SIG_VR_RATIO_MIN=2.5 试盘日量比 / 提示日量能倍数（把试盘量比大小纳入）。
+  回测（2026-08-03~10-30，相对 V3.1 基线 10380 信号）：
+    C1+C2+C4 → 5556 信号（-46%），信号级 3/5/10日胜率 43.1/40.6/38.3% → 45.5/44.2/39.7%，
+    平均 -0.22/-0.65/-1.34% → -0.00/-0.20/-1.05%；股票级 3/5/10日 45.9/46.4/42.8%。
+    六校准样本 6/6 通过，坏形态 0/10 通过；11-13 截面 36 → 12 只。
 """
 from 埋伏点_回踩均线模型 import add_indicators
 
@@ -56,6 +72,16 @@ NEAR_DOWN = 0.07          # 收盘最多低于 MA60 7%（容纳金杯 -6.39%、�
 DIP_WINDOW = 10           # 轨迹窗口
 TREND_ABOVE_MIN = 0.01    # 窗口内须曾在 MA60 上方 >=1%
 FALL_MIN = 0.02           # 前4日均偏离 - 末3日均偏离 >= 2 个百分点（须向下回落）
+
+# ---- V3.2 量价企稳过滤（2026-11-16，六校准样本前3日/提示日量价研究得出）----
+# 六样本提示日全部缩量、坏形态全部放量上攻，是最有区分力的三个条件：
+#   C1 提示日量 <= 40日均量 0.85 倍（样本 0.34~0.76；坏形态 0.76~1.61）
+#   C2 提示日量 <= 前3日均量（样本 0.58~0.94；坏形态 0.74~2.55，均值1.44）
+#   C4 试盘日量比 / 提示日量能倍数 >= 2.5（样本 2.83~9.23；把试盘日量比与提示日缩量联动）
+VOL_FILTER_ON = True       # 总开关，False 可整体关闭退回 V3.1
+SIG_VR40_MAX = 0.85        # 提示日量能上限（相对近40日均量）
+SHRINK_VS_PREV3_MAX = 1.0  # 提示日量 / 前3日均量 上限
+TRIAL_SIG_VR_RATIO_MIN = 2.5  # 试盘日量比 / 提示日量能倍数 下限
 
 # ---- V2 旧阈值（legacy 保留，便于回退/对照）----
 V2_NEAR_MA_DEV = 0.05
@@ -135,6 +161,22 @@ def detect_coil_v2(bars):
             if fall_pp < FALL_MIN * 100:         # 轨迹不是向下（横盘/上行）
                 return None
 
+    # 6) 量价企稳过滤（V3.2）：放量试盘 → 缩量回踩 → 提示日再缩量
+    sig_vr = shrink = trial_vr = None
+    if VOL_FILTER_ON:
+        avg_v_sig = sum(x["v"] for x in bars[n - 41:n - 1]) / 40   # 近40日均量，不含当日
+        sig_vr = cur["v"] / avg_v_sig if avg_v_sig > 0 else 0.0
+        prev3 = bars[n - 4:n - 1]                                   # T-3, T-2, T-1
+        shrink = cur["v"] / (sum(x["v"] for x in prev3) / 3)
+        avg_v_t = sum(x["v"] for x in bars[trial_idx - 40:trial_idx]) / 40
+        trial_vr = bars[trial_idx]["v"] / avg_v_t if avg_v_t > 0 else 0.0
+        if sig_vr > SIG_VR40_MAX:                    # C1 提示日必须缩量
+            return None
+        if shrink > SHRINK_VS_PREV3_MAX:             # C2 相对前3日继续缩量
+            return None
+        if sig_vr <= 0 or trial_vr / sig_vr < TRIAL_SIG_VR_RATIO_MIN:  # C4 试盘量比联动
+            return None
+
     score = 100 - abs(dev) * 1000 - abs(gap - 24) * 1.5 - abs(drop - 0.20) * 120
     return {
         "signal": True,
@@ -144,6 +186,9 @@ def detect_coil_v2(bars):
         "dev60": round(abs(dev), 4),          # 保持 V2 口径（绝对值），兼容下游
         "dev_signed": round(dev, 4),
         "fall_pp": round(fall_pp, 2),
+        "sig_vr40": round(sig_vr, 3) if sig_vr is not None else None,
+        "shrink_prev3": round(shrink, 3) if shrink is not None else None,
+        "trial_vr": round(trial_vr, 3) if trial_vr is not None else None,
         "near_ma": "MA60",
         "trial_date": bars[trial_idx]["d"],
     }
