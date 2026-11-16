@@ -248,54 +248,23 @@ def build_title(date_s, n):
 
 
 def build_markdown(date_s, picks, stats=None, replay=False, top=20):
-    """组装推送正文（与 low_shadow2 的推送风格一致）。"""
-    L = [
-        "### 高位上影线模型 · %s（洗盘再起观察名单）" % date_s,
-        "",
-        "> 看涨信号：收盘处 60 日高位（比率≥%.0f%% 且当日分位≥%.0f%%）的长上影阴线，"
-        "视为高位洗盘；次日高开走强为洗盘确认。正面观察，非买入建议。"
-        % (POS["min_ratio"] * 100, float(POS.get("pos_quant_min", 0)) * 100),
-        "",
-    ]
+    """组装推送正文——只显示 代码 / 名称 / 评分 / 收盘 / 涨跌 五项。"""
+    L = ["### 高位上影线 · %s · %d只" % (date_s, len(picks)), ""]
     n = len(picks)
     if n:
-        L += ["**最终候选 %d 只**" % n, "",
-              "| # | 代码 | 名称 | 收盘 | 涨跌% | 评分 | 量比前日/MA5 | 60日位置 | 前一日分位 | 前两日形态 |",
-              "|---|---|---|---|---|---|---|---|---|---|"]
-        for i, p in enumerate(picks[:top], 1):
+        L += ["| 代码 | 名称 | 评分 | 收盘 | 涨跌 |",
+              "|---|---|---|---|---|"]
+        for p in picks[:top]:
             r = p.get("raw") or {}
-            L.append("| %d | %s | %s | %s | %s | %s | %s/%s | %s%% | %s | %s |" % (
-                i, p.get("code", ""), p.get("name", ""), p.get("close", ""),
-                r.get("pct_chg", "—"), p.get("score", ""),
-                r.get("vol_ratio_prev", "—"), r.get("vol_ratio", "—"),
-                r.get("pos60", "—"),
-                ("%.1f%%" % r["posq_prev"]) if r.get("posq_prev") is not None else "-",
-                r.get("pre2_pattern", "—")))
+            L.append("| %s | %s | %s | %s | %s |" % (
+                p.get("code", ""), p.get("name", ""), p.get("score", ""),
+                p.get("close", ""), r.get("pct_chg", "—")))
         L.append("")
     else:
-        L += ["**今日空仓（0 只）**", "",
-              "新口径过滤后无信号通过，属阈值预期结果，**不是漏跑或数据源故障**。", ""]
-
-    _flt_txt = ("第二条件 F" if FLT.get("enabled") else "第二条件已废除") if FLT else "无第二条件"
-    detail = [
-        "- 口径：%s（量比 %.2f~%.2f + 位置 比率≥%.0f%%∩当日分位≥%.0f%% + %s）" % (
-            CFG["version"].split(" · ")[0],
-            VOL["volume_band"]["min"], VOL["volume_band"]["max"],
-            POS["min_ratio"] * 100, float(POS.get("pos_quant_min", 0)) * 100,
-            _flt_txt),
-    ]
-    if stats:
-        if stats.get("universe"):
-            detail.append("- 样本池 %s 只 / 有效K线 %s" % (stats["universe"], stats.get("scanned", "—")))
-        if stats.get("core") is not None:
-            detail.append("- 核心信号 %s → 第二条件剔除 %s → 候选 %s" % (
-                stats["core"], stats.get("filtered", "—"), n))
+        L += ["今日空仓（0 只）。", ""]
     if replay:
-        detail.append("- 本条为**补发**（读台账重推，未重跑选股）")
-    detail += ["",
-               "高位上影线为**洗盘再起观察名单**（看涨）：次日高开走强视为洗盘确认。",
-               "数据来源：共同前置层（新浪日线）。本清单为模型信号，不构成投资建议。"]
-    L += detail
+        L.append("（补发）")
+    L.append("模型信号，非投资建议。")
     return "\n".join(L)
 
 
