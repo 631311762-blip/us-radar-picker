@@ -5,7 +5,7 @@
   "direction": "偏空（风险观察名单）",
   "win_rule": "down",
   "score_mode": "tier",
-  "version": "v2.0 · 由「低位上影线模型2(双栏) v2.3」拆出的高位栏；第一条件量比 0.85~1.4（v1.3 口径不变），第二条件写入 F：前一日 60 日区间分位 20~60 且前两日阴阳组合≠「阴阳」（用户口径 2026-11-15）",
+  "version": "v2.1 · 由「低位上影线模型2(双栏) v2.3」拆出的高位栏；第一条件量比 0.85~1.4，第二条件 F（前一日 60 日区间分位 20~60 且前两日阴阳组合≠「阴阳」）；v2.1 将位置阈值 min_ratio 由 0.8 上调至 0.90（用户口径 2026-11-16，修正窄幅震荡股被误判为高位）",
   "source_model": "low_upper_model2_tracker (v2.3)",
   "_migration_note": "GitHub 仓库 high_shadow/ 原本只有接入骨架，云盘原代码未提供。本配置按 low_shadow2/config.json 的『同一份 model_core.py + 两份 config』双栏结构对称复现：shape / volume / score 全部指标与阈值原样不动，仅把位置判定分支由低位翻转为高位。min_ratio 为对称推定值，待用云盘原 config.json 核对后调整。",
   "shape": {
@@ -19,11 +19,11 @@
   "position": {
     "rule": "high_hh60_ratio",
     "window": 60,
-    "min_ratio": 0.8,
+    "min_ratio": 0.9,
     "ma20_window": 20,
     "pos_quant_min": 0.5,
-    "_rule_note": "低位栏 rule=low_hh60_ratio 走 c <= 0.6*hh60；本栏走 else 分支 c >= min_ratio*hh60。0.8 表示收盘价已达 60日最高价的 80% 以上（接近/创新高），属高位上影线风险区。",
-    "_min_ratio_status": "推定值·待核对"
+    "_rule_note": "低位栏 rule=low_hh60_ratio 走 c <= 0.6*hh60；本栏走 else 分支 c >= min_ratio*hh60。0.90 表示收盘价已达 60日最高价的 90% 以上（真正接近/创新高），属高位上影线风险区。v2.1 由 0.8 上调：0.8 对窄幅震荡股近似恒真（60日最低价可能已达最高的 80% 以上，跌到区间底部仍判高位），金牌家居 11-16 收 14.05 距 60 日高 16.71 已跌 15.9% 仍被误判，故上调到 0.90。",
+    "_min_ratio_status": "已用 330 根长历史实证校准（2026-11-16）：比率≥0.90 叠加 F 后 T+1 胜率 59.61%、T+5 胜率 50.16%，优于 0.80；0.95 过窄仅 6 条。云盘原 config.json 仍待核对。"
   },
   "volume": {
     "unlimited": false,
@@ -79,6 +79,16 @@
       "other": 10.0
     }
   },
+  "push": {
+    "enabled": true,
+    "channel": "pushplus",
+    "fallback_on_failure": true,
+    "empty_notice": true,
+    "title_template": "高位上影线 · {date} · {n}只",
+    "template": "markdown",
+    "note": "收盘后把当日风险观察名单推送到微信。主通道 PushPlus（PUSHPLUS_TOKEN），失败/未配置时兜底 Server酱（SERVERCHAN_SENDKEY）；空仓也推一条状态通知，避免「没消息=没跑」的误判。enabled=false 一键关闭；--no-push 供本地复跑/回溯使用；--push-only --date 只补发台账不重跑。异常全部吞掉，推送失败绝不影响选股与台账。",
+    "added": "2026-11-16：接入微信推送，与 low_shadow2 的 config.push 同构。"
+  },
   "confirm": {
     "gap_high": 0.005,
     "gap_low": -0.005,
@@ -133,6 +143,15 @@
       "reason": "用户指定『量比改为 0.85-1.4，且按照 F 写入模型』。第一条件维持 v1.3 的 0.85~1.4 不变（数值无需改动）；第二条件采用前两日位置研究里去重后仍稳定改善、样本量也足够的候选 F。实现为独立过滤层，与 low_shadow2/config.filter 同构，enabled=false 可一键回滚。",
       "backtest": "F 1,886 条：T+1 +0.358%/53.87%、T+3 +0.329%/48.89%、T+5 +0.424%/48.51%；基准 C0(仅第一条件) 5,690 条为 +0.092%/50.12%、-0.053%/46.54%、-0.194%/45.05%。2026-11-13 名单 47→26 只。",
       "status": "已生效（本地 + GitHub main）"
+    },
+    {
+      "date": "2026-11-16",
+      "field": "position.min_ratio",
+      "from": 0.8,
+      "to": 0.9,
+      "reason": "用户质疑金牌家居 11-16 收 14.05（距 60 日高 16.71 已跌 15.9%）仍被判高位。核实发现 0.8 对窄幅震荡股近似恒真：60日最低 13.63 / 最高 16.71 = 81.6%，即使跌到区间底部比率口径仍判高位。根因是 min_ratio 从低位栏对称翻转时的推定值偏低。",
+      "backtest": "330 根长历史（296 交易日）对比：比率≥0.80+F 1875 条 T+5 +0.429%/48.43%；比率≥0.90+F 307 条 T+1 +0.344%/59.61%、T+5 +0.456%/50.16%；比率≥0.95+F 仅 6 条过窄。分位口径 posq≥0.5 表现最差（T+5 -0.534%）。故取 0.90。",
+      "status": "已生效（本地 + GitHub main，v2.1）"
     }
   ]
 }
