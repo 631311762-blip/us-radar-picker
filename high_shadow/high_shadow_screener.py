@@ -11,14 +11,21 @@ v3.0（用户口径 2026-11-17）方向翻正为【看涨·高位洗盘后再起
     这是正面观察名单，不是风险名单；上涨记为命中（win_rule=up）。
     四只标杆（光线/华策/通合/金逸）信号次日全部高开大涨，证实方向为看涨。
 
-v3.0 三个条件：
-    第一条件  volume.volume_band = [0.85, 1.4]，vol_ratio_prev 与 vol_ratio 同时满足；
+v4.0（用户口径 2026-11-17）方向对齐重构：
+    废除看跌基因的第二条件 F（filter.enabled=false），量比上限 1.4→2.7
+    以容纳放量洗盘确认。根因：F 的「前一日分位<60」+ 量比上限 1.4 是看跌时代约束，
+    把四只正面标杆全部误杀（强势洗盘本在持续高位且需放量）。废除后四只全部自然入选，
+    规则仍能每天泛化自动扫描全市场；位置双条件与强形态保留为核心信号。
+
+v4.0 生效条件：
+    形态条件  detect() 的长上影阴线（上影≥2倍实体、上影/全幅≥50%、下影/全幅≤25%、
+              上影/收盘≥1.5%、阴线、非跌停）——核心质量信号，阈值未改；
     位置条件  c >= 0.88*hh60  且  当日分位 pos_quant=(c-ll60)/(hh60-ll60) >= 0.45
               （双条件，剔除世纪瑞尔这类比率压线但当日分位低的假高位，保住金逸）；
-    第二条件  config.filter = F：T-1 在 60 日高低区间分位 [20, 60)，且
-              T-2/T-1 阴阳组合 ≠「阴阳」（先阴后阳）。
-第二条件实现为**独立过滤层** pass_filter()，与 low_shadow2/config.filter 同构：
-detect() 只负责输出特征列、sig 判定口径零改动；filter.enabled=false 可一键回滚到 v1.3。
+    量能条件  volume.volume_band = [0.85, 2.7]，vol_ratio_prev 与 vol_ratio 同时满足；
+    第二条件  config.filter = F 已废除（enabled=false），pass_filter() 恒通过。
+    （filter.enabled=true 可一键恢复旧 F 口径，不推荐。）
+detect() 只负责输出特征列、sig 判定口径零改动；filter 实现为独立过滤层，与 low_shadow2 同构。
 
 数据入口（符合 high_shadow/README.md 契约）：
   1. 样本池：UNIVERSE_JSON 指向 common/state/universe.json（已 ST + 立信剔除）；
@@ -269,12 +276,13 @@ def build_markdown(date_s, picks, stats=None, replay=False, top=20):
         L += ["**今日空仓（0 只）**", "",
               "新口径过滤后无信号通过，属阈值预期结果，**不是漏跑或数据源故障**。", ""]
 
+    _flt_txt = ("第二条件 F" if FLT.get("enabled") else "第二条件已废除") if FLT else "无第二条件"
     detail = [
-        "- 口径：%s（量比 %.2f~%.2f + 位置 比率≥%.0f%%∩当日分位≥%.0f%% + 第二条件 %s）" % (
+        "- 口径：%s（量比 %.2f~%.2f + 位置 比率≥%.0f%%∩当日分位≥%.0f%% + %s）" % (
             CFG["version"].split(" · ")[0],
             VOL["volume_band"]["min"], VOL["volume_band"]["max"],
             POS["min_ratio"] * 100, float(POS.get("pos_quant_min", 0)) * 100,
-            FLT.get("rule", "off")),
+            _flt_txt),
     ]
     if stats:
         if stats.get("universe"):
@@ -449,7 +457,7 @@ def run_backtest(cache, out_dir, date):
             summary[k] = {"mean": round(float(arr.mean()), 3),
                           "median": round(float(np.median(arr)), 3),
                           "up_rate(命中率)": round(float((arr > 0).mean()) * 100, 2),
-                          "_note": "v3.0 看涨口径：上涨记为命中"}
+                          "_note": "v4.0 看涨口径：上涨记为命中"}
     with open(os.path.join(out_dir, "backtest_%s.json" % date.replace("-", "")), "w", encoding="utf-8") as f:
         json.dump({"summary": summary, "signals": rows[:500]}, f, ensure_ascii=False, indent=2)
     return summary
