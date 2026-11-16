@@ -239,6 +239,56 @@ def push(title, content, template="markdown"):
         return False
 
 
+# ------------------------------------------------------------------ 推送去重
+# 2026-11-16：用户反馈「同一天收到两条领湃样本推送，样本一致但表述不同」。
+# 根因是一次三步流程里 每日脚本 + 跟踪修正脚本 各推一条。现结构性收敛为
+# 「每日仅一条选股清单」，并在此加按天去重保险，防止主流水线/兜底/手动补跑
+# 同日重复推送。标记落在 lingpei/lingpei/state（与台账同目录，随 state 回写
+# 入库），跨 runner 生效。
+PUSH_DEDUP_FILE = "领湃_推送去重.json"
+
+
+def _push_dedup_path():
+    # 用 __file__ 固定绝对路径，不依赖 CWD / STATE_DIR，避免各流程落点错位
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "lingpei", "state", PUSH_DEDUP_FILE)
+
+
+def push_once(title, content, template="markdown", kind="signal"):
+    """同一自然日、同一类别只推送一次。
+
+    kind:
+      "signal" —— 正式入选清单（每日脚本）
+      "notice" —— 闸门未过 / 无信号等提示
+      "settle" —— 3/5/10 结算简报（默认不推，开关打开时独立成类）
+    分类别去重，避免「先发无信号、后补出清单」被误拦。
+    推送成功才写标记（失败允许补推）；LINGPEI_PUSH_FORCE=1 可强制绕过。
+    """
+    day = today_str()
+    key = "%s|%s" % (day, kind)
+    force = os.environ.get("LINGPEI_PUSH_FORCE", "") == "1"
+    p = _push_dedup_path()
+    rec = {}
+    try:
+        if os.path.exists(p):
+            rec = json.load(open(p, encoding="utf-8")) or {}
+        if rec.get(key) and not force:
+            print("[推送去重] %s 今日已推送，跳过重复推送" % key)
+            return False
+    except Exception:
+        rec = {}
+    ok = push(title, content, template)
+    if ok:
+        # 只保留当天标记，文件不随日期膨胀
+        rec = {key: datetime.datetime.now(BJT).isoformat(timespec="seconds")}
+        try:
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            json.dump(rec, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+        except Exception as e:
+            print("[推送去重] 标记写入失败（不影响本次推送）: %s" % e)
+    return ok
+
+
 # ------------------------------------------------------------------ 立信排除集
 def load_lixin_exclude():
     ensure_state()

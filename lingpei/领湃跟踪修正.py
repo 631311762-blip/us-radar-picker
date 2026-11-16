@@ -3,9 +3,14 @@
 
 三步流程最后一步：读取 领湃_V33跟踪台账.json，对所有未结算样本按
 「提示日之后第 3/5/10 个交易日收盘 / 提示日收盘 - 1」回填收益，
-汇总各档胜率、平均/中位收益，并 PushPlus 推送结算简报。
+汇总各档胜率、平均/中位收益。
 
-取数优先级：本地 K 线缓存（LINGPEI_KCACHE，默认 /tmp/kcache）→ 东方财富 → 新浪。
+2026-11-16（用户要求）：每天只收一份领湃推送。本脚本**默认静默**——
+只回填台账、打印汇总，不再单独推送结算简报；结算进度已由
+领湃模型_每日.py 合并进当日唯一一条选股清单推送。
+若临时需要完整结算简报，设 LINGPEI_SETTLE_PUSH=1 单独开启（仍按天去重）。
+
+取数优先级：本地 K 线缓存（LINGPEI_KCACHE，需显式启用）→ 东方财富 → 新浪。
 **条件冻结**：本脚本只做结算，不改任何模型阈值；条件更新须在结算结果出来后单独进行。
 """
 import os
@@ -191,7 +196,15 @@ def main():
            "<p style='color:#888'>口径：提示日之后第 3/5/10 个交易日收盘 / 提示日收盘 − 1；"
            "取数优先级 本地缓存 → 东财 → 新浪。</p>"
            ) % (today, len(samples), fresh, sum_rows, latest, len(latest_rows), det_rows)
-    tb.push("领湃 B_V3.3 3/5/10结算 %s" % today, msg, template="html")
+    # 2026-11-16：默认静默，避免与当日选股清单构成第二条重复推送。
+    # 结算进度已合并进 领湃模型_每日.py 的唯一推送；需要完整简报时显式开启。
+    if os.environ.get("LINGPEI_SETTLE_PUSH", "") == "1":
+        tb.push_once("领湃 B_V3.3 3/5/10结算 %s" % today, msg,
+                     template="html", kind="settle")
+        print("[推送] 结算简报已按开关单独发送")
+    else:
+        print("[推送] 默认静默（每天仅一份领湃推送）；"
+              "需完整结算简报可设 LINGPEI_SETTLE_PUSH=1")
     print("\n[完成] %s" % today)
 
 

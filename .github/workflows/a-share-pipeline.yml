@@ -185,6 +185,9 @@ jobs:
           # 各模型自有台账/归档
           git add shanshui/善水模型_推荐跟踪.csv 2>/dev/null || true
           git add lingpei/state 2>/dev/null || true
+          # 领湃台账与「按天推送去重标记」实际落在 lingpei/lingpei/state，
+          # 需一并回写才能跨 runner 生效（防止兜底/补跑当天重复推送）。
+          git add lingpei/lingpei/state 2>/dev/null || true
           git add yidian/state 2>/dev/null || true
           git add kaizhong/state 2>/dev/null || true
           git add low_shadow/state 2>/dev/null || true

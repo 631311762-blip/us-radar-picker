@@ -17,6 +17,33 @@ from 回踩长期均线企稳模型 import detect_coil_v2
 REC_FILE = "领湃_推荐记录.json"
 
 
+def _settle_digest():
+    """从本地台账读取 3/5/10 结算进度，合并进当日唯一一条推送。
+
+    2026-11-16：用户要求每天只收一份领湃推送。原「跟踪修正脚本单独推结算简报」
+    已默认静默，改由此处把结算摘要附在选股清单里，信息不丢失。
+    """
+    try:
+        track = tb.load_track()
+        samples = track.get("samples", [])
+        if not samples:
+            return ""
+        parts = []
+        for h in (3, 5, 10):
+            key = "t%d" % h
+            rets = [s[key]["ret"] for s in samples
+                    if (s.get(key) or {}).get("done") and s[key].get("ret") is not None]
+            if rets:
+                wr = sum(1 for x in rets if x > 0) / len(rets)
+                parts.append("T+%d %d只 / 胜率%.0f%%" % (h, len(rets), wr * 100))
+            else:
+                parts.append("T+%d 待结算" % h)
+        return ("<p style='color:#555'><b>低位样本跟踪</b>（台账 %d 只 · 条件冻结）：%s</p>"
+                % (len(samples), " · ".join(parts)))
+    except Exception:
+        return ""
+
+
 def main():
     # 共同前置层接入（强制）：patch 工具箱的取数函数到共享样本池/K线缓存。
     _ad = None
@@ -50,9 +77,9 @@ def main():
     gate = "跳过(--no-gate)" if args.no_gate else ("通过" if ok else "未过")
     print("[SW_B] 今日广度 %.3f / 20日均 %.3f / 闸门=%s" % (b if b is not None else 0, ma if ma is not None else 0, gate))
     if not args.no_gate and not ok:
-        tb.push("领湃模型 %s 闸门未过" % today,
-                "SW_B 广度 %.1f%% <= 20日均 %.1f%%，今日不出股。" % ((b or 0) * 100, (ma or 0) * 100),
-                template="html")
+        tb.push_once("领湃模型 %s 闸门未过" % today,
+                     "SW_B 广度 %.1f%% <= 20日均 %.1f%%，今日不出股。" % ((b or 0) * 100, (ma or 0) * 100),
+                     template="html", kind="notice")
         return
 
     lixin = tb.load_lixin_exclude()
@@ -112,10 +139,13 @@ def main():
         msg = ("<h3>领湃模型 B_V3.3 %s 入选 %d 只</h3>"
                "<table border='1' cellspacing='0' cellpadding='4'>"
                "<tr><th>序号</th><th>名称</th><th>代码</th><th>评分</th><th>贴线</th><th>间距</th><th>距前高</th></tr>"
-               "%s</table>") % (today, len(top), rows)
-        tb.push("领湃模型 %s 入选%d只" % (today, len(top)), msg, template="html")
+               "%s</table>%s") % (today, len(top), rows, _settle_digest())
+        tb.push_once("领湃模型 %s 入选%d只" % (today, len(top)), msg,
+                     template="html", kind="signal")
     else:
-        tb.push("领湃模型 %s 无信号" % today, "今日无 B_V3.3 回踩企稳信号。", template="html")
+        tb.push_once("领湃模型 %s 无信号" % today,
+                     "今日无 B_V3.3 回踩企稳信号。" + _settle_digest(),
+                     template="html", kind="notice")
 
     print("[完成] %s" % today)
 
