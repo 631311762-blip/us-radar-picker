@@ -3,14 +3,18 @@
 """
 高位上影线模型 · 合并流水线接入版  high_shadow_screener.py
 ============================================================
-模型来源：由「低位上影线模型2(双栏) v2.3」拆出的「高位栏」——风险观察名单。
+模型来源：由「低位上影线模型2(双栏) v2.3」拆出的「高位栏」——洗盘再起观察名单。
 与 low_shadow2（低位栏）共用同一套 model_core 逻辑：shape / volume / score
-的指标与阈值一律未改，仅位置判定分支由「低位」翻转为「高位」：
-    低位栏  c <= 0.6 * hh60    （低位上影，偏多·买入候选）
-    高位栏  c >= 0.8 * hh60    （高位上影，偏空·风险观察）
+的指标与阈值一律未改，仅位置判定分支由「低位」翻转为「高位」。
 
-v2.0 两个条件（用户口径 2026-11-15）：
+v3.0（用户口径 2026-11-17）方向翻正为【看涨·高位洗盘后再起】：
+    这是正面观察名单，不是风险名单；上涨记为命中（win_rule=up）。
+    四只标杆（光线/华策/通合/金逸）信号次日全部高开大涨，证实方向为看涨。
+
+v3.0 三个条件：
     第一条件  volume.volume_band = [0.85, 1.4]，vol_ratio_prev 与 vol_ratio 同时满足；
+    位置条件  c >= 0.88*hh60  且  当日分位 pos_quant=(c-ll60)/(hh60-ll60) >= 0.45
+              （双条件，剔除世纪瑞尔这类比率压线但当日分位低的假高位，保住金逸）；
     第二条件  config.filter = F：T-1 在 60 日高低区间分位 [20, 60)，且
               T-2/T-1 阴阳组合 ≠「阴阳」（先阴后阳）。
 第二条件实现为**独立过滤层** pass_filter()，与 low_shadow2/config.filter 同构：
@@ -173,7 +177,11 @@ def detect(bars):
     if POS["rule"] == "low_hh60_ratio":
         pos_ok = c <= POS["max_ratio"] * hh60
     else:
+        # v3.0 位置双条件：比率下限 + 当日 60 日区间分位下限（同时满足）。
+        # 单用比率对窄幅震荡股近似恒真，叠加当日分位可剔除"比率压线、实为区间中下部"的假高位。
         pos_ok = c >= POS["min_ratio"] * hh60
+        if POS.get("pos_quant_enabled", False):
+            pos_ok = pos_ok & (pos_quant >= float(POS["pos_quant_min"]))
     # 量比硬区间（v1.3 口径 0.85~1.4，具体数值一律以 config.volume.volume_band 为准）。
     # 同时约束 vol_ratio_prev（当日量/前日量）与 vol_ratio（当日量/前5日均量），
     # 由 config.volume.volume_band.apply_to 决定作用对象；未启用时回退到旧阈值。
@@ -235,10 +243,11 @@ def build_title(date_s, n):
 def build_markdown(date_s, picks, stats=None, replay=False, top=20):
     """组装推送正文（与 low_shadow2 的推送风格一致）。"""
     L = [
-        "### 高位上影线模型 · %s（风险观察名单）" % date_s,
+        "### 高位上影线模型 · %s（洗盘再起观察名单）" % date_s,
         "",
-        "> 偏空信号：收盘价处 60 日高位 %.0f%% 以上的长上影阴线，次日走弱视为风险兑现，非买入信号。"
-        % (POS["min_ratio"] * 100),
+        "> 看涨信号：收盘处 60 日高位（比率≥%.0f%% 且当日分位≥%.0f%%）的长上影阴线，"
+        "视为高位洗盘；次日高开走强为洗盘确认。正面观察，非买入建议。"
+        % (POS["min_ratio"] * 100, float(POS.get("pos_quant_min", 0)) * 100),
         "",
     ]
     n = len(picks)
@@ -261,9 +270,11 @@ def build_markdown(date_s, picks, stats=None, replay=False, top=20):
               "新口径过滤后无信号通过，属阈值预期结果，**不是漏跑或数据源故障**。", ""]
 
     detail = [
-        "- 口径：v2.1（量比 %.2f~%.2f + 第二条件 %s + 位置≥%.0f%%）" % (
+        "- 口径：%s（量比 %.2f~%.2f + 位置 比率≥%.0f%%∩当日分位≥%.0f%% + 第二条件 %s）" % (
+            CFG["version"].split(" · ")[0],
             VOL["volume_band"]["min"], VOL["volume_band"]["max"],
-            FLT.get("rule", "off"), POS["min_ratio"] * 100),
+            POS["min_ratio"] * 100, float(POS.get("pos_quant_min", 0)) * 100,
+            FLT.get("rule", "off")),
     ]
     if stats:
         if stats.get("universe"):
@@ -274,7 +285,7 @@ def build_markdown(date_s, picks, stats=None, replay=False, top=20):
     if replay:
         detail.append("- 本条为**补发**（读台账重推，未重跑选股）")
     detail += ["",
-               "高位上影线为**风险观察名单**，不产生买入信号；次日走弱视为风险兑现。",
+               "高位上影线为**洗盘再起观察名单**（看涨）：次日高开走强视为洗盘确认。",
                "数据来源：共同前置层（新浪日线）。本清单为模型信号，不构成投资建议。"]
     L += detail
     return "\n".join(L)
@@ -403,7 +414,7 @@ def raw_of(r):
 
 
 # ----------------------------------------------------------------------------
-# 轻量回溯（风险名单：后续下跌记为命中）
+# 轻量回溯（v3.0 看涨口径：后续上涨记为命中；v2.1 曾为看跌风险名单）
 # ----------------------------------------------------------------------------
 def run_backtest(cache, out_dir, date):
     rows = []
@@ -437,7 +448,8 @@ def run_backtest(cache, out_dir, date):
         if len(arr):
             summary[k] = {"mean": round(float(arr.mean()), 3),
                           "median": round(float(np.median(arr)), 3),
-                          "down_rate(命中率)": round(float((arr < 0).mean()) * 100, 2)}
+                          "up_rate(命中率)": round(float((arr > 0).mean()) * 100, 2),
+                          "_note": "v3.0 看涨口径：上涨记为命中"}
     with open(os.path.join(out_dir, "backtest_%s.json" % date.replace("-", "")), "w", encoding="utf-8") as f:
         json.dump({"summary": summary, "signals": rows[:500]}, f, ensure_ascii=False, indent=2)
     return summary
@@ -447,13 +459,13 @@ def run_backtest(cache, out_dir, date):
 # 主流程
 # ----------------------------------------------------------------------------
 def main():
-    ap = argparse.ArgumentParser(description="高位上影线模型（风险观察名单）· 收盘后选股")
+    ap = argparse.ArgumentParser(description="高位上影线模型（洗盘再起观察名单·看涨）· 收盘后选股")
     ap.add_argument("--mode", default="review", choices=["review"])
     ap.add_argument("--date", default=None, help="目标交易日 YYYY-MM-DD，缺省取K线最新交易日")
     ap.add_argument("--top", type=int, default=20, help="写入统一推荐台账的前N只")
     ap.add_argument("--workers", type=int, default=20, help="并发抓取线程数")
     ap.add_argument("--refresh", action="store_true", help="忽略本地K线缓存重新抓取")
-    ap.add_argument("--backtest", action="store_true", help="附带轻量回溯（风险名单 T+1/3/5）")
+    ap.add_argument("--backtest", action="store_true", help="附带轻量回溯（看涨口径 T+1/3/5）")
     ap.add_argument("--no-push", action="store_true", help="本地复跑/回溯：本次不推送微信")
     ap.add_argument("--push-only", action="store_true", help="不重跑选股，只读取指定日期台账补发微信")
     args = ap.parse_args()
@@ -560,7 +572,8 @@ def main():
     # 完整候选样本
     with open(os.path.join(STATE_DIR, "%s_样本.json" % date_s), "w", encoding="utf-8") as f:
         json.dump({"date": date_s, "model": "high_shadow", "column": "高位",
-                   "direction": "偏空（风险观察名单）", "version": CFG["version"],
+                   "direction": CFG["direction"], "win_rule": CFG["win_rule"],
+                   "version": CFG["version"],
                    "count": len(picks), "core_signals": len(picks) + filtered,
                    "filtered_by_second_condition": filtered,
                    "first_condition": {"volume_band": [VOL["volume_band"]["min"],
@@ -572,6 +585,7 @@ def main():
                                                      FLT.get("posq_prev_max")],
                                        "exclude_patterns": FLT.get("exclude_patterns", [])},
                    "position_rule": POS["rule"], "min_ratio": POS["min_ratio"],
+                   "pos_quant_min": POS.get("pos_quant_min") if POS.get("pos_quant_enabled") else None,
                    "picks": picks}, f, ensure_ascii=False, indent=2)
     csv_path = os.path.join(STATE_DIR, "%s_样本.csv" % date_s)
     cols = ["code", "name", "close", "pct", "turnover", "score", "board",
@@ -588,7 +602,7 @@ def main():
                         r["pos60"], r["pos_quant"], r["posq_prev"], r["pre2_pattern"],
                         r["ret2"], r["d1"], r["gap"]])
 
-    print("[3/3] ==== 高位上影线（风险观察名单）· %s · 样本池%d 有效K线%d K线缺失%d 价格校验剔除%d "
+    print("[3/3] ==== 高位上影线（洗盘再起·看涨）· %s · 样本池%d 有效K线%d K线缺失%d 价格校验剔除%d "
           "核心信号%d 第二条件剔除%d 最终候选%d ===="
           % (date_s, len(uni), scanned, kmiss, mismatch,
              len(picks) + filtered, filtered, len(picks)))
@@ -611,10 +625,10 @@ def main():
 
     if args.backtest:
         s = run_backtest(cache, STATE_DIR, date_s)
-        print("[回溯] 区间信号 %d 个 / %d 只，T+1均值%.2f%% 下跌占比%.2f%%，T+5均值%.2f%% 下跌占比%.2f%%"
+        print("[回溯] 区间信号 %d 个 / %d 只，T+1均值%.2f%% 上涨命中%.2f%%，T+5均值%.2f%% 上涨命中%.2f%%"
               % (s["signals"], s["stocks"], s.get("t1", {}).get("mean", 0),
-                 s.get("t1", {}).get("down_rate(命中率)", 0),
-                 s.get("t5", {}).get("mean", 0), s.get("t5", {}).get("down_rate(命中率)", 0)))
+                 s.get("t1", {}).get("up_rate(命中率)", 0),
+                 s.get("t5", {}).get("mean", 0), s.get("t5", {}).get("up_rate(命中率)", 0)))
     return 0
 
 
