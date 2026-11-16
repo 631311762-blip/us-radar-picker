@@ -1,14 +1,14 @@
 {
   "model": "shanshui",
-  "generated_at": "2026-11-13T18:02:45+08:00",
-  "batches": 2,
-  "samples": 4,
-  "win_rate": 0.5,
+  "generated_at": "2026-11-16T18:54:02+08:00",
+  "batches": 3,
+  "samples": 6,
+  "win_rate": 0.3333,
   "by_horizon": {
     "t1": {
-      "samples": 4,
-      "win_rate": 0.5,
-      "avg_return": 0.0077
+      "samples": 6,
+      "win_rate": 0.3333,
+      "avg_return": -0.0135
     },
     "t5": {
       "samples": 0,
@@ -45,6 +45,18 @@
       "name": "三利谱",
       "date": "2026-11-11",
       "t1": -0.0237
+    },
+    {
+      "code": "002840",
+      "name": "华统股份",
+      "date": "2026-11-13",
+      "t1": -0.0222
+    },
+    {
+      "code": "301077",
+      "name": "星华新材",
+      "date": "2026-11-13",
+      "t1": -0.0895
     }
   ]
 }

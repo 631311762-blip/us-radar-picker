@@ -1,0 +1,56 @@
+{
+  "date": "2026-11-16",
+  "model": "yidian",
+  "count": 1,
+  "picks": [
+    {
+      "code": "688513",
+      "name": "苑东生物",
+      "close": 41.94,
+      "score": 90.78,
+      "board": "科创板",
+      "raw": {
+        "code": "688513",
+        "name": "苑东生物",
+        "board": "科创板",
+        "price": 41.94,
+        "chg_pct": 2.5678650036683717,
+        "turn_pct": 2.33,
+        "vr": 1.74,
+        "mktcap": 7911213114.0,
+        "float_mktcap": 7911213114.0,
+        "close": 41.94,
+        "open": 41.39,
+        "entity_pct": 1.33,
+        "dd90": 0.3709230769230769,
+        "dd90_ref": 40.89,
+        "dd90_basis": "prev_close",
+        "r5": 0.005273250239693272,
+        "ma20": 42.97850000000001,
+        "ma5": 42.522000000000006,
+        "ma5_prev": 42.477999999999994,
+        "ma60": 45.473833333333324,
+        "dist_ma20": 0.024163244412904406,
+        "ma5_up": true,
+        "below_ma60": true,
+        "high90": 65.0,
+        "audit_firm": "年成立的中信会计师事务所",
+        "score": 90.78,
+        "status": "筑底",
+        "startup_day": 0,
+        "buy_low": 40.89,
+        "buy_high": 41.94,
+        "stop_loss": 39.84,
+        "target": 44.88
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 777,
+    "universe": 4604,
+    "dropped": 0
+  },
+  "written_at": "2026-11-16T18:10:30+08:00"
+}

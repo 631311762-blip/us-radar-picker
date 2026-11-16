@@ -1,97 +1,97 @@
 {
-  "generated_at": "2026-11-13T18:02:45+08:00",
+  "generated_at": "2026-11-16T18:54:02+08:00",
   "results": [
     {
       "name": "shanshui",
       "label": "善水模型 v10",
       "exit": 0,
-      "seconds": 116.1
+      "seconds": 115.5
     },
     {
       "name": "low_shadow",
       "label": "低位上影线模型",
       "exit": 0,
-      "seconds": 3.7
+      "seconds": 3.8
     },
     {
       "name": "low_shadow2",
       "label": "低位上影模型2（双栏拆分·低位栏）",
       "exit": 0,
-      "seconds": 18.8
+      "seconds": 19.9
     },
     {
       "name": "lingpei",
-      "label": "领湃模型 B_V2",
+      "label": "领湃模型 B_V3.3（K线企稳·长下影探底回升）",
       "exit": 0,
-      "seconds": 57.1
+      "seconds": 156.0
     },
     {
       "name": "kaizhong",
       "label": "凯众模型 v4",
       "exit": 0,
-      "seconds": 13.0
+      "seconds": 15.1
     },
     {
       "name": "yidian",
       "label": "易点模型",
       "exit": 0,
-      "seconds": 209.0
+      "seconds": 161.4
     },
     {
       "name": "powei",
       "label": "破位后上涨模型（假破位收复）",
       "exit": 0,
-      "seconds": 30.9
+      "seconds": 44.1
     },
     {
       "name": "zhushanglang",
       "label": "主升浪 V4",
       "exit": 0,
-      "seconds": 2312.9
+      "seconds": 2567.3
     }
   ],
   "settlements": [
     {
       "model": "shanshui",
-      "batches": 2,
-      "samples": 4,
-      "win_rate": 0.5
+      "batches": 3,
+      "samples": 6,
+      "win_rate": 0.3333
     },
     {
       "model": "low_shadow",
-      "batches": 2,
-      "samples": 1,
+      "batches": 3,
+      "samples": 7,
       "win_rate": 0.0
     },
     {
       "model": "low_shadow2",
-      "batches": 2,
-      "samples": 74,
-      "win_rate": 0.0405
+      "batches": 3,
+      "samples": 81,
+      "win_rate": 0.037
     },
     {
       "model": "lingpei",
-      "batches": 2,
-      "samples": 17,
+      "batches": 3,
+      "samples": 22,
       "win_rate": 0.0
     },
     {
       "model": "kaizhong",
-      "batches": 3,
-      "samples": 14,
+      "batches": 4,
+      "samples": 18,
       "win_rate": 0.0
     },
     {
       "model": "yidian",
-      "batches": 3,
+      "batches": 4,
       "samples": 18,
-      "win_rate": 0.2778
+      "win_rate": 0.2223
     },
     {
       "model": "powei",
-      "batches": 1,
-      "samples": 0,
-      "win_rate": null
+      "batches": 2,
+      "samples": 11,
+      "win_rate": 0.1818
     }
   ]
 }

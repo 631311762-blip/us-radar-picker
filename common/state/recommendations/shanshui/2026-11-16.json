@@ -1,0 +1,40 @@
+{
+  "date": "2026-11-16",
+  "model": "shanshui",
+  "count": 1,
+  "picks": [
+    {
+      "code": "001872",
+      "name": "招商港口",
+      "close": 26.72,
+      "score": 52.5,
+      "board": "深市主板",
+      "raw": {
+        "code": "001872",
+        "name": "招商港口",
+        "board": "深市主板",
+        "price": 26.72,
+        "pct": 4.009342156481111,
+        "turnover": 0.13,
+        "market_cap_yi": 622.52278988,
+        "prev_close": 25.07,
+        "trial_high": 26.88,
+        "trial_idx": 36,
+        "span": 23,
+        "drawdown": 11.9,
+        "close_gap": -0.6,
+        "vol_ratio_pull": 0.572,
+        "vr20_now": 1.83,
+        "score": 52.5
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 777,
+    "universe": 4604,
+    "dropped": 0
+  },
+  "written_at": "2026-11-16T18:04:34+08:00"
+}

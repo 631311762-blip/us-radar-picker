@@ -1,0 +1,43 @@
+{
+  "date": "2026-11-16",
+  "model": "low_shadow2",
+  "count": 2,
+  "picks": [
+    {
+      "code": "000759",
+      "name": "中百集团",
+      "close": 5.5,
+      "score": 82.5,
+      "board": "",
+      "raw": {
+        "code": "000759",
+        "name": "中百集团",
+        "close": 5.5,
+        "score": 82.5,
+        "board": ""
+      }
+    },
+    {
+      "code": "301392",
+      "name": "汇成真空",
+      "close": 115.15,
+      "score": 63.4,
+      "board": "",
+      "raw": {
+        "code": "301392",
+        "name": "汇成真空",
+        "close": 115.15,
+        "score": 63.4,
+        "board": ""
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 777,
+    "universe": 4604,
+    "dropped": 0
+  },
+  "written_at": "2026-11-16T18:04:58+08:00"
+}

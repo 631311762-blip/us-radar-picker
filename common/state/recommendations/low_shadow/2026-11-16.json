@@ -1,0 +1,63 @@
+{
+  "date": "2026-11-16",
+  "model": "low_shadow",
+  "count": 2,
+  "picks": [
+    {
+      "code": "300266",
+      "name": "兴源环境",
+      "close": 1.59,
+      "score": 100.0,
+      "board": "",
+      "raw": {
+        "symbol": "300266",
+        "name": "兴源环境",
+        "date": "2026-11-16",
+        "close": 1.59,
+        "upper_amp": 0.0759,
+        "upper_to_body": 12.0,
+        "vol_ratio": 1.993,
+        "pos_pct": 0.0258,
+        "amount": 50396982.0,
+        "pct_chg": 0.63,
+        "ma20": 1.66,
+        "low_20": 1.55,
+        "comp_path": false,
+        "auditor": "未知",
+        "score": 100.0
+      }
+    },
+    {
+      "code": "300141",
+      "name": "和顺电气",
+      "close": 8.65,
+      "score": 50.0,
+      "board": "",
+      "raw": {
+        "symbol": "300141",
+        "name": "和顺电气",
+        "date": "2026-11-16",
+        "close": 8.65,
+        "upper_amp": 0.0629,
+        "upper_to_body": 7.71,
+        "vol_ratio": 1.729,
+        "pos_pct": 0.0627,
+        "amount": 76459945.0,
+        "pct_chg": 0.35,
+        "ma20": 8.89,
+        "low_20": 8.14,
+        "comp_path": false,
+        "auditor": "未知",
+        "score": 50.0
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 777,
+    "universe": 4604,
+    "dropped": 0
+  },
+  "written_at": "2026-11-16T18:04:37+08:00"
+}
