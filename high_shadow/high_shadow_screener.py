@@ -40,11 +40,17 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import pandas as pd
 
+try:
+    import requests
+except ImportError:  # 无 requests 时推送降级为不可用，不影响选股主流程
+    requests = None
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 CFG = json.load(open(os.path.join(BASE_DIR, "config.json"), encoding="utf-8"))
 SH, POS, VOL, SC = CFG["shape"], CFG["position"], CFG["volume"], CFG["score"]
 FLT = CFG.get("filter", {})   # 第二条件（可选过滤层）；旧版 config 缺该段时为空 dict，向后兼容
+PSH = CFG.get("push", {})     # 微信推送层（与 low_shadow2/config.push 同构）；缺该段时默认关闭
 KLINE_COUNT = 70
 
 UNIVERSE_JSON = os.environ.get("UNIVERSE_JSON", os.path.join(ROOT, "common", "state", "universe.json"))
@@ -207,6 +213,128 @@ def detect(bars):
         "ret2": ret2, "d1": d1, "gap": gap})
 
 
+def _post_json(url, payload, as_form=False, timeout=15):
+    """极简 POST，返回 json dict；异常由调用方统一吞。"""
+    if requests is None:
+        return {}
+    try:
+        if as_form:
+            r = requests.post(url, data=payload, timeout=timeout)
+        else:
+            r = requests.post(url, json=payload, timeout=timeout)
+        return r.json()
+    except Exception:
+        return {}
+
+
+def build_title(date_s, n):
+    tpl = PSH.get("title_template", "高位上影线 · {date} · {n}只")
+    return tpl.format(date=date_s, n=n)
+
+
+def build_markdown(date_s, picks, stats=None, replay=False, top=20):
+    """组装推送正文（与 low_shadow2 的推送风格一致）。"""
+    L = [
+        "### 高位上影线模型 · %s（风险观察名单）" % date_s,
+        "",
+        "> 偏空信号：收盘价处 60 日高位 %.0f%% 以上的长上影阴线，次日走弱视为风险兑现，非买入信号。"
+        % (POS["min_ratio"] * 100),
+        "",
+    ]
+    n = len(picks)
+    if n:
+        L += ["**最终候选 %d 只**" % n, "",
+              "| # | 代码 | 名称 | 收盘 | 涨跌% | 评分 | 量比前日/MA5 | 60日位置 | 前一日分位 | 前两日形态 |",
+              "|---|---|---|---|---|---|---|---|---|---|"]
+        for i, p in enumerate(picks[:top], 1):
+            r = p.get("raw") or {}
+            L.append("| %d | %s | %s | %s | %s | %s | %s/%s | %s%% | %s | %s |" % (
+                i, p.get("code", ""), p.get("name", ""), p.get("close", ""),
+                r.get("pct_chg", "—"), p.get("score", ""),
+                r.get("vol_ratio_prev", "—"), r.get("vol_ratio", "—"),
+                r.get("pos60", "—"),
+                ("%.1f%%" % r["posq_prev"]) if r.get("posq_prev") is not None else "-",
+                r.get("pre2_pattern", "—")))
+        L.append("")
+    else:
+        L += ["**今日空仓（0 只）**", "",
+              "新口径过滤后无信号通过，属阈值预期结果，**不是漏跑或数据源故障**。", ""]
+
+    detail = [
+        "- 口径：v2.1（量比 %.2f~%.2f + 第二条件 %s + 位置≥%.0f%%）" % (
+            VOL["volume_band"]["min"], VOL["volume_band"]["max"],
+            FLT.get("rule", "off"), POS["min_ratio"] * 100),
+    ]
+    if stats:
+        if stats.get("universe"):
+            detail.append("- 样本池 %s 只 / 有效K线 %s" % (stats["universe"], stats.get("scanned", "—")))
+        if stats.get("core") is not None:
+            detail.append("- 核心信号 %s → 第二条件剔除 %s → 候选 %s" % (
+                stats["core"], stats.get("filtered", "—"), n))
+    if replay:
+        detail.append("- 本条为**补发**（读台账重推，未重跑选股）")
+    detail += ["",
+               "高位上影线为**风险观察名单**，不产生买入信号；次日走弱视为风险兑现。",
+               "数据来源：共同前置层（新浪日线）。本清单为模型信号，不构成投资建议。"]
+    L += detail
+    return "\n".join(L)
+
+
+def push_wechat(title, content, force=False):
+    """推送到微信，返回 (ok, channel)。config.push 驱动，PushPlus 主 + Server酱兜底。"""
+    if not force and not PSH.get("enabled", False):
+        print("[push] 推送层未启用(config.push.enabled=false)，跳过")
+        return False, "disabled"
+    token = (os.environ.get("PUSHPLUS_TOKEN") or "").strip()
+    sckey = (os.environ.get("SERVERCHAN_SENDKEY") or os.environ.get("FTQQ_KEY") or "").strip()
+    template = PSH.get("template", "markdown")
+    channel = (PSH.get("channel") or "pushplus").lower()
+    fallback = bool(PSH.get("fallback_on_failure", True))
+    order = ["pushplus", "serverchan"] if channel == "pushplus" else ["serverchan", "pushplus"]
+    tried = []
+    for ch in order:
+        if ch == "pushplus":
+            if not token:
+                tried.append("pushplus(未配置)")
+                continue
+            j = _post_json("https://www.pushplus.plus/send", {
+                "token": token, "title": title, "content": content, "template": template})
+            ok = j.get("code") == 200
+            print("[push] PushPlus code=%s msg=%s" % (j.get("code"), j.get("msg")))
+            tried.append("pushplus(%s)" % ("OK" if ok else "code=%s" % j.get("code")))
+            if ok:
+                return True, "pushplus"
+        else:
+            if not sckey:
+                tried.append("serverchan(未配置)")
+                continue
+            j = _post_json("https://sctapi.ftqq.com/%s.send" % sckey,
+                           {"title": title, "desp": content}, as_form=True)
+            ok = j.get("code") == 0
+            print("[push] Server酱 code=%s" % j.get("code"))
+            tried.append("serverchan(%s)" % ("OK" if ok else "code=%s" % j.get("code")))
+            if ok:
+                return True, "serverchan"
+        if not fallback:
+            break
+    print("[push] 未送达：%s；正文已打印如下（不影响选股）" % "; ".join(tried))
+    print("---- %s ----" % title)
+    print(content)
+    return False, ";".join(tried)
+
+
+def push_report(date_s, picks, stats=None, replay=False, force=False, top=20):
+    """主流程末尾调用：空仓是否通知由 config.push.empty_notice 控制。"""
+    if not force and not PSH.get("enabled", False):
+        return False, "disabled"
+    if not picks and not PSH.get("empty_notice", True):
+        print("[push] 空仓且 empty_notice=false，跳过")
+        return False, "empty_skipped"
+    return push_wechat(build_title(date_s, len(picks)),
+                       build_markdown(date_s, picks, stats=stats, replay=replay, top=top),
+                       force=force)
+
+
 def pass_filter(row):
     """第二条件 F（config.filter 驱动）—— 独立于 detect() 核心信号。
 
@@ -326,10 +454,31 @@ def main():
     ap.add_argument("--workers", type=int, default=20, help="并发抓取线程数")
     ap.add_argument("--refresh", action="store_true", help="忽略本地K线缓存重新抓取")
     ap.add_argument("--backtest", action="store_true", help="附带轻量回溯（风险名单 T+1/3/5）")
+    ap.add_argument("--no-push", action="store_true", help="本地复跑/回溯：本次不推送微信")
+    ap.add_argument("--push-only", action="store_true", help="不重跑选股，只读取指定日期台账补发微信")
     args = ap.parse_args()
 
     os.makedirs(STATE_DIR, exist_ok=True)
     os.makedirs(REC_DIR, exist_ok=True)
+
+    # ---- 补发模式：只读台账、只推送，不触碰前置层/选股/台账 ----
+    if args.push_only:
+        d = args.date or pd.Timestamp.now().strftime("%Y-%m-%d")
+        path = os.path.join(REC_DIR, "%s.json" % d)
+        if not os.path.exists(path):
+            print("[push] 台账不存在：%s，无法补发" % path)
+            return 1
+        try:
+            ledger = json.load(open(path, encoding="utf-8"))
+        except Exception as e:
+            print("[push] 台账读取失败：%s" % e)
+            return 1
+        lp = ledger.get("picks", [])
+        st = {"universe": None, "core": ledger.get("count", len(lp))}
+        ok, ch = push_report(d, lp, stats=st, replay=True, force=True, top=args.top)
+        print("[push] 补发 %s：%s（channel=%s, %d 只）" % (
+            d, "成功" if ok else "未送达", ch, len(lp)))
+        return 0 if ok else 2
 
     uni = load_universe()
     cache = {} if args.refresh else load_cache()
@@ -452,6 +601,13 @@ def main():
                  r["posq_prev"] or 0, r["pre2_pattern"]))
     if not picks:
         print("本交易日无高位上影线候选。")
+
+    # 微信推送：config.push 驱动；--no-push 跳过。推送失败不影响已落盘台账。
+    if not args.no_push:
+        push_report(date_s, picks,
+                    stats={"universe": len(uni), "scanned": scanned, "core": len(picks) + filtered,
+                           "filtered": filtered},
+                    top=args.top)
 
     if args.backtest:
         s = run_backtest(cache, STATE_DIR, date_s)
