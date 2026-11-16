@@ -2,10 +2,11 @@
   "date": "2026-11-16",
   "model": "high_shadow",
   "column": "高位",
-  "direction": "偏空（风险观察名单）",
-  "version": "v2.1 · 由「低位上影线模型2(双栏) v2.3」拆出的高位栏；第一条件量比 0.85~1.4，第二条件 F（前一日 60 日区间分位 20~60 且前两日阴阳组合≠「阴阳」）；v2.1 将位置阈值 min_ratio 由 0.8 上调至 0.90（用户口径 2026-11-16，修正窄幅震荡股被误判为高位）",
-  "count": 1,
-  "core_signals": 1,
+  "direction": "偏多（高位洗盘后再起观察名单）",
+  "win_rule": "up",
+  "version": "v3.0 · 方向翻正为「高位洗盘后再起」观察名单（看涨，用户口径 2026-11-17）；第一条件量比 0.85~1.4，第二条件 F（T-1 分位 20~60 且前两日非阴阳）；位置改为双条件：比率 min_ratio=0.88 且当日 60 日区间分位 pos_quant≥0.45（用户确认用回测更稳口径，保住金逸影视、剔除世纪瑞尔这类假高位）",
+  "count": 0,
+  "core_signals": 0,
   "filtered_by_second_condition": 0,
   "first_condition": {
     "volume_band": [
@@ -29,36 +30,7 @@
     ]
   },
   "position_rule": "high_hh60_ratio",
-  "min_ratio": 0.9,
-  "picks": [
-    {
-      "code": "300150",
-      "name": "世纪瑞尔",
-      "close": 4.03,
-      "score": 68.5,
-      "board": "创业板",
-      "price": 4.03,
-      "pct": -2.1844660194174725,
-      "turnover": 2.18,
-      "vr": 1.45,
-      "mktcap": 2474998604.0,
-      "raw": {
-        "pct_chg": -2.18,
-        "upper_pct": 2.23,
-        "upper_range": 64.3,
-        "lower_range": 14.3,
-        "vol_ratio": 0.9,
-        "vol_ratio_prev": 1.11,
-        "pos60": 90.2,
-        "pos_quant": 35.3,
-        "posq_prev": 48.5,
-        "pre2_pattern": "阴阴",
-        "ret2": -2.6,
-        "d1": -1.2,
-        "gap": -1.46,
-        "second_condition": "F",
-        "source": "high_shadow"
-      }
-    }
-  ]
+  "min_ratio": 0.88,
+  "pos_quant_min": 0.45,
+  "picks": []
 }
