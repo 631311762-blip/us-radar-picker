@@ -1,64 +1,65 @@
 {
- "_comment": "所有纳入共同前置框架的 A 股模型注册表。新增模型：在 models 里加一项即可自动套用四个共同条件（全市场行情/立信剔除/ST剔除/回溯修正），无需改动 workflow。cmd 为相对仓库根的命令；由 run_all.py 顺序执行。",
- "version": 2,
- "models": [
-  {
-   "name": "shanshui",
-   "label": "善水模型 v10",
-   "cmd": "python3 shanshui/daily_shanshui.py --model v10 --top 10",
-   "enabled": true
-  },
-  {
-   "name": "low_shadow",
-   "label": "低位上影线模型",
-   "cmd": "python3 low_shadow/low_shadow_screener.py --mode review",
-   "enabled": true
-  },
-  {
-   "name": "low_shadow2",
-   "label": "低位上影模型2（双栏拆分·低位栏）",
-   "cmd": "python3 low_shadow2/low_shadow2_screener.py --mode review",
-   "enabled": true,
-   "_note": "云端 /workspace/low_shadow_model 同口径（config.json+model_core.py），仅数据入口换共同前置层；与 low_shadow（严格上影线）为两个独立模型。"
-  },
-  {
-   "name": "lingpei",
-   "label": "领湃模型 B_V3.3（K线企稳·长下影探底回升）",
-   "cmd": "bash -lc 'cd lingpei && python3 _lixin_update.py && python3 领湃模型_每日.py && python3 领湃跟踪修正.py'",
-   "enabled": true
-  },
-  {
-   "name": "kaizhong",
-   "label": "凯众模型 v4",
-   "cmd": "python3 kaizhong/daily_v4.py",
-   "enabled": true
-  },
-  {
-   "name": "yidian",
-   "label": "易点模型",
-   "cmd": "python3 yidian/run.py",
-   "enabled": true
-  },
-  {
-   "name": "powei",
-   "label": "破位后上涨模型（假破位收复）",
-   "cmd": "python3 powei/run.py",
-   "enabled": true,
-   "_note": "收盘后全市场扫描：横盘水平支撑→假破位→N日内收复，博反弹信号，价格行为优先于量能。消费共同前置层(ST/立信剔除+共享K线)，经 ctx.record 落盘 common/state/recommendations/powei/ 实现与其它模型区分；自有台账回写 powei/state/。"
-  },
-  {
-   "name": "zhushanglang",
-   "label": "主升浪 V4",
-   "cmd": "python3 stock-v3/daily_v3.py",
-   "enabled": true,
-   "settle": false,
-   "_note": "自带 回溯/进化/选股/推送/云端备份 的独立子系统，不消费共同前置层 universe/K线缓存；settle=false 跳过公共回溯（它有自己的 feedback 闭环）。"
-  },
-  {
-   "name": "high_shadow",
-   "label": "高位上影线模型（风险观察名单）",
-   "enabled": false,
-   "_note": "云盘自动化运行（与 GitHub Actions 流水线分开定时），消费合并流水线 common/state/universe.json 样本池（ST+立信剔除），在选股入口强制生效；不在本 runner 内执行，故 enabled=false。"
-  }
- ]
+  "_comment": "所有纳入共同前置框架的 A 股模型注册表。新增模型：在 models 里加一项即可自动套用四个共同条件（全市场行情/立信剔除/ST剔除/回溯修正），无需改动 workflow。cmd 为相对仓库根的命令；由 run_all.py 顺序执行。",
+  "version": 2,
+  "models": [
+    {
+      "name": "shanshui",
+      "label": "善水模型 v10",
+      "cmd": "python3 shanshui/daily_shanshui.py --model v10 --top 10",
+      "enabled": true
+    },
+    {
+      "name": "low_shadow",
+      "label": "低位上影线模型",
+      "cmd": "python3 low_shadow/low_shadow_screener.py --mode review",
+      "enabled": true
+    },
+    {
+      "name": "low_shadow2",
+      "label": "低位上影模型2（双栏拆分·低位栏）",
+      "cmd": "python3 low_shadow2/low_shadow2_screener.py --mode review",
+      "enabled": true,
+      "_note": "云端 /workspace/low_shadow_model 同口径（config.json+model_core.py），仅数据入口换共同前置层；与 low_shadow（严格上影线）为两个独立模型。"
+    },
+    {
+      "name": "lingpei",
+      "label": "领湃模型 B_V3.3（K线企稳·长下影探底回升）",
+      "cmd": "bash -lc 'cd lingpei && python3 _lixin_update.py && python3 领湃模型_每日.py && python3 领湃跟踪修正.py'",
+      "enabled": true
+    },
+    {
+      "name": "kaizhong",
+      "label": "凯众模型 v4",
+      "cmd": "python3 kaizhong/daily_v4.py",
+      "enabled": true
+    },
+    {
+      "name": "yidian",
+      "label": "易点模型",
+      "cmd": "python3 yidian/run.py",
+      "enabled": true
+    },
+    {
+      "name": "powei",
+      "label": "破位后上涨模型（假破位收复）",
+      "cmd": "python3 powei/run.py",
+      "enabled": true,
+      "_note": "收盘后全市场扫描：横盘水平支撑→假破位→N日内收复，博反弹信号，价格行为优先于量能。消费共同前置层(ST/立信剔除+共享K线)，经 ctx.record 落盘 common/state/recommendations/powei/ 实现与其它模型区分；自有台账回写 powei/state/。"
+    },
+    {
+      "name": "zhushanglang",
+      "label": "主升浪 V4",
+      "cmd": "python3 stock-v3/daily_v3.py",
+      "enabled": true,
+      "settle": false,
+      "_note": "自带 回溯/进化/选股/推送/云端备份 的独立子系统，不消费共同前置层 universe/K线缓存；settle=false 跳过公共回溯（它有自己的 feedback 闭环）。"
+    },
+    {
+      "name": "high_shadow",
+      "label": "高位上影线模型（风险观察名单）",
+      "enabled": true,
+      "_note": "2026-11-13 用户确认「迁移代码进仓库再纳入」；2026-11-16 用户确认正式启用每日调度 + 微信推送。原为云盘自动化独立定时，消费合并流水线 common/state/universe.json 样本池（ST+立信剔除）。代码已入 GitHub main：high_shadow/high_shadow_screener.py + config.json（v2.1：第一条件量比 0.85~1.4，第二条件 F = 前一日 60 日分位[20,60) 且前两日非阴阳，位置阈值 min_ratio 0.90），入口 --mode review 已接入 PushPlus 微信推送（读 PUSHPLUS_TOKEN，复用统一流水线 env）。enabled=true 纳入每日统一流水线；【重要】需确认云盘原独立定时已停掉，避免重复运行/重复推送。",
+      "cmd": "python3 high_shadow/high_shadow_screener.py --mode review"
+    }
+  ]
 }
