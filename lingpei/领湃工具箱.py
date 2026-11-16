@@ -276,6 +276,71 @@ def save_records(recs):
               ensure_ascii=False, indent=2)
 
 
+# ------------------------------------------------------------------ V3.3 3/5/10 日跟踪台账
+TRACK_FILE = "领湃_V33跟踪台账.json"
+TRACK_HORIZONS = (3, 5, 10)
+# 台账固定落在 lingpei/lingpei/state（与推荐记录同目录），不依赖 CWD / STATE_DIR，
+# 避免「每日写入」与「结算读取」因运行目录不同而错位。
+TRACK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lingpei", "state")
+
+
+def load_track():
+    """读取 V3.3 跟踪台账；不存在时返回空骨架。"""
+    p = os.path.join(TRACK_DIR, TRACK_FILE)
+    if os.path.exists(p):
+        try:
+            return json.load(open(p, encoding="utf-8")) or {}
+        except Exception:
+            return {}
+    return {"model": "B_V3.3", "horizons": list(TRACK_HORIZONS), "samples": []}
+
+
+def save_track(track):
+    os.makedirs(TRACK_DIR, exist_ok=True)
+    json.dump(track, open(os.path.join(TRACK_DIR, TRACK_FILE), "w", encoding="utf-8"),
+              ensure_ascii=False, indent=2)
+
+
+def track_append(date, hits):
+    """把某日 V3.3 全量命中写入 3/5/10 跟踪台账（按 code+date 去重）。
+
+    hits 每项含 detect_coil_v2 返回字段 + code/name/entry_close。
+    返回 (新增数, 台账总样本数)。
+    """
+    track = load_track()
+    track.setdefault("model", "B_V3.3")
+    track.setdefault("horizons", list(TRACK_HORIZONS))
+    smp = track.setdefault("samples", [])
+    exist = {(x.get("code"), x.get("date")) for x in smp}
+    added = 0
+    for h in hits:
+        key = (h.get("code"), date)
+        if key in exist:
+            continue
+        dev = h.get("dev_signed") or 0.0
+        pos = "深破MA60" if dev <= -0.03 else ("贴线/略破" if dev <= 0 else "MA60上方")
+        row = {
+            "code": h.get("code"), "name": h.get("name", ""), "date": date, "batch": date,
+            "score": h.get("score"), "dev_signed": dev, "dev60": h.get("dev60"),
+            "drop_from_peak": h.get("drop_from_peak"), "gap_days": h.get("gap_days"),
+            "trial_date": h.get("trial_date"), "fall_pp": h.get("fall_pp"),
+            "sig_vr40": h.get("sig_vr40"), "shrink_prev3": h.get("shrink_prev3"),
+            "trial_vr": h.get("trial_vr"), "k_amp": h.get("k_amp"),
+            "k_lower": h.get("k_lower"), "k_c_from_low": h.get("k_c_from_low"),
+            "k_low_vs_prev": h.get("k_low_vs_prev"), "near_ma": h.get("near_ma"),
+            "entry_close": h.get("entry_close"), "position": pos,
+        }
+        for k in TRACK_HORIZONS:
+            row["t%d" % k] = {"date": None, "close": None, "ret": None, "done": False}
+        smp.append(row)
+        exist.add(key)
+        added += 1
+    smp.sort(key=lambda x: (x.get("date", ""), -(x.get("score") or 0)))
+    if added:
+        save_track(track)
+    return added, len(smp)
+
+
 # ------------------------------------------------------------------ SW_B 广度闸门
 def _breadth_now():
     u = get_universe()

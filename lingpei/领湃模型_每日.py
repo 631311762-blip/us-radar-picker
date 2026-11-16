@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """领湃模型_每日.py：收盘后主流程。
-行情更新 -> 全市场扫描 B_V2 -> 立信/ST/SW_B 闸门过滤 -> PushPlus(html) 推送 -> 写入推荐记录。
+行情更新 -> 全市场扫描 B_V3.3 -> 立信/ST/SW_B 闸门过滤 -> PushPlus(html) 推送 -> 写入推荐记录。
 重建版：按原 prompt 口径推断实现。
 """
 import os
@@ -34,7 +34,7 @@ def main():
 
     today = tb.today_str()
     print("=" * 64)
-    print("领湃模型 B_V2（重建版）  %s" % today)
+    print("领湃模型 B_V3.3（重建版）  %s" % today)
     print("=" * 64)
 
     # 基准交易日：以东财最新 K 线日期为准
@@ -76,7 +76,7 @@ def main():
             continue
         sig = detect_coil_v2(bars)
         if sig:
-            sig.update({"code": code, "name": u["name"]})
+            sig.update({"code": code, "name": u["name"], "entry_close": bars[-1]["c"]})
             hits.append(sig)
 
     hits.sort(key=lambda x: x["score"], reverse=True)
@@ -99,19 +99,23 @@ def main():
     })
     tb.save_records(recs)
 
+    # 写入 V3.3 3/5/10 日跟踪台账（全量命中，按 code+日期去重；后续由 领湃跟踪修正.py 结算）
+    added, total = tb.track_append(base_date, hits)
+    print("[跟踪台账] 新增 %d 只，累计 %d 只待结算" % (added, total))
+
     # 推送
     if top:
         rows = "".join(
             "<tr><td>%d</td><td>%s</td><td>%s</td><td>%.1f</td><td>%s</td><td>%d</td><td>%.1f%%</td></tr>"
             % (i + 1, h["name"], h["code"], h["score"], h["near_ma"], h["gap_days"], h["drop_from_peak"] * 100)
             for i, h in enumerate(top))
-        msg = ("<h3>领湃模型 B_V2 %s 入选 %d 只</h3>"
+        msg = ("<h3>领湃模型 B_V3.3 %s 入选 %d 只</h3>"
                "<table border='1' cellspacing='0' cellpadding='4'>"
                "<tr><th>序号</th><th>名称</th><th>代码</th><th>评分</th><th>贴线</th><th>间距</th><th>距前高</th></tr>"
                "%s</table>") % (today, len(top), rows)
         tb.push("领湃模型 %s 入选%d只" % (today, len(top)), msg, template="html")
     else:
-        tb.push("领湃模型 %s 无信号" % today, "今日无 B_V2 回踩企稳信号。", template="html")
+        tb.push("领湃模型 %s 无信号" % today, "今日无 B_V3.3 回踩企稳信号。", template="html")
 
     print("[完成] %s" % today)
 

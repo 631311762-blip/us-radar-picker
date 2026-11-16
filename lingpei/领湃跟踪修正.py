@@ -1,97 +1,198 @@
 # -*- coding: utf-8 -*-
-"""领湃跟踪修正.py：回看到期推荐股 T+10 收益，汇总胜率，给参数修正建议。
-重建版：按原 prompt 口径推断实现。
+"""领湃跟踪修正.py：B_V3.3 低位样本 T+3 / T+5 / T+10 跟踪结算。
+
+三步流程最后一步：读取 领湃_V33跟踪台账.json，对所有未结算样本按
+「提示日之后第 3/5/10 个交易日收盘 / 提示日收盘 - 1」回填收益，
+汇总各档胜率、平均/中位收益，并 PushPlus 推送结算简报。
+
+取数优先级：本地 K 线缓存（LINGPEI_KCACHE，默认 /tmp/kcache）→ 东方财富 → 新浪。
+**条件冻结**：本脚本只做结算，不改任何模型阈值；条件更新须在结算结果出来后单独进行。
 """
 import os
 import sys
+import re
 import json
+import statistics
 import datetime
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+# 台账路径已在工具箱内用 __file__ 固定，这里仅为兼容旧推荐记录设置 STATE_DIR
+os.environ.setdefault("STATE_DIR", os.path.join(_HERE, "lingpei", "state"))
+sys.path.insert(0, _HERE)
 import 领湃工具箱 as tb
 
+HORIZONS = (3, 5, 10)
+# 本地缓存仅在本轮验证时通过 LINGPEI_KCACHE 显式启用；云端默认走在线行情，避免误读旧缓存。
+KCACHE = os.environ.get("LINGPEI_KCACHE", "")
 
-def _t10_return(bars, entry_date, horizon=10):
-    """entry_date 之后第 horizon 个交易日的收盘相对 entry 当日收盘的收益率。"""
-    # 找到 entry_date 对应的索引
-    idx = None
-    for i, b in enumerate(bars):
-        if b["d"] >= entry_date:
-            idx = i
-            break
-    if idx is None or idx + horizon >= len(bars):
-        return None
-    buy = bars[idx]["c"]
-    sell = bars[idx + horizon]["c"]
-    if buy <= 0:
-        return None
-    return (sell - buy) / buy
+
+def _sina_hist(code, count=220):
+    """新浪日线兜底，返回 [{d,o,c,h,l,v}]（成交量股数转手）。"""
+    import requests
+    secid = ("sh" + code) if code.startswith("6") else (
+        ("bj" + code) if code.startswith(("4", "8", "9")) else ("sz" + code))
+    url = ("https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_=/CN_MarketDataService.getKLineData"
+           "?symbol=" + secid + "&scale=240&ma=no&datalen=" + str(count))
+    try:
+        r = requests.get(url, timeout=15, headers={
+            "User-Agent": "Mozilla/5.0", "Referer": "https://finance.sina.com.cn"})
+        m = re.search(r"\((\[.*\])\)", r.text, re.S)
+        if m:
+            bars = [{"d": str(d["day"]), "o": float(d["open"]), "c": float(d["close"]),
+                     "h": float(d["high"]), "l": float(d["low"]),
+                     "v": float(d["volume"]) / 100.0} for d in json.loads(m.group(1))]
+            return bars or None
+    except Exception:
+        pass
+    return None
+
+
+def load_bars(code):
+    """返回 ([{d,o,c,h,l,v}], 数据源)，按日期升序。"""
+    p = os.path.join(KCACHE, code + ".json") if KCACHE else ""
+    if p and os.path.exists(p):
+        try:
+            bars = json.load(open(p))
+            if len(bars) >= 65:
+                return bars, "cache"
+        except Exception:
+            pass
+    bars = tb.em_hist(code, 220)
+    if bars and len(bars) >= 65:
+        return bars, "em"
+    bars = _sina_hist(code, 220)
+    if bars and len(bars) >= 65:
+        return bars, "sina"
+    return None, "fail"
+
+
+def settle_one(s, bars):
+    """回填单只样本 T+3/T+5/T+10，返回本次新结算的档位列表。"""
+    dates = [b["d"] for b in bars]
+    d0 = s.get("date")
+    if d0 not in dates:
+        return []
+    i = dates.index(d0)
+    base = bars[i]["c"]
+    if base <= 0:
+        return []
+    fresh = []
+    for h in HORIZONS:
+        key = "t%d" % h
+        t = s.get(key) or {}
+        if t.get("done"):
+            continue
+        j = i + h
+        if j >= len(bars):
+            continue  # 尚未走到第 h 个交易日，留待后续结算
+        b = bars[j]
+        t.update({"date": b["d"], "close": round(b["c"], 4),
+                  "ret": round(b["c"] / base - 1, 4), "done": True})
+        s[key] = t
+        fresh.append(h)
+    return fresh
+
+
+def summarize(samples):
+    out = {}
+    for h in HORIZONS:
+        key = "t%d" % h
+        rets = [s[key]["ret"] for s in samples
+                if (s.get(key) or {}).get("done") and s[key].get("ret") is not None]
+        out[h] = {
+            "n": len(rets),
+            "win_rate": round(sum(1 for x in rets if x > 0) / len(rets), 4) if rets else None,
+            "avg": round(statistics.mean(rets), 4) if rets else None,
+            "median": round(statistics.median(rets), 4) if rets else None,
+        }
+    return out
+
+
+def _pct(v):
+    return ("%+.2f%%" % (v * 100)) if v is not None else "n/a"
 
 
 def main():
     today = tb.today_str()
     print("=" * 64)
-    print("领湃跟踪修正（重建版）  %s" % today)
+    print("领湃 B_V3.3  3/5/10 日跟踪结算  %s" % today)
     print("=" * 64)
 
-    recs = tb.load_records()
-    if not recs:
-        print("[无推荐记录]")
+    track = tb.load_track()
+    samples = track.get("samples", [])
+    if not samples:
+        print("[台账为空] 无可结算样本")
         return
 
-    # 截止今天，推荐日距今 >= 10 交易日 的条目视为到期
-    results = []  # (code, name, entry_date, ret)
-    for entry in recs:
-        edate = entry.get("date")
-        # 计算 edate 距今交易日数（用任一标的的 K 线近似）
-        for stk in entry.get("stocks", []):
-            if stk.get("t10_done"):
-                results.append((stk["code"], stk["name"], edate, stk.get("t10_ret")))
-                continue
-            bars = tb.em_hist(stk["code"], 200)
-            if not bars:
-                continue
-            ret = _t10_return(bars, edate, 10)
-            if ret is None:
-                continue  # 尚未满 10 交易日
-            stk["t10_done"] = True
-            stk["t10_ret"] = round(ret, 4)
-            results.append((stk["code"], stk["name"], edate, ret))
+    pending = [s for s in samples
+               if any(not (s.get("t%d" % h) or {}).get("done") for h in HORIZONS)]
+    print("[台账] 样本 %d 只，待结算 %d 只，模型 %s"
+          % (len(samples), len(pending), track.get("model", "B_V3.3")))
 
-    if not results:
-        print("[暂无到期样本]")
-        tb.save_records(recs)
-        return
+    bars_map, src_cnt = {}, {}
+    for s in pending:
+        code = s["code"]
+        if code in bars_map:
+            continue
+        bars, src = load_bars(code)
+        bars_map[code] = bars
+        src_cnt[src] = src_cnt.get(src, 0) + 1
+    print("[取数] %s" % src_cnt)
 
-    rets = [r[3] for r in results if r[3] is not None]
-    wins = sum(1 for x in rets if x > 0)
-    win_rate = wins / len(rets) * 100 if rets else 0
-    avg = sum(rets) / len(rets) if rets else 0
-    median = sorted(rets)[len(rets) // 2] if rets else 0
+    fresh = 0
+    for s in pending:
+        bars = bars_map.get(s["code"])
+        if not bars:
+            continue
+        fresh += len(settle_one(s, bars))
 
-    print("[到期样本] %d 只 | 胜率 %.1f%% | 平均 %.2f%% | 中位 %.2f%%"
-          % (len(rets), win_rate, avg * 100, median * 100))
-    for code, name, edate, ret in results:
-        print("  %s %s 推荐%s -> T+10 %+.2f%%" % (name, code, edate, (ret or 0) * 100))
+    tb.save_track(track)
+    summary = summarize(samples)
+    print("\n[结算汇总] 本次新结算 %d 条" % fresh)
+    for h in HORIZONS:
+        v = summary[h]
+        wr = ("%.1f%%" % (v["win_rate"] * 100)) if v["win_rate"] is not None else "n/a"
+        print("  T+%-2d 已结算 %3d 只 | 胜率 %6s | 平均 %8s | 中位 %8s"
+              % (h, v["n"], wr, _pct(v["avg"]), _pct(v["median"])))
 
-    # 参数修正建议（基于胜率/平均收益粗略给出）
-    advice = []
-    if win_rate < 50:
-        advice.append("胜率偏低，建议收紧 dd_hi / 提高试盘量能倍数 TRIAL_VOL_RATIO")
-    if avg < 0:
-        advice.append("平均收益为负，建议缩小 DROP 上限、要求更贴近长期均线")
-    if win_rate >= 60 and avg > 0.03:
-        advice.append("模型当前有效，可维持阈值")
-    msg = ("<h3>领湃 B_V2 T+10 复盘 %s</h3>"
-           "<p>到期样本 %d 只，胜率 %.1f%%，平均 %.2f%%，中位 %.2f%%</p>"
-           "<p>修正建议：%s</p>"
-           "<p>（注：重建版口径，参数建议仅供粗参考）</p>"
-           ) % (today, len(rets), win_rate, avg * 100, median * 100,
-                "<br>".join(advice) if advice else "维持现状")
-    tb.push("领湃 B_V2 T+10 复盘 %s" % today, msg, template="html")
+    # 最新批次明细
+    batches = sorted({s.get("batch") or s["date"] for s in samples})
+    latest = batches[-1] if batches else None
+    latest_rows = [s for s in samples if (s.get("batch") or s["date"]) == latest]
+    print("\n[最新批次 %s] %d 只" % (latest, len(latest_rows)))
+    for s in latest_rows:
+        cells = " ".join("T+%d:%s" % (h, _pct((s.get("t%d" % h) or {}).get("ret"))
+                                     if (s.get("t%d" % h) or {}).get("done") else "待结算")
+                         for h in HORIZONS)
+        print("  %-10s %s  %s" % (s["name"] or s["code"], s["code"], cells))
 
-    tb.save_records(recs)
-    print("[完成]")
+    # ---- 推送结算简报 ----
+    sum_rows = "".join(
+        "<tr><td>T+%d</td><td>%d</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+        % (h, summary[h]["n"],
+           ("%.1f%%" % (summary[h]["win_rate"] * 100)) if summary[h]["win_rate"] is not None else "n/a",
+           _pct(summary[h]["avg"]), _pct(summary[h]["median"]))
+        for h in HORIZONS)
+    det_rows = "".join(
+        "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
+        % (s["name"] or s["code"], s["code"],
+           *[(_pct(s["t%d" % h]["ret"]) if (s.get("t%d" % h) or {}).get("done") else "待结算")
+             for h in HORIZONS])
+        for s in latest_rows)
+    msg = ("<h3>领湃 B_V3.3 3/5/10 日跟踪结算 %s</h3>"
+           "<p>台账 %d 只，本次新结算 %d 条；<b>条件已冻结，待结算完成后再评估更新</b>。</p>"
+           "<table border='1' cellspacing='0' cellpadding='4'>"
+           "<tr><th>档位</th><th>已结算</th><th>胜率</th><th>平均收益</th><th>中位收益</th></tr>"
+           "%s</table>"
+           "<h4>最新批次 %s（%d 只）</h4>"
+           "<table border='1' cellspacing='0' cellpadding='4'>"
+           "<tr><th>名称</th><th>代码</th><th>T+3</th><th>T+5</th><th>T+10</th></tr>"
+           "%s</table>"
+           "<p style='color:#888'>口径：提示日之后第 3/5/10 个交易日收盘 / 提示日收盘 − 1；"
+           "取数优先级 本地缓存 → 东财 → 新浪。</p>"
+           ) % (today, len(samples), fresh, sum_rows, latest, len(latest_rows), det_rows)
+    tb.push("领湃 B_V3.3 3/5/10结算 %s" % today, msg, template="html")
+    print("\n[完成] %s" % today)
 
 
 if __name__ == "__main__":
