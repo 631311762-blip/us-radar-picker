@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""回踩长期均线企稳模型 B_V3.2 核心检测 detect_coil_v2（函数名保持不变，兼容下游）。
+"""回踩长期均线企稳模型 B_V3.3 核心检测 detect_coil_v2（函数名保持不变，兼容下游）。
 
 校准基准（三个样本须同时满足）：
   1) 领湃科技 300530 @ 2026-08-21（原始基准）：试盘日 07-27 放量大阳
@@ -54,6 +54,27 @@ V3.2 量价企稳过滤（2026-11-16，用户要求加入）：研究六校准�
     C1+C2+C4 → 5556 信号（-46%），信号级 3/5/10日胜率 43.1/40.6/38.3% → 45.5/44.2/39.7%，
     平均 -0.22/-0.65/-1.34% → -0.00/-0.20/-1.05%；股票级 3/5/10日 45.9/46.4/42.8%。
     六校准样本 6/6 通过，坏形态 0/10 通过；11-13 截面 36 → 12 只。
+
+V3.3 提示日 K 线企稳过滤（2026-11-16，用户要求补充第二个筛选条件）：
+  整理六校准样本提示日开高低收，并对全市场 5556 个 V3.2 信号按 K 线特征分箱统计后续胜率。
+  六样本共性：长下影 lower 0.35~0.68、小实体 body<=0.27、振幅收敛 2.48%~3.27%、
+    盘中低点跌破 MA60 且多数创前日新低、收盘距当日最低 +1.14%~+2.30%——
+    即「盘中下探破线 → 尾盘收回、留长下影」的探底回升锤子线。
+  对照组 11-09 十只坏形态恰好相反：lower 均值 0.14、upper 0.48、body 0.38、
+    amp 4.45%、low_vs_prev +2.9%（未破前低）——放量上攻的长上影大实体。
+  分箱胜率（基线 3/5/10日 45.5/44.2/39.7%）显示：
+    amp>=4% 是主要亏损源（4~6% 档 5日 34.8%、>=6% 档 20.8%）；
+    clv>=0.7 单条最高(5日 50.7%)但六样本无一达标，硬加会杀掉全部校准样本，故不采用；
+    破前低(low_vs_prev<=+0.5%) 单条即把坏形态滤到 0/10 且 5日 48.6%。
+  落地四条（KLINE_FILTER_ON 总开关，False 可退回 V3.2）：
+    K1 AMP_MAX=0.04 振幅上限；K2 LOWER_SHADOW_MIN=0.30 长下影；
+    K3 C_FROM_LOW∈[0.01,0.03] 收盘距最低甜区；K5 LOW_VS_PREV_MAX=0.005 须破/贴近前低。
+    K4 小实体(body<=0.30) 虽是样本共性，但单条胜率 43.3% 反而低于基线，故不纳入；
+    K6 clv>=0.35、K7 low_dev>=-9% 几乎无区分力，不纳入，避免过拟合。
+  回测（2026-08-03~10-30，相对 V3.2 基线 5556 信号）：
+    K1+K2+K3+K5 → 1264 信号（-77%），3/5/10日胜率 45.5/44.2/39.7% → 54.4/54.0/49.7%，
+    平均 -0.00/-0.20/-1.05% → +0.76/+0.97/+0.73%；六样本 6/6、坏形态 0/10；
+    各评分区间保留率均匀 22~24%，>=80 分段 5日胜率 57.4%/+2.07%。
 """
 from 埋伏点_回踩均线模型 import add_indicators
 
@@ -82,6 +103,14 @@ VOL_FILTER_ON = True       # 总开关，False 可整体关闭退回 V3.1
 SIG_VR40_MAX = 0.85        # 提示日量能上限（相对近40日均量）
 SHRINK_VS_PREV3_MAX = 1.0  # 提示日量 / 前3日均量 上限
 TRIAL_SIG_VR_RATIO_MIN = 2.5  # 试盘日量比 / 提示日量能倍数 下限
+
+# ---- V3.3 提示日 K 线企稳过滤（2026-11-16，K线形态分箱胜率研究得出）----
+# 六样本=长下影小实体探底回升锤子线；坏形态=长上影大实体放量上攻，形态恰好相反。
+KLINE_FILTER_ON = True        # 总开关，False 可整体关闭退回 V3.2
+AMP_MAX = 0.04                # K1 提示日振幅上限（相对前收）；样本2.48~3.27%，>=4%档明显亏损
+LOWER_SHADOW_MIN = 0.30       # K2 下影占全幅下限；样本0.35~0.68，坏形态均值0.14
+C_FROM_LOW_MIN, C_FROM_LOW_MAX = 0.01, 0.03  # K3 收盘距当日最低甜区；样本1.14~2.30%
+LOW_VS_PREV_MAX = 0.005       # K5 最低价须破/贴近前日低点；样本-1.9%~+0.4%，坏形态均值+2.9%
 
 # ---- V2 旧阈值（legacy 保留，便于回退/对照）----
 V2_NEAR_MA_DEV = 0.05
@@ -115,7 +144,9 @@ def _trajectory(bars, n):
 def detect_coil_v2(bars):
     """B_V3 主检测。返回信号 dict 或 None。
     字段与 V2 完全兼容（score/gap_days/drop_from_peak/dev60/near_ma/trial_date），
-    另新增 dev_signed（带符号偏离）、fall_pp（轨迹落差，百分点）。
+    另新增 dev_signed（带符号偏离）、fall_pp（轨迹落差，百分点）、
+    V3.2 量价字段（sig_vr40/shrink_prev3/trial_vr）、
+    V3.3 K线字段（k_amp/k_lower/k_c_from_low/k_low_vs_prev）。
     """
     n = len(bars)
     if n < 65:
@@ -177,6 +208,25 @@ def detect_coil_v2(bars):
         if sig_vr <= 0 or trial_vr / sig_vr < TRIAL_SIG_VR_RATIO_MIN:  # C4 试盘量比联动
             return None
 
+    # 7) 提示日 K 线企稳过滤（V3.3）：长下影 + 小振幅 + 收盘距低适中 + 盘中破前低
+    #    即「盘中下探破 MA60/前低 → 尾盘收回」的探底回升锤子线，区别于放量上攻的长上影大实体。
+    k_amp = k_lower = k_c_low = k_low_prev = None
+    if KLINE_FILTER_ON:
+        prev = bars[-2]
+        rng = cur["h"] - cur["l"] if cur["h"] > cur["l"] else 1e-9
+        k_amp = rng / prev["c"] if prev["c"] > 0 else 9.9
+        k_lower = (min(cur["o"], cur["c"]) - cur["l"]) / rng
+        k_c_low = cur["c"] / cur["l"] - 1 if cur["l"] > 0 else 9.9
+        k_low_prev = cur["l"] / prev["l"] - 1 if prev["l"] > 0 else 9.9
+        if k_amp > AMP_MAX:                                  # K1 振幅收敛
+            return None
+        if k_lower < LOWER_SHADOW_MIN:                       # K2 长下影
+            return None
+        if not (C_FROM_LOW_MIN <= k_c_low <= C_FROM_LOW_MAX):  # K3 收盘距低甜区
+            return None
+        if k_low_prev > LOW_VS_PREV_MAX:                     # K5 盘中须破/贴近前低
+            return None
+
     score = 100 - abs(dev) * 1000 - abs(gap - 24) * 1.5 - abs(drop - 0.20) * 120
     return {
         "signal": True,
@@ -189,6 +239,10 @@ def detect_coil_v2(bars):
         "sig_vr40": round(sig_vr, 3) if sig_vr is not None else None,
         "shrink_prev3": round(shrink, 3) if shrink is not None else None,
         "trial_vr": round(trial_vr, 3) if trial_vr is not None else None,
+        "k_amp": round(k_amp, 4) if k_amp is not None else None,
+        "k_lower": round(k_lower, 3) if k_lower is not None else None,
+        "k_c_from_low": round(k_c_low, 4) if k_c_low is not None else None,
+        "k_low_vs_prev": round(k_low_prev, 4) if k_low_prev is not None else None,
         "near_ma": "MA60",
         "trial_date": bars[trial_idx]["d"],
     }
