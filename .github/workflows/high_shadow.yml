@@ -17,7 +17,16 @@ on:
   schedule:
     # UTC 08:30 = 北京 16:30（收盘后，晚于统一流水线 15:10 的 slot 作兜底）
     - cron: "30 8 * * 1-5"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      push_only:
+        description: "只补发指定日期台账的微信推送（跳过前置层与选股，秒级完成）"
+        required: false
+        default: "false"
+      push_date:
+        description: "配合 push_only 的台账日期 YYYY-MM-DD（默认当天）"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -60,8 +69,21 @@ jobs:
             python3 -m pip install --quiet requests numpy pandas
           fi
 
+      - name: 补发模式（--push-only：只读台账秒级推送，跳过前置层/选股）
+        if: steps.gate.outputs.ready == 'true' && github.event.inputs.push_only == 'true'
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+          PUSH_DATE: ${{ github.event.inputs.push_date }}
+        run: |
+          if [ -n "$PUSH_DATE" ]; then
+            python3 high_shadow/high_shadow_screener.py --push-only --date "$PUSH_DATE"
+          else
+            python3 high_shadow/high_shadow_screener.py --push-only
+          fi
+
       - name: 共同前置层（交易日 + 立信 + ST + 全市场行情记录）
-        if: steps.gate.outputs.ready == 'true'
+        if: steps.gate.outputs.ready == 'true' && github.event.inputs.push_only != 'true'
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
@@ -71,7 +93,7 @@ jobs:
         run: python3 common/prefilter.py
 
       - name: 运行高位上影线模型（自身代码路径 + 微信推送）
-        if: steps.gate.outputs.ready == 'true'
+        if: steps.gate.outputs.ready == 'true' && github.event.inputs.push_only != 'true'
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
@@ -79,7 +101,7 @@ jobs:
         run: python3 high_shadow/high_shadow_screener.py --mode review
 
       - name: 回写状态
-        if: steps.gate.outputs.ready == 'true' && always()
+        if: steps.gate.outputs.ready == 'true' && github.event.inputs.push_only != 'true' && always()
         run: |
           git config user.name "high_shadow-bot"
           git config user.email "high_shadow-bot@users.noreply.github.com"
