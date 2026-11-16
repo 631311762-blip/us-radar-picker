@@ -4,14 +4,14 @@
   "column": "高位",
   "direction": "偏多（高位洗盘后再起观察名单）",
   "win_rule": "up",
-  "version": "v3.0 · 方向翻正为「高位洗盘后再起」观察名单（看涨，用户口径 2026-11-17）；第一条件量比 0.85~1.4，第二条件 F（T-1 分位 20~60 且前两日非阴阳）；位置改为双条件：比率 min_ratio=0.88 且当日 60 日区间分位 pos_quant≥0.45（用户确认用回测更稳口径，保住金逸影视、剔除世纪瑞尔这类假高位）",
+  "version": "v4.0 · 方向对齐重构（看涨口径 2026-11-17）：废除看跌基因的第二条件 F（filter.enabled=false），量比上限 1.4→2.7 以容纳放量洗盘确认；核心信号回归『强形态 + 高位』——四只标杆（光线/华策/金逸/通合）形态与位置全部通过，此前仅被 F 的『前一日分位<60』和量比上限 1.4 误杀。位置维持 v3.0 双条件：比率≥0.88 ∩ 当日 60 日分位≥0.45。",
   "count": 0,
   "core_signals": 0,
   "filtered_by_second_condition": 0,
   "first_condition": {
     "volume_band": [
       0.85,
-      1.4
+      2.7
     ],
     "apply_to": [
       "vol_ratio_prev",
@@ -19,7 +19,7 @@
     ]
   },
   "second_condition": {
-    "enabled": true,
+    "enabled": false,
     "rule": "F",
     "posq_prev": [
       20.0,
