@@ -12,10 +12,26 @@ name: 低位上影模型2 独立流程
 # 产物，会回退到 akshare 逐只抓 4600+ 只（极慢）且「仅打印不写台账」。
 # 共享 K 线缓存 common/state/klines/ 被 .gitignore 排除、跨 runner 不存在，
 # 所以这里必须在本 runner 内跑一次 prefilter.py 自己生成。
+#
+# 2026-11-16（补推送通道）：low_shadow2 原为唯一无微信推送的模型，仅写台账。
+# 现由 screener 自身在 main() 末尾推送（config.push 驱动，空仓也通知）。
+# 新增 workflow_dispatch inputs：
+#   - push_only=true : 跳过前置层/选股/回写，只读指定日期台账补发微信（秒级）
+#   - date           : 配合 push_only，YYYY-MM-DD；留空取当日
+# 不传任何 inputs 时行为与旧版完全一致，fallback-2300.yml 的兜底调用不受影响。
 # =========================================================================
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      push_only:
+        description: "仅补发指定日期台账到微信（不重跑选股）"
+        required: false
+        default: "false"
+      date:
+        description: "补发日期 YYYY-MM-DD（push_only=true 时生效，留空取当日）"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -41,6 +57,7 @@ jobs:
         run: python3 -m pip install --quiet requests numpy pandas
 
       - name: 共同前置层（交易日 + 立信 + ST + 全市场行情记录）
+        if: inputs.push_only != 'true'
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
@@ -50,12 +67,28 @@ jobs:
         run: python3 common/prefilter.py
 
       - name: 运行低位上影模型2（自身代码路径）
+        if: inputs.push_only != 'true'
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
         run: python3 low_shadow2/low_shadow2_screener.py --mode review
 
+      # 补发通道：只读台账、只推送，不碰前置层/选股/台账，秒级完成。
+      - name: 补发指定日期台账到微信
+        if: inputs.push_only == 'true'
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+        run: |
+          D="${{ inputs.date }}"
+          if [ -n "$D" ]; then
+            python3 low_shadow2/low_shadow2_screener.py --push-only --date "$D"
+          else
+            python3 low_shadow2/low_shadow2_screener.py --push-only
+          fi
+
       - name: 回写状态与推荐台账
-        if: always()
+        if: always() && inputs.push_only != 'true'
         run: |
           git config user.name "low_shadow2-bot"
           git config user.email "low_shadow2-bot@users.noreply.github.com"

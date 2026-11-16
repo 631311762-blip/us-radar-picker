@@ -39,6 +39,16 @@
       "vol_ratio": "当日成交量 / 前5日均量（不含当日），与 volume.ma5_cap 同口径"
     }
   },
+  "push": {
+    "enabled": true,
+    "channel": "pushplus",
+    "fallback_on_failure": true,
+    "empty_notice": true,
+    "title_template": "低位上影线二 · {date} · {n}只",
+    "template": "markdown",
+    "note": "收盘后把当日清单推送到微信。主通道 PushPlus（PUSHPLUS_TOKEN），失败/未配置时兜底 Server酱（SERVERCHAN_SENDKEY）；空仓也推一条状态通知，避免「没消息=没跑」的误判。enabled=false 一键关闭；--no-push 供本地复跑/回溯使用，不误发。异常全部吞掉，推送失败绝不影响选股与台账。",
+    "added": "2026-11-16：该模型原为仓库 8 个模型中唯一无推送通道者，仅写台账，导致微信收不到清单。"
+  },
   "score": {
     "upper_weight": 40,
     "volume_weight": 30,
@@ -101,6 +111,14 @@
       "to": 1.1,
       "reason": "新增可选二次过滤层(步骤2)：当日量/前5日均量 >= 1.1，剔除缩量<0.8 及 0.8~1.1 平庸档；上限 volume.ma5_cap=2.2 保持不变（1.8~2.2 仅 36 条，暂不收紧避免过拟合）",
       "backtest": "单独启用：T+5 57.2%/+3.31%；与步骤1合并后 304 条，T+3 70.4%/+4.35%、T+5 66.3%/+5.87%、T+10 66.4%/+7.07%"
+    },
+    {
+      "date": "2026-11-16",
+      "field": "push",
+      "from": null,
+      "to": "enabled=true (PushPlus + Server酱兜底, 空仓也通知)",
+      "reason": "补齐微信推送通道：此前 low_shadow2 是仓库 8 个模型中唯一没有推送代码的，只写 common/state/recommendations/ 台账，微信永远收不到。用户 2026-11-16 反馈「今天没推送至微信么，没收到」后确认落地。",
+      "backtest": "无选股口径变更；detect()/vol_score()/score()/pass_filter() 逐行未改，推送层独立附加于 main() 末尾并全吞异常。"
     }
   ]
 }
