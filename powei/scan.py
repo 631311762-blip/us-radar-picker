@@ -46,13 +46,13 @@ RECLAIM_UPPER_MAX= 0.40  # 收复日上影/振幅 上限（排除长上影冲高
 SECOND_CONFIRM_WIN = 5    # 二次确认扫描窗（收复后交易日）
 SECOND_CONFIRM_UP  = 0.03 # 二次确认日收涨阈值（≥3%）
 SECOND_CONFIRM_VOL = 1.2  # 二次确认放量基准（相对破位前20日均量倍数）
+SECOND_CONFIRM_FRESH = 1  # 二次确认时效：确认日距今≤1交易日才列第一优先级（回测：确认日追高为负期望）
 # ==========================================================================
 
 # ---------------- 立信审计排除集（与流水线共同前置层口径一致）----------------
 # 流水线已物理剔除 ST/退市/次新/立信；本地扫描器需自行消费该名单，避免把立信股推给用户。
 import re as _re
 _LIXIN_PATHS = [
-    os.path.join(HERE, '..', 'common', 'state', 'lixin_exclude.json'),   # 仓库内：powei/ -> common/state/
     os.path.join(HERE, 'us-radar-picker', 'common', 'state', 'lixin_exclude.json'),
     os.path.join(HERE, 'common', 'state', 'lixin_exclude.json'),
     '/workspace/us-radar-picker/common/state/lixin_exclude.json',
@@ -209,7 +209,8 @@ def detect(d):
             vol_ok=(cj['volume']>=d[sig]['volume']) or (avgvol and cj['volume']>=avgvol*SECOND_CONFIRM_VOL)
             if chg>=SECOND_CONFIRM_UP and vol_ok:
                 second_confirm={'day':cj['day'],'gap':j-sig,'chg':round(chg,4),
-                                'vol_ratio':round(cj['volume']/avgvol,2) if avgvol else None}
+                                'vol_ratio':round(cj['volume']/avgvol,2) if avgvol else None,
+                                'sc_age':(N-1)-j}   # 确认日距最新交易日数（时效判断用）
                 break
         op = op_plan(d, sig)   # 操作策略（管三天）
         events.append({
@@ -244,9 +245,10 @@ def score(e):
     # 破位→收复间隔越短越优：1日回 +9，10日回 +0
     if g is not None:
         s += max(0, MAX_GAP - g)
-    # 二次确认（二次提示点）：收复后再现放量上涨确认非单纯反弹，列为第一优先级
+    # 二次确认（二次提示点）：仅「新鲜」确认（确认日距今≤1交易日）列第一优先级 +15；
+    # 过期确认（已跌数日）不再享优先级加分，降级为观察样本，避免旧闻霸榜。
     sc=e.get('second_confirm')
-    if isinstance(sc,dict):
+    if isinstance(sc,dict) and sc.get('sc_age',99)<=SECOND_CONFIRM_FRESH:
         s+=15
     return s
 
@@ -259,7 +261,7 @@ OPER_RULE = """**操作策略（本模型「管三天」，每次推荐必附）
   · 若 **上影线 / 绿阴线**（诱空）→ 等第三天（T+2）**开盘低位**买入。
 - **买入后第三天必须卖出**（固定持有 ≤3 日，不恋战）。
 - **买点量能（分层参考·非硬过滤）**：回测显示「买点放量 + 破位→收复间隔≤3」组合未来 3 日胜率最高（71.5%），列为**量能精选层（优先关注）**；缩量承接型仍保留但排序靠后。两者均不剔除。
-- **二次确认（二次提示点）**：收复后 1~5 日内再现「放量上涨（收涨≥3%）」即确认非单纯反弹，列为**第一优先级**推送；未出现则作为**观察样本**推送，继续跟踪。
+- **二次确认（二次提示点）**：收复后 1~5 日内再现「放量上涨（收涨≥3%）」即确认非单纯反弹；**仅当确认日距今 ≤1 交易日**才列为**第一优先级**推送，确认日距今 >1 交易日（涨势已兑现/回落）则**自动降级为观察样本**，避免旧信号霸榜。**二次确认是"优先级提示"而非"买点"**：回测确认日追高买入为负期望（3日胜率44.5%／均收−0.57%），正期望买点仍在收复日 T+1/T+2；未达确认条件的作为**观察样本**继续跟踪。
 - 风控：跌破支撑下 3~5% 止损；到达 +8~12% 或放量滞涨可提前止盈。"""
 
 UPPER_SHADOW_RATIO=0.5
@@ -376,12 +378,16 @@ def write_outputs(cands, max_age):
     md_path=os.path.join(HERE, f'扫描结果_{today}.md')
     csv_path=os.path.join(HERE, f'scan_results_{today}.csv')
     # Markdown
-    confirmed=[e for e in cands if isinstance(e.get('second_confirm'),dict)]
-    watch=[e for e in cands if not isinstance(e.get('second_confirm'),dict)]
+    confirmed=[e for e in cands if isinstance(e.get('second_confirm'),dict)
+               and e['second_confirm'].get('sc_age',99)<=SECOND_CONFIRM_FRESH]
+    watch=[e for e in cands if not (isinstance(e.get('second_confirm'),dict)
+           and e['second_confirm'].get('sc_age',99)<=SECOND_CONFIRM_FRESH)]
     lines=[f'# 破位后上涨模型 · 每日扫描结果（{today}）', '']
     lines.append(f'> 近 **{max_age}** 个交易日发生"收复支撑"的候选共 **{len(cands)}** 只：'
-                 f'其中 **第一优先级·二次确认 {len(confirmed)}** 只（收复后放量上涨确认，后续上涨概率更高），'
-                 f'**观察样本 {len(watch)}** 只（待确认）。模型为博反弹信号，须严格止盈止损，非投资建议。')
+                 f'其中 **第一优先级·二次确认 {len(confirmed)}** 只（收复后放量上涨确认、且确认日距今 ≤{SECOND_CONFIRM_FRESH} 交易日），'
+                 f'**观察样本 {len(watch)}** 只（待确认或确认已过时效）。模型为博反弹信号，须严格止盈止损，非投资建议。')
+    lines.append(f'> ⚠️ **二次确认是"优先级提示"而非"买点"**：回测显示确认日追高买入为负期望（3日胜率 44.5%／均收 −0.57%，涨停确认更差）；'
+                 f'真正正期望买点仍在收复日 T+1/T+2。**确认日距今 >{SECOND_CONFIRM_FRESH} 交易日的信号自动降级为观察样本、不再列第一优先级。**')
     # ── 第一优先级：二次确认 ──
     if confirmed:
         lines += ['','## 第一优先级 · 二次确认（收复后放量上涨确认）',
