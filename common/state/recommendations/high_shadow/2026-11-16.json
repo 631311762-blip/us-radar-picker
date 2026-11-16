@@ -1,36 +1,6 @@
 {
   "date": "2026-11-16",
   "model": "high_shadow",
-  "count": 1,
-  "picks": [
-    {
-      "code": "300150",
-      "name": "世纪瑞尔",
-      "close": 4.03,
-      "score": 68.5,
-      "board": "创业板",
-      "price": 4.03,
-      "pct": -2.1844660194174725,
-      "turnover": 2.18,
-      "vr": 1.45,
-      "mktcap": 2474998604.0,
-      "raw": {
-        "pct_chg": -2.18,
-        "upper_pct": 2.23,
-        "upper_range": 64.3,
-        "lower_range": 14.3,
-        "vol_ratio": 0.9,
-        "vol_ratio_prev": 1.11,
-        "pos60": 90.2,
-        "pos_quant": 35.3,
-        "posq_prev": 48.5,
-        "pre2_pattern": "阴阴",
-        "ret2": -2.6,
-        "d1": -1.2,
-        "gap": -1.46,
-        "second_condition": "F",
-        "source": "high_shadow"
-      }
-    }
-  ]
+  "count": 0,
+  "picks": []
 }
