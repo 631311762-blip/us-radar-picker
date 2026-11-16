@@ -1,13 +1,16 @@
 # 高位上影线模型 · 仓库接入说明
 
-> 状态：**已落地 · v2.0（第一条件量比 0.85~1.4 + 第二条件 F）** · 2026-11-15 更新，
-> 代码/配置/样本已推送 GitHub `main`。
+> 状态：**已落地 · v2.1（量比 0.85~1.4 + 第二条件 F + 位置阈值 0.90 + 微信推送）** · 2026-11-16 更新，
+> 代码/配置/样本已推送 GitHub `main`，`registry.json` 已 `enabled=true` 纳入每日统一流水线。
 > 原「云盘独立定时」的代码未提供，本目录现按 `low_shadow2`（低位栏）同一套
 > `model_core` 对称复现出高位栏，可直接运行。v1.0 形态/量能/评分阈值一律沿用低位栏；
-> **第一条件量能定为 `[0.85, 1.4]` 硬区间**（v1.1 → v1.2 → v1.3，上限始终 1.4），
-> **第二条件 v2.0 写入 F**：T-1 在 60 日高低区间分位 `[20, 60)` 且前两日阴阳组合
-> ≠「阴阳」。光线传媒(0.881)、华策影视仍在第一条件区间内。
-> 详见下方「v1.1 / v1.2 / v1.3 / v2.0 变更」与「口径与待核对项」。
+> **第一条件量能定为 `[0.85, 1.4]` 硬区间**，**第二条件写入 F**（T-1 分位 `[20, 60)`
+> 且前两日阴阳组合 ≠「阴阳」），**v2.1 位置阈值 `min_ratio` 0.8→0.90**（修正窄幅震荡股
+> 被误判为高位：金牌家居 11-16 收 14.05 距 60 日高 16.71 已跌 15.9% 仍被判高位）。
+> **微信推送**：入口脚本已接入 PushPlus（`push_wechat()`，读 `PUSHPLUS_TOKEN`，markdown 模板），
+> 每日统一流水线与独立兜底 workflow 跑完即推；`--no-push` 仅供本地调试跳过。
+> 【重要】须确认云盘原独立定时已停掉，避免重复运行/重复推送。
+> 详见下方变更记录与「口径与待核对项」。
 
 ## 这个模型是什么
 
@@ -17,7 +20,7 @@
 | | 低位栏 `low_shadow2` | 高位栏 `high_shadow`（本模型） |
 |---|---|---|
 | 方向 | 偏多 · 买入候选 | **偏空 · 风险观察名单** |
-| 位置判定 | `c <= 0.6 × hh60` | **`c >= 0.8 × hh60`** |
+| 位置判定 | `c <= 0.6 × hh60` | **`c >= 0.90 × hh60`**（v2.1） |
 | 命中口径 | 后续上涨 | **后续下跌** |
 | 形态/评分 | 同一套阈值 | 完全沿用，未改 |
 | 量能 | `v/MA5 ≤ 2.2` 且 `v/前日 ≥ 0.5` | **v1.3 起两个量比同时落在 `[0.85, 1.4]`** |
@@ -28,9 +31,11 @@
 high_shadow/
 ├── README.md                    ← 本文件
 ├── config.json                  ← 高位栏参数（.gitignore 忽略，入库需 git add -f）
-│                                  v2.0 两段：volume.volume_band(第一条件) + filter(第二条件 F)
+│                                  v2.1 三段：volume.volume_band(第一条件) + filter(第二条件 F)
+│                                  + position.min_ratio=0.90
 ├── high_shadow_screener.py      ← 选股入口（--mode review）· detect() 输出特征，
 │                                  pass_filter() 应用第二条件（与 low_shadow2/config.filter 同构）
+│                                  + push_wechat() 微信推送（--no-push 可跳过）
 ├── requirements.txt             ← requests / numpy / pandas
 ├── anchor_refine.py             ← 标杆条件精筛（分析脚本，仍用 v1.0 阈值便于对比）
 ├── backtest_anchor.py           ← T+1/T+3 长历史回溯
@@ -56,7 +61,8 @@ high_shadow/
    并缓存到 `state/klines_cache.json.gz`，便于离线复跑与回溯；
 3. **一致性校验**：目标日 K线收盘价与样本池 `price` 偏差 >2% 的股票跳过
    （复权口径或数据源不一致时避免误判）；
-4. **推送**：沿用 `PUSHPLUS_TOKEN` / `SERVERCHAN_SENDKEY`（当前入口未做推送，只落盘）。
+4. **推送**：`push_wechat()` 读 `PUSHPLUS_TOKEN` 走 PushPlus markdown 通道，随每日
+   统一流水线自动推送；`--no-push` 仅供本地调试跳过，推送失败不影响落盘。
 
 ## 运行
 
@@ -66,6 +72,9 @@ python3 high_shadow/high_shadow_screener.py --mode review
 
 # 指定日期补跑 + 轻量回溯
 python3 high_shadow/high_shadow_screener.py --mode review --date 2026-11-13 --backtest
+
+# 本地调试（不发微信）
+python3 high_shadow/high_shadow_screener.py --mode review --date 2026-11-16 --no-push
 
 # 可用参数：--top N（台账前N只）/ --workers N（并发）/ --refresh（忽略缓存重抓）
 ```
@@ -256,18 +265,44 @@ C 表面更亮但 11-13 只剩 1 只、过窄易过拟合；G 更宽松但改善
 中航机载 71.1、金徽酒 69.8。`state/<date>_样本.csv` 新增
 `posq_prev / pre2_pattern / ret2 / d1 / gap` 五列，便于逐票复核第二条件。
 
-### 推送与启用状态
+### 推送与启用状态（2026-11-16 已启用）
 
-- `config.json` / `high_shadow_screener.py` / `README.md` / 研究与回溯脚本 /
-  11-13 样本与统一台账已提交 GitHub `main`；
-- **`common/registry.json` 的 `high_shadow.enabled` 仍为 `false`**，
-  每日 16:05 统一流水线与 23 点兜底均未自动启用，需用户确认后再改 `true`；
-- `.github/workflows/high_shadow.yml` 未改动（入口已存在，但只有手动/兜底触发才运行）。
+- `config.json`（v2.1）/ `high_shadow_screener.py` / `README.md` / 研究与回溯脚本 /
+  11-13、11-16 样本与统一台账已提交 GitHub `main`；
+- **`common/registry.json` 的 `high_shadow.enabled` 已改为 `true`**，纳入每日统一流水线
+  （cmd 无 `--no-push`，跑完自动微信推送）；
+- `.github/workflows/high_shadow.yml` 已加独立定时（北京 16:30）+ 共同前置层 +
+  推送透传，作为主流水线故障时的兜底，也支持手动触发。
 
-## 启用步骤
+## v2.1 变更：位置阈值 0.8→0.90（2026-11-16）
+
+**用户质疑**：金牌家居 11-16 收 14.05，而 10-23 收 15.85（60 日盘中高 16.71），
+已跌 15.9% 却被判「高位」。
+
+**根因**：`min_ratio=0.8` 是从低位栏对称翻转的推定值；对窄幅震荡股，60 日最低价
+可能已达最高的 80% 以上（本例 13.63/16.71=81.6%），比率口径恒真——跌到区间底部
+仍判高位。分位口径给出 13.6%（区间底部），两者结论相反。
+
+**改动**：仅 `config.json` 的 `position.min_ratio` `0.8 → 0.90`，version→v2.1，
+`_change_log` 追加一条；`high_shadow_screener.py` 只更新头部注释。
+
+**依据**（330 根长历史、296 交易日，量比 0.85~1.4 + 形态）：
+
+| 口径 | 信号数 | T+1 均值/胜率 | T+5 均值/胜率 | 聚类t5 |
+|---|---|---|---|---|
+| 比率≥0.80 + F | 1,875 | +0.361%/53.97% | +0.429%/48.43% | 1.20 |
+| **比率≥0.90 + F** | **307** | **+0.344%/59.61%** | **+0.456%/50.16%** | -0.16 |
+| 分位≥0.50 + F | 463 | +0.142%/52.48% | +0.306%/46.44% | 0.50 |
+| 比率≥0.95 + F | 6 | -0.450%/33.3% | -0.857%/33.3% | — |
+
+分位口径最差（定义「高位」应看比率而非区间分位）；0.90 是甜点，0.95 过窄。
+改后 11-16 名单由 2 只收敛到 1 只（世纪瑞尔 90.2% 保留，金牌家居 84.1% 剔除）。
+详见 `高位上影线_位置口径缺陷核实.md` 与 `高位上影线_位置口径修正_回溯对比.csv`。
+
+## 启用步骤（已完成）
 
 1. 代码与 `config.json` 已入库（`config.json` 被 `.gitignore` 忽略，用 `git add -f` 添加）；
-2. **待用户确认**后，把 `common/registry.json` 中 `high_shadow` 的 `enabled` 由 `false` 改为 `true`；
-3. 手动触发一次「高位上影线模型 独立流程」验证自身路径，再触发主流水线验证 registry 路径；
-4. 确认云盘上原来的独立定时**停掉**，避免重复运行；
-5. 核对云盘原 `config.json` 的 `min_ratio`（及 win_rule）后定稿。
+2. `common/registry.json` 的 `high_shadow.enabled` 已改 `true`；
+3. `.github/workflows/high_shadow.yml` 已加定时 + 前置层 + 推送透传；
+4. **【待用户操作】把云盘上原来的「高位上影线」独立定时停掉**，避免重复运行/重复推送；
+5. 云盘原 `config.json` 的 `min_ratio`（及 win_rule）仍待核对，本仓库以 0.90 为准。
