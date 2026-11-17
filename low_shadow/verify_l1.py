@@ -85,8 +85,10 @@ def main():
     res = {"universe_n": len(universe)}
 
     # ---- (1) 筛选/评分/参数函数源码逐字一致 ----
+    # h5_check 的板块策略于 2026-11-17 独立变更（放回来主板、仅排除北交所），
+    # 不属于 L1 不变量，故不纳入逐字对比；其余筛选/评分/参数函数仍须与基线一致。
     funcs = ["extract_last_features", "_check_shadow", "is_low_shadow",
-             "shadow_diagnose", "h5_check", "pct_rank", "rank_candidates",
+             "shadow_diagnose", "pct_rank", "rank_candidates",
              "correct_params", "env_pass", "em_hist", "get_universe"]
     diffs = [fn for fn in funcs
              if inspect.getsource(getattr(old, fn)) != inspect.getsource(getattr(new, fn))]

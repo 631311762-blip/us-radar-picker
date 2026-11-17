@@ -311,7 +311,9 @@ DEFAULT_PARAMS = {
     # 3 日命中 54.1% / +1.82%，5 日命中 57.5% / +2.61%，且保留凌志软件类低上影票。
     # 原型 8 道硬条件保持不变，H5 作为其后的独立精选层。
     "h5_enabled": True,
-    "h5_board_prefix": ["300", "301", "688", "689"],  # 只留创业板/科创板（隐含排除北交所与主板）
+    # 2026-11-17 按用户要求把主板放回来：放行沪深主板+创业板+科创板，仅排除北交所。
+    # 此前口径只留创/科（322→123，5日+2.61%）；放主板后 322→238，5日+0.80%（主板新增样本偏弱，已在报告中说明）。
+    "h5_board_prefix": ["000", "001", "002", "003", "300", "301", "302", "600", "601", "603", "605", "688", "689"],
     "h5_max_drop_pct": -3.0,   # 当日跌幅 <= -3% 剔除（破位非试盘，回测 28 只 5 日 -1.83%）
     "h5_vol_ratio_max": 3.0,   # 量比 > 3 剔除（过度放量，回测 20 只 5 日 -1.68%）
     "h5_amount_max": 1e9,      # 成交额 > 10 亿剔除（大额票是主要亏损源）
@@ -495,8 +497,9 @@ def shadow_diagnose(feat, params):
 def h5_check(symbol, feat, params):
     """H5 精选层：在原型 8 道硬条件之后叠加的过滤规则。
 
-    10 月至今回测（322 → 123 只，5 日均收益 -0.04% → +2.61%）落地的生产口径：
-      只留创业板/科创板 + 排除当日跌>3% + 排除量比>3 + 排除成交额>10亿。
+    当前口径（2026-11-17 起，按用户要求放回来主板）：
+      放行沪深主板+创业板+科创板（排除北交所）+ 排除当日跌>3% + 排除量比>3 + 排除成交额>10亿。
+      322 → 238 只（其中主板新增 115 只，5 日均 -0.98%，整体 5 日 +2.61% → +0.80%）。
     返回 (是否通过, 淘汰原因)；h5_enabled=False 时恒通过（便于 A/B 对照）。
     """
     if not params.get("h5_enabled"):
@@ -505,7 +508,7 @@ def h5_check(symbol, feat, params):
         return False, "K线不足"
     prefixes = tuple(params.get("h5_board_prefix") or ())
     if prefixes and not str(symbol).startswith(prefixes):
-        return False, "板块(仅创/科)"
+        return False, "板块(排除北交所)"
     if feat["pct_chg"] <= params.get("h5_max_drop_pct", -3.0):
         return False, "当日跌幅>3%"
     if feat["vol_ratio"] > params.get("h5_vol_ratio_max", 3.0):

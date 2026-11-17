@@ -24,19 +24,22 @@ for k in ("upper_amp_min", "vol_ratio_min", "low_pos_max_pct", "h5_enabled",
           "h5_max_drop_pct", "h5_vol_ratio_max", "h5_amount_max",
           "param_lock", "min_tune_samples", "candidate_pool"):
     chk("load_params[%s]" % k, p[k] == m.DEFAULT_PARAMS[k], "= %r" % (p[k],))
-chk("板块前缀", tuple(p["h5_board_prefix"]) == ("300", "301", "688", "689"))
+NEW_PREFIX = ("000", "001", "002", "003", "300", "301", "302",
+              "600", "601", "603", "605", "688", "689")
+chk("板块前缀(放主板/排除北交所)", tuple(p["h5_board_prefix"]) == NEW_PREFIX)
 
 print()
 print("=" * 90)
-print("【2】H5 筛选口径：322 条回测样本应得 123 只，11-13 应得 10 只")
+print("【2】H5 筛选口径：322 条回测样本应得 238 只，11-13 应得 11 只")
+print("    （2026-11-17 起按用户要求把主板放回来；旧口径只创/科为 123 / 10 只）")
 d = json.load(open(BASE + "/bt_oct_result.json", encoding="utf-8"))
 picks = d["picks"]
 
 
-def ref_h5(x):  # 回测报告中的 H5 参考实现（独立复现，用于交叉校验）
+def ref_h5(x):  # 独立复现当前 H5 口径（放行主板+创/科创，排除北交所）
     s = x["symbol"]
-    return (s.startswith(("300", "301", "688", "689"))
-            and not s.startswith(("4", "8", "92"))
+    return (s.startswith(NEW_PREFIX)
+            and not s.startswith(("4", "8", "92"))  # 北交所兜底排除
             and x["pct_chg"] > -3.0 and x["vol_ratio"] <= 3.0
             and x["amount"] <= 1e9)
 
@@ -44,13 +47,13 @@ def ref_h5(x):  # 回测报告中的 H5 参考实现（独立复现，用于交�
 got = set(x["symbol"] + "@" + x["date"] for x in picks
           if m.h5_check(x["symbol"], x, p)[0])
 ref = set(x["symbol"] + "@" + x["date"] for x in picks if ref_h5(x))
-chk("全窗口 H5 样本数 = 123", len(got) == 123, "实得 %d" % len(got))
+chk("全窗口 H5 样本数 = 238", len(got) == 238, "实得 %d" % len(got))
 chk("与回测参考实现逐条一致", got == ref, "差异 %d 条" % len(got ^ ref))
 
 y13 = [x for x in picks if x["date"] == "2026-11-13"]
 got13 = [x for x in y13 if m.h5_check(x["symbol"], x, p)[0]]
 chk("11-13 基线 13 只", len(y13) == 13, "实得 %d" % len(y13))
-chk("11-13 H5 保留 10 只", len(got13) == 10, "实得 %d" % len(got13))
+chk("11-13 H5 保留 11 只", len(got13) == 11, "实得 %d" % len(got13))
 ref13 = [x for x in y13 if ref_h5(x)]
 chk("11-13 与回测参考一致", set(x["symbol"] for x in got13) == set(x["symbol"] for x in ref13))
 print("     H5 保留:", "、".join("%s %s" % (x["symbol"], x["name"]) for x in sorted(got13, key=lambda z: -z["score"])))
@@ -61,7 +64,7 @@ print()
 print("  --- 官方归档(东财真实成交额) 13 只交叉验证 ---")
 off = json.load(open(BASE + "/qualified_20261113_171842.json", encoding="utf-8"))["candidates"]
 off13 = [x for x in off if m.h5_check(x["symbol"], x, p)[0]]
-chk("官方口径 H5 也为 10 只", len(off13) == 10, "实得 %d" % len(off13))
+chk("官方口径 H5 也为 11 只", len(off13) == 11, "实得 %d" % len(off13))
 chk("官方口径与回测口径集合一致",
     set(x["symbol"] for x in off13) == set(x["symbol"] for x in got13))
 
@@ -73,7 +76,7 @@ for x in picks:
     if not ok:
         funnel[why] = funnel.get(why, 0) + 1
 print("    ", funnel, "| 合计剔除", sum(funnel.values()), "| 保留", len(got))
-chk("漏斗合计 = 322 - 123", sum(funnel.values()) == 199, "实得 %d" % sum(funnel.values()))
+chk("漏斗合计 = 322 - 238", sum(funnel.values()) == 84, "实得 %d" % sum(funnel.values()))
 
 print()
 print("=" * 90)
