@@ -4,7 +4,7 @@
   "column": "高位",
   "direction": "偏多（高位洗盘后再起观察名单）",
   "win_rule": "up",
-  "version": "v4.0 · 方向对齐重构（看涨口径 2026-11-17）：废除看跌基因的第二条件 F（filter.enabled=false），量比上限 1.4→2.7 以容纳放量洗盘确认；核心信号回归『强形态 + 高位』——四只标杆（光线/华策/金逸/通合）形态与位置全部通过，此前仅被 F 的『前一日分位<60』和量比上限 1.4 误杀。位置维持 v3.0 双条件：比率≥0.88 ∩ 当日 60 日分位≥0.45。",
+  "version": "v4.1 · 看涨口径 + 偏空提醒列（用户口径 2026-11-17）：模型仍按 v4.0 实施（废除看跌基因的第二条件 F，量比上限 1.4→2.7 容纳放量洗盘，核心信号『强形态+高位』，四只标杆全部入选）；v4.1 新增 bearish_hint 偏空提醒列——入选票中量比(vol_ratio_prev 或 vol_ratio)任一超 v3.0 旧上限 1.4 的放量票标注『偏空提醒·放量』提示关注见顶风险，仅作提示不影响入选与排序。位置维持双条件：比率≥0.88 ∩ 当日 60 日分位≥0.45。",
   "count": 22,
   "core_signals": 22,
   "filtered_by_second_condition": 0,
@@ -59,6 +59,7 @@
         "d1": 9.96,
         "gap": -3.13,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     },
@@ -88,6 +89,7 @@
         "d1": 0.07,
         "gap": 1.0,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     },
@@ -117,6 +119,7 @@
         "d1": -3.27,
         "gap": 3.13,
         "second_condition": "off",
+        "bearish_hint": "偏空提醒·放量(vol_ratio_prev=1.62)",
         "source": "high_shadow"
       }
     },
@@ -146,6 +149,7 @@
         "d1": -1.81,
         "gap": 0.57,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     },
@@ -175,6 +179,7 @@
         "d1": -2.31,
         "gap": 0.0,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     },
@@ -204,6 +209,7 @@
         "d1": 7.35,
         "gap": 2.08,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     },
@@ -233,6 +239,7 @@
         "d1": 0.13,
         "gap": 0.13,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     },
@@ -262,6 +269,7 @@
         "d1": -2.08,
         "gap": 0.0,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     },
@@ -291,6 +299,7 @@
         "d1": -2.34,
         "gap": -0.23,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     },
@@ -320,6 +329,7 @@
         "d1": -0.59,
         "gap": 0.46,
         "second_condition": "off",
+        "bearish_hint": "偏空提醒·放量(vol_ratio_prev=1.42)",
         "source": "high_shadow"
       }
     },
@@ -349,6 +359,7 @@
         "d1": -5.93,
         "gap": 0.83,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     },
@@ -378,6 +389,7 @@
         "d1": 3.05,
         "gap": -0.05,
         "second_condition": "off",
+        "bearish_hint": "偏空提醒·放量(vol_ratio=1.59)",
         "source": "high_shadow"
       }
     },
@@ -407,6 +419,7 @@
         "d1": 1.45,
         "gap": -0.55,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     },
@@ -436,6 +449,7 @@
         "d1": -3.94,
         "gap": -0.33,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     },
@@ -465,6 +479,7 @@
         "d1": -4.34,
         "gap": 0.92,
         "second_condition": "off",
+        "bearish_hint": "偏空提醒·放量(vol_ratio_prev=1.91/vol_ratio=1.51)",
         "source": "high_shadow"
       }
     },
@@ -494,6 +509,7 @@
         "d1": -0.95,
         "gap": 0.26,
         "second_condition": "off",
+        "bearish_hint": "偏空提醒·放量(vol_ratio_prev=1.67/vol_ratio=1.69)",
         "source": "high_shadow"
       }
     },
@@ -523,6 +539,7 @@
         "d1": -1.96,
         "gap": 0.21,
         "second_condition": "off",
+        "bearish_hint": "偏空提醒·放量(vol_ratio_prev=2.36/vol_ratio=2.08)",
         "source": "high_shadow"
       }
     },
@@ -552,6 +569,7 @@
         "d1": 1.4,
         "gap": 0.25,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     },
@@ -581,6 +599,7 @@
         "d1": -0.6,
         "gap": -0.33,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     },
@@ -610,6 +629,7 @@
         "d1": -1.31,
         "gap": 0.09,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     },
@@ -639,6 +659,7 @@
         "d1": -1.15,
         "gap": 0.27,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     },
@@ -668,6 +689,7 @@
         "d1": -0.53,
         "gap": 0.0,
         "second_condition": "off",
+        "bearish_hint": "",
         "source": "high_shadow"
       }
     }
