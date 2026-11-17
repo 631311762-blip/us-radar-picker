@@ -108,7 +108,11 @@ def settle_one(p):
     n = len(b)
     c0 = c[i]
 
+    # 2026-11-18：保留 model 版本标记，让结算账本可按版本追溯
+    # （历史遗留记录无此字段，由 is_v3() 按 kind 兜底判定）
+    _model = p.get("model") or ("v1" if p.get("kind") == "v1-旧模型" else "v3")
     out = dict(date=p["date"], code=p["code"], name=p["name"], kind=p["kind"],
+               model=_model,
                score=p["score"], close=c0, pct=p.get("pct"),
                settled_at=datetime.date.today().isoformat())
     # g10 / d10：需要推荐日之后 10 个完整交易日
@@ -214,9 +218,29 @@ def observe(preds, last_date):
     return out
 
 
+# ────────────────────────────── 版本口径（2026-11-18）──────────────────────────────
+def is_v3(r):
+    """一条结算样本是否属于当前 v3.1 主榜口径。
+
+    2026-11-18 用户指出「结算不该用旧模型」。历史账本（feedback_db.jsonl）里
+    混有 2026-10-23 的 v1 旧模型样本（kind='v1-旧模型'、pct=null）。这些样本
+    只应作为历史参考，不能参与 v3.1 的命中率统计/因子归因/进化门槛计数。
+
+    判定优先级：
+      1) 有 model 字段 → 只认 'v3'（新账本 settle_one 已写入 model）；
+      2) 无 model 字段（历史遗留）→ 按 kind 兜底：'v1-旧模型' 为旧，其余为 v3。
+    """
+    m = r.get("model")
+    if m is not None:
+        return m == "v3"
+    return r.get("kind") != "v1-旧模型"
+
+
 # ────────────────────────────── 第3层：因子归因 ──────────────────────────────
 def attribute(db, factors):
-    """HIT 组 vs MISS 组的因子百分位均值差（标准化为 Cohen's d）"""
+    """HIT 组 vs MISS 组的因子百分位均值差（标准化为 Cohen's d）
+    只用 v3.1 主榜样本（v1 旧模型不参与，避免旧口径污染新权重归因）"""
+    db = [r for r in db if is_v3(r)]
     hit = [r for r in db if r.get("hit") == 1 and r.get("pct")]
     mis = [r for r in db if r.get("hit") == 0 and r.get("pct")]
     if len(hit) < 8 or len(mis) < 8:
@@ -328,20 +352,30 @@ def track_md(obs, last_date):
 
 
 def review_md(db, att, evo, state, hold_stats):
-    """模型复盘段"""
+    """模型复盘段 —— 统计口径按 v3.1 主榜，v1 旧模型单列历史参考（2026-11-18）"""
     md = ["### 🔬 模型复盘（自我进化）"]
-    done = [r for r in db if r.get("settled")]
+    # 2026-11-18：把 v1 旧模型样本从 v3.1 口径中隔离
+    done = [r for r in db if r.get("settled") and is_v3(r)]
+    done_old = [r for r in db if r.get("settled") and not is_v3(r)]
     if not done:
-        n_pend = len([r for r in db if not r.get("settled")])
-        md.append(f"　已结算样本 0 条（{n_pend} 条仍在观察期，推荐满 11 个交易日后结算）。")
+        n_pend = len([r for r in db if not r.get("settled") and is_v3(r)])
+        md.append(f"　v3.1 已结算样本 0 条（{n_pend} 条仍在观察期，推荐满 11 个交易日后结算）。")
         md.append(f"　达到 {MIN_NEW} 条后才会触发权重重估——宁可慢，也不拿几天的噪声改模型。")
+        if done_old:
+            md.append(f"　（另有 {len(done_old)} 条 v1 旧模型历史样本，不计入 v3.1 口径。）")
         return md
     hit = sum(1 for r in done if r.get("hit"))
     n = len(done)
     g = sum(r.get("g10", 0) for r in done) / n
     d = sum(r.get("d10", 0) for r in done) / n
-    md.append(f"　已结算 **{n}** 条｜10日浮盈≥20% 命中 **{hit}** 条（**{hit/n*100:.1f}%**）"
+    md.append(f"　**v3.1 口径**：已结算 **{n}** 条｜10日浮盈≥20% 命中 **{hit}** 条（**{hit/n*100:.1f}%**）"
               f"｜平均最大浮盈 {g:.1f}%｜平均最大回撤 {d:.1f}%")
+    if done_old:
+        ho = sum(1 for r in done_old if r.get("hit"))
+        go = sum(r.get("g10", 0) for r in done_old) / len(done_old)
+        md.append(f"　〔历史参考〕v1 旧模型另 {len(done_old)} 条：命中 "
+                  f"{ho}/{len(done_old)}={ho/len(done_old)*100:.1f}%｜平均最大浮盈 {go:.1f}%"
+                  f"（旧口径样本，不参与上方统计与权重进化）。")
     if hold_stats:
         md.append(f"　参照：holdout 测试期该权重下命中率 {hold_stats[0]:.1f}%，"
                   f"随机基准约 {hold_stats[1]:.1f}%")
@@ -437,7 +471,9 @@ def run(report_only=False, force=False):
     evo = None
     hold_stats = None
     if hold and not report_only:
-        state["n_new_since_evolve"] = state.get("n_new_since_evolve", 0) + len(new)
+        # 2026-11-18：进化门槛只累计 v3.1 新结算样本（v1 旧模型不计入）
+        state["n_new_since_evolve"] = state.get("n_new_since_evolve", 0) + sum(
+            1 for r in new if is_v3(r))
         state["days_since_evolve"] = state.get("days_since_evolve", 99) + 1
         base_l = holdout_eval([W[k] for k in factors], hold["A"], factors)
         rand = sum(sum(s["y"]) for s in hold["A"]) / max(1, sum(len(s["y"]) for s in hold["A"])) * 100
@@ -449,14 +485,14 @@ def run(report_only=False, force=False):
             fit["weights"] = {k: cand[j] for j, k in enumerate(factors)}
             fit["evolved"] = dict(ts=datetime.datetime.now().isoformat(timespec="seconds"),
                                   from_ver=old.get("ver", "v3.1"),
-                                  samples=len([r for r in db if r.get("settled")]))
+                                  samples=len([r for r in db if r.get("settled") and is_v3(r)]))
             fit["ver"] = "v3.1+evo" + datetime.date.today().strftime("%m%d")
             jsave(FIT, fit)
             jappend(HIST, dict(ts=datetime.datetime.now().isoformat(timespec="seconds"),
                                reason=evo["reason"], eta=evo.get("eta"),
                                before=evo["before"], after=evo["after"],
                                base=evo["base"], cand=evo["cand"],
-                               n_samples=len([r for r in db if r.get("settled")]),
+                               n_samples=len([r for r in db if r.get("settled") and is_v3(r)]),
                                att=[dict(x) for x in (att or [])]))
             state.update(n_new_since_evolve=0, days_since_evolve=0,
                          last_evolve=datetime.date.today().isoformat())
