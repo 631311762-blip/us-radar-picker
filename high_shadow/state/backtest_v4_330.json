@@ -1,38 +1,38 @@
 {
   "summary": {
-    "date": "v4.0-backtest",
-    "signals": 4334,
-    "stocks": 2623,
-    "version": "v4.0",
+    "date": "v4.2-backtest",
+    "signals": 1682,
+    "stocks": 992,
+    "version": "v4.2",
     "horizons": [
       "T+1",
       "T+3"
     ],
-    "config": "量比[0.85,2.7] F关 位置比率>=0.88∩分位>=0.45 看涨口径（上涨=命中）",
-    "t1": {
-      "mean": 0.144,
-      "median": 0.0,
-      "上涨准确率%": 49.45,
-      "下跌占比%": 50.55,
-      "日聚类t": 0.17
-    },
-    "t3": {
-      "mean": -0.04,
-      "median": -0.429,
-      "上涨准确率%": 45.89,
-      "下跌占比%": 54.11,
-      "日聚类t": -0.273
-    },
+    "config": "量比[0.85,2.7] F关 位置比率>=0.88∩分位>=0.45 看涨口径（上涨=命中）+ 板块过滤创业板300/301+科创板688",
     "period": {
       "start": "2025-09-18",
       "end": "2026-11-10",
       "trading_days": 274,
-      "signals_per_day_avg": 15.8,
-      "signals_per_day_median": 13.0,
-      "signals_per_day_max": 98,
-      "signals_per_day_max_date": "2026-05-21",
-      "empty_days": 8,
-      "empty_days_pct": 2.9
+      "signals_per_day_avg": 6.1,
+      "signals_per_day_median": 5.0,
+      "signals_per_day_max": 49,
+      "signals_per_day_max_date": "2026-01-29",
+      "empty_days": 27,
+      "empty_days_pct": 9.9
+    },
+    "t1": {
+      "mean": 0.27,
+      "median": 0.129,
+      "上涨准确率%": 50.89,
+      "下跌占比%": 49.11,
+      "日聚类t": 0.077
+    },
+    "t3": {
+      "mean": 0.094,
+      "median": -0.409,
+      "上涨准确率%": 46.37,
+      "下跌占比%": 53.63,
+      "日聚类t": 0.405
     }
   }
 }
