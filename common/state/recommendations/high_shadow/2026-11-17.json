@@ -1,0 +1,37 @@
+{
+  "date": "2026-11-17",
+  "model": "high_shadow",
+  "count": 1,
+  "picks": [
+    {
+      "code": "688100",
+      "name": "威胜信息",
+      "close": 26.04,
+      "score": 56.5,
+      "board": "科创板",
+      "price": 26.04,
+      "pct": -1.03,
+      "turnover": 0.54,
+      "vr": 1.02,
+      "mktcap": 12803481957.0,
+      "raw": {
+        "pct_chg": -1.03,
+        "upper_pct": 2.19,
+        "upper_range": 80.3,
+        "lower_range": 18.3,
+        "vol_ratio": 1.02,
+        "vol_ratio_prev": 0.86,
+        "pos60": 94.6,
+        "pos_quant": 67.0,
+        "posq_prev": 72.9,
+        "pre2_pattern": "阳阳",
+        "ret2": 3.58,
+        "d1": 0.8,
+        "gap": -0.99,
+        "second_condition": "off",
+        "bearish_hint": "",
+        "source": "high_shadow"
+      }
+    }
+  ]
+}
