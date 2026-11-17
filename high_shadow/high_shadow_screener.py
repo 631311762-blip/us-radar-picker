@@ -62,6 +62,7 @@ CFG = json.load(open(os.path.join(BASE_DIR, "config.json"), encoding="utf-8"))
 SH, POS, VOL, SC = CFG["shape"], CFG["position"], CFG["volume"], CFG["score"]
 FLT = CFG.get("filter", {})   # 第二条件（可选过滤层）；旧版 config 缺该段时为空 dict，向后兼容
 PSH = CFG.get("push", {})     # 微信推送层（与 low_shadow2/config.push 同构）；缺该段时默认关闭
+BH = CFG.get("bearish_hint", {})  # 偏空提醒层（v4.1）：量比超 v3.0 旧上限即标注，仅提示不影响入选
 KLINE_COUNT = 70
 
 UNIVERSE_JSON = os.environ.get("UNIVERSE_JSON", os.path.join(ROOT, "common", "state", "universe.json"))
@@ -252,14 +253,17 @@ def build_markdown(date_s, picks, stats=None, replay=False, top=20):
     L = ["### 高位上影线 · %s · %d只" % (date_s, len(picks)), ""]
     n = len(picks)
     if n:
-        L += ["| 代码 | 名称 | 评分 | 收盘 | 涨跌 |",
-              "|---|---|---|---|---|"]
+        L += ["| 代码 | 名称 | 评分 | 收盘 | 涨跌 | 偏空 |",
+              "|---|---|---|---|---|---|"]
         for p in picks[:top]:
             r = p.get("raw") or {}
-            L.append("| %s | %s | %s | %s | %s |" % (
+            hint = "⚠偏空" if r.get("bearish_hint") else ""
+            L.append("| %s | %s | %s | %s | %s | %s |" % (
                 p.get("code", ""), p.get("name", ""), p.get("score", ""),
-                p.get("close", ""), r.get("pct_chg", "—")))
+                p.get("close", ""), r.get("pct_chg", "—"), hint))
         L.append("")
+        if any((p.get("raw") or {}).get("bearish_hint") for p in picks[:top]):
+            L.append("⚠偏空＝量比超 1.4 的放量票，警惕高位见顶，请重点关注。")
     else:
         L += ["今日空仓（0 只）。", ""]
     if replay:
@@ -348,6 +352,28 @@ def pass_filter(row):
     return True
 
 
+def bearish_hint_of(row):
+    """偏空提醒（v4.1，config.bearish_hint 驱动）：入选票中量比超 v3.0 旧上限即标注。
+
+    vol_ratio_prev 或 vol_ratio 任一 > threshold（默认 1.4）→ 返回提醒标签，否则返回空串。
+    **只作风险提示列**，不参与 sig 判定、不影响入选与评分排序。
+    enabled=false 或旧版 config 缺该段时恒返回空串，向后兼容。
+    """
+    if not BH.get("enabled", False):
+        return ""
+    try:
+        th = float(BH.get("threshold", 1.4))
+        fields = BH.get("fields", ["vol_ratio_prev", "vol_ratio"])
+        hot = [f for f in fields if row.get(f) is not None
+               and np.isfinite(float(row[f])) and float(row[f]) > th]
+    except (TypeError, ValueError, KeyError):
+        return ""
+    if hot:
+        vals = "/".join("%s=%.2f" % (f, float(row[f])) for f in hot)
+        return "%s(%s)" % (BH.get("label", "偏空提醒·放量"), vals)
+    return ""
+
+
 def vol_score(vr, vrp):
     t = SC["vol_tiers"]
     if vr > t["cap"]:
@@ -386,6 +412,7 @@ def raw_of(r):
         "d1": round(float(r["d1"]), 2) if pd.notna(r["d1"]) else None,
         "gap": round(float(r["gap"]), 2) if pd.notna(r["gap"]) else None,
         "second_condition": (FLT.get("rule", "") if FLT.get("enabled") else "off"),
+        "bearish_hint": bearish_hint_of(r),
         "source": "high_shadow",
     }
 
@@ -567,7 +594,8 @@ def main():
     csv_path = os.path.join(STATE_DIR, "%s_样本.csv" % date_s)
     cols = ["code", "name", "close", "pct", "turnover", "score", "board",
             "upper_pct", "upper_range", "lower_range", "vol_ratio", "vol_ratio_prev",
-            "pos60", "pos_quant", "posq_prev", "pre2_pattern", "ret2", "d1", "gap"]
+            "pos60", "pos_quant", "posq_prev", "pre2_pattern", "ret2", "d1", "gap",
+            "bearish_hint"]
     with open(csv_path, "w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f)
         w.writerow(cols)
@@ -577,7 +605,7 @@ def main():
                         p["score"], p["board"], r["upper_pct"], r["upper_range"],
                         r["lower_range"], r["vol_ratio"], r["vol_ratio_prev"],
                         r["pos60"], r["pos_quant"], r["posq_prev"], r["pre2_pattern"],
-                        r["ret2"], r["d1"], r["gap"]])
+                        r["ret2"], r["d1"], r["gap"], r.get("bearish_hint", "")])
 
     print("[3/3] ==== 高位上影线（洗盘再起·看涨）· %s · 样本池%d 有效K线%d K线缺失%d 价格校验剔除%d "
           "核心信号%d 第二条件剔除%d 最终候选%d ===="
@@ -586,10 +614,11 @@ def main():
     for i, p in enumerate(picks[:args.top], 1):
         r = p["raw"]
         print("%2d. %s %s 收%.2f 评分%.1f 上影/股价%.2f%% 上影/全幅%.0f%% "
-              "量比MA5 %.2f 60日位置%.1f%% 前一分位%.1f%% %s"
+              "量比MA5 %.2f 60日位置%.1f%% 前一分位%.1f%% %s%s"
               % (i, p["code"], p["name"], p["close"], p["score"], r["upper_pct"],
                  r["upper_range"], r["vol_ratio"], r["pos60"],
-                 r["posq_prev"] or 0, r["pre2_pattern"]))
+                 r["posq_prev"] or 0, r["pre2_pattern"],
+                 ("  ⚠"+r["bearish_hint"]) if r.get("bearish_hint") else ""))
     if not picks:
         print("本交易日无高位上影线候选。")
 
