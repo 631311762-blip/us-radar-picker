@@ -166,6 +166,20 @@ def main():
             print("  ·", m)
     except Exception as e:
         print("  [警告] 影子跟踪异常，不影响主流程：", e)
+
+    # ── ④c 影子假设跟踪（H2）：涨停基因因子降权 A/B 对照（2026-11-18 用户要求走影子试验）
+    #    与主榜同池同口径，只记不推不改；两组各自结算满60条才裁定。独立于 H1。
+    sh2 = dict(msg=[], md=[])
+    try:
+        import shadow_h2
+        print("\n" + "=" * 78)
+        print("【影子环节】H2 假设跟踪：记录 → 结算 → 闸门评估")
+        print("=" * 78)
+        sh2 = shadow_h2.run()
+        for m in sh2.get("msg", []):
+            print("  ·", m)
+    except Exception as e:
+        print("  [警告] H2 影子跟踪异常，不影响主流程：", e)
     blocked, seen = [], set()
     for b in r["blocked"]:
         if b["code"] in seen:
@@ -273,6 +287,9 @@ def main():
     # 影子假设跟踪段
     if sh and sh.get("md"):
         md += sh["md"]
+        md.append("")
+    if sh2 and sh2.get("md"):
+        md += sh2["md"]
         md.append("")
 
     # 模型复盘

@@ -1,0 +1,46 @@
+{
+ "id": "H2",
+ "name": "涨停基因因子降权（lu10/lu20/shrink 减半）",
+ "registered": "2026-11-18",
+ "registered_by": "用户指令（方式2：影子观察，不手改 factor_fit.json）",
+ "status": "watching",
+ "status_note": "watching=影子跟踪中；await_control=试验组已满60条待对照组；promote_ready=通过闸门可提交进化；rejected=未通过",
+ "origin": {
+  "trigger": "用户反馈「奥雅股份这么好的主升浪你都排名低，模型不完美」，要求调整涨停数评分",
+  "finding": "奥雅 10-21/10-22 形态因子全部 90%+，但 lu10/lu20/shrink 三个涨停基因因子（权重占 27.8%）全为 0 分，是排名低的真正原因；它从无涨停，创业板涨停需 +19.5%",
+  "constraint": "factor_fit.json 明令禁改；新逻辑先影子观察满 60 条结算再裁定；不得为单一样本过拟合",
+  "prior_evidence": "权重敏感性回测（112 交易日×4 权重）显示：全删涨停3因子奥雅 10-21 仍排 74、10-22 排 21 仍不入榜；且整体 5 日收益/胜率/命中率差异 p=0.85~0.91 不显著 → 改权重既救不了奥雅也不改善模型，故走影子前瞻验证而非直接改权重"
+ },
+ "definition": {
+  "change": "涨停基因三因子 lu10/lu20/shrink 权重各 ×0.5，其余 6 因子权重不变，重新归一化（分母=新权重和）",
+  "weights_formula": "W2[k] = W[k]*0.5 if k in {lu10,lu20,shrink} else W[k]; score = sum(W2[k]*pct[k])/sum(W2)*100",
+  "scope": "与主榜同池同口径：同一交易日、同一批已过立信/形态闸门的 valid rows，同一 buyable 过滤、同一新鲜度分层、同一板块配额；唯一变量是权重",
+  "control_group": "control=当前真实权重 v3.1+evo1113；experiment=减权版。两组各自记账各自结算，横向对照",
+  "note": "只记不推不改；影子账本绝不写 predictions.json / feedback_db.jsonl / factor_fit.json"
+ },
+ "protocol": {
+  "method": "影子前瞻对照：两组同池选票，用 feedback.settle_one 同口径结算 g10/hit，避免历史回测的未来函数与过拟合",
+  "settle_need": 60,
+  "settle_days": "推荐日后需 10 个完整交易日才结算；记账当日不计，T+11 起陆续出结算",
+  "gate": "试验组 g10 均值 ≥ 对照组 且 命中率(g10≥20%) ≥ 对照组 → promote_ready；否则 rejected",
+  "adoption": "promote_ready 后仍不自动改模型，需在下一次进化会话中由闸门/用户最终裁定；且需证明非单一样本过拟合"
+ },
+ "shadow": {
+  "log": "shadow_h2_log.jsonl",
+  "db": "shadow_h2_db.jsonl",
+  "start_from": "2026-11-18",
+  "groups": {
+   "control": {
+    "n_recorded": 0,
+    "n_settled": 0,
+    "stat": null
+   },
+   "experiment": {
+    "n_recorded": 0,
+    "n_settled": 0,
+    "stat": null
+   }
+  },
+  "n_days_recorded": 0
+ }
+}
