@@ -63,6 +63,7 @@ SH, POS, VOL, SC = CFG["shape"], CFG["position"], CFG["volume"], CFG["score"]
 FLT = CFG.get("filter", {})   # 第二条件（可选过滤层）；旧版 config 缺该段时为空 dict，向后兼容
 PSH = CFG.get("push", {})     # 微信推送层（与 low_shadow2/config.push 同构）；缺该段时默认关闭
 BH = CFG.get("bearish_hint", {})  # 偏空提醒层（v4.1）：量比超 v3.0 旧上限即标注，仅提示不影响入选
+BD = CFG.get("board_filter", {})  # 板块过滤层（v4.2）：只保留创业板/科创板，剔除主板/北交所
 KLINE_COUNT = 70
 
 UNIVERSE_JSON = os.environ.get("UNIVERSE_JSON", os.path.join(ROOT, "common", "state", "universe.json"))
@@ -145,12 +146,33 @@ def save_cache(cache):
         json.dump(cache, f)
 
 
+def code_board_allowed(code):
+    """板块过滤核心（v4.2）：按代码前缀判定是否属于放行板块（创业板300/301、科创板688）。
+    board_filter.enabled=false 时恒通过。用于回测等只有 code 无 board 字段的场景。"""
+    if not BD.get("enabled"):
+        return True
+    return str(code).zfill(6).startswith(tuple(BD.get("code_prefixes", [])))
+
+
+def board_allowed(x):
+    """样本池板块过滤（v4.2）：按 board 字段白名单；字段缺失时按 code_prefixes 前缀兜底。"""
+    if not BD.get("enabled"):
+        return True
+    board = str(x.get("board", "") or "")
+    if board:
+        return board in BD.get("boards", [])
+    return code_board_allowed(x.get("code", ""))
+
+
 def load_universe():
     with open(UNIVERSE_JSON, encoding="utf-8") as f:
         data = json.load(f)
     if isinstance(data, dict):
         data = data.get("universe") or data.get("data") or []
-    return [x for x in data if x.get("code")]
+    rows = [x for x in data if x.get("code")]
+    if BD.get("enabled"):
+        rows = [x for x in rows if board_allowed(x)]
+    return rows
 
 
 # ----------------------------------------------------------------------------
@@ -423,6 +445,8 @@ def raw_of(r):
 def run_backtest(cache, out_dir, date):
     rows = []
     for code, bars in cache.items():
+        if not code_board_allowed(code):
+            continue
         if not bars or len(bars) < POS["window"] + 7:
             continue
         try:
@@ -530,6 +554,8 @@ def main():
     picks, scanned, kmiss, mismatch, filtered = [], 0, 0, 0, 0
     print("[2/3] 扫描 %s 的高位上影线信号 ..." % target.strftime("%Y-%m-%d"))
     for code, bars in cache.items():
+        if not code_board_allowed(code):
+            continue
         x = uni_map.get(code, {})
         nm = x.get("name", "")
         if "ST" in nm.upper() or nm.startswith("*"):
