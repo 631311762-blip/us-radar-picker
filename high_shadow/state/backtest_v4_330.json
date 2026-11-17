@@ -22,6 +22,17 @@
       "上涨准确率%": 45.89,
       "下跌占比%": 54.11,
       "日聚类t": -0.273
+    },
+    "period": {
+      "start": "2025-09-18",
+      "end": "2026-11-10",
+      "trading_days": 274,
+      "signals_per_day_avg": 15.8,
+      "signals_per_day_median": 13.0,
+      "signals_per_day_max": 98,
+      "signals_per_day_max_date": "2026-05-21",
+      "empty_days": 8,
+      "empty_days_pct": 2.9
     }
   }
 }
