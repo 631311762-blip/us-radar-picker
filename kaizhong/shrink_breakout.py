@@ -1,26 +1,37 @@
 # -*- coding: utf-8 -*-
 """
-缩量二次突破模型 (Shrink-Volume Double Breakout, SVDB) · 独立扫描器
+缩量二次突破模型 (Shrink-Volume Double Breakout, SVDB) · 黄金样本严格拟合版 v3
 
-来源：2016-2026 全A股回测验证版本（同一数据同口径对比，10日胜率 63.2%、
-平均收益 +4.51%、盈亏比 1.61；同期凯众v4放量突破仅 41.7% / +0.29%）。
-用户 2026-11-18 决定用它替换凯众 v4。
+来源：用户以凯众股份(603037)、仁信新材(301395)为黄金样本，逐 K 线拟合；
+      2026-11-18 用户二次校正："横盘1-3个月最好，试盘日应是横盘期间成交量最大的地方"。
 
-形态链条：
-  1) 横盘平台（25 日，高低振幅 ≤0.40）
-  2) 放量假突破：量 ≥ 平台均量 ×1.8、最高价 ≥ 平台上沿 ×1.015，
-     且冲高回落（上影）或数日内收盘跌回平台上沿 = 套人
-  3) ★突破强度 high[b1]/平台上沿 ≥ 1.15（回测验证的唯一核心胜负手）
-  4) 洗盘 5~45 日
-  5) 缩量二次上攻（提示日 T）：最高价 ≥ 平台上沿 ×0.97、收盘 ≥ ×0.90，
-     且成交量 ≤ 首次突破量 ×0.60（浮筹洗净，少量资金即可拉升）
-  5+) ★方向性硬约束（2026-11-18 修复）：提示日必须收涨（收盘 > 前一日收盘）
-     且收盘 ≥ 当日最高价 ×0.90。缺这两条时，模型会把「冲高回落长上影大阴线」
-     与「下跌途中缩量横盘」误判为二次上攻 —— 实盘曾选出提示日 -5.72% / -9.66% 的标的。
+形态链条（★为 v3 相对 v2 的关键收紧）：
+  1) ★横盘平台：连续 40~60 交易日（约1-3个月）窄幅横盘，
+     ★硬约束：收盘价落在平台均值 ±5% 内的天数占比 ≥ 85%（真横盘，排除单边趋势/V反转）
+     压力线 ph = 横盘期「收盘价」p95（滤孤立冲高）；支撑线 sup = 收盘价 p5（滤孤立低点）
+     黄金样本：凯众 压力10.54/支撑9.69、仁信 压力12.63≈12.7/支撑11.45≈11.46（与用户口径一致）
+  2) ★试盘日（首突 b1）= 横盘期内成交量最大的一天（硬条件），
+     最高价 ≥ 压力线×1.02（略过即可），收盘 ≥ 压力线；量 ≥ 平台均量×3.0
+  3) ★突破失败并破位（2026-11-18 改）：首突后出现过 收盘 < 支撑线 sup（跌破箱体下沿）
+     比旧的"压力线×0.91"更贴合黄金样本：凯众破位日10-15收9.52<9.69、仁信11-03收11.12<11.46
+  4) 快速收复 + 洗盘 10~30 日（2026-11-18 定；容纳凯众12日/仁信22日，两黄金样本均命中）
+  5) 缩量二次上攻（提示日 T）：最高价 ≥ 首突日高×0.95（达到前高即可关注，2026-11-18 由0.97放宽），
+     量 ≤ 首突量×0.55（无需多少量就能涨），收盘 ≥ 压力线×0.98（已站上）
+  6) 方向性硬约束：提示日收涨 且 收盘 ≥ 当日最高价×0.90
   提示日 T 即买点，收盘价买入，止损 -5%。
 
-接口与 stance_hint.py 完全对齐（STANCE 参数 + scan_one），
-供 daily_v4.py 无缝调用；台账/复盘/推送/合规剔除等运维框架保持不变。
+v3 排除效果（用户指出的问题票）：
+  · 丽珠集团 000513：9-28 试盘前的"平台"收盘集中度仅 20%，是 V 型反转非横盘 → 排除
+  · 日出东方 603366：集中度 50%、趋势 +20% → 排除
+  · 出版传媒 601999：集中度 70%、趋势 +24% → 排除
+  · 锋龙股份 002931：集中度 40% → 排除
+
+版本历史：
+  v1 非黄金样本拟合（日内高压力线 + 1.15 强度），备份 shrink_breakout_v1.py
+  v2 收盘压力线 + 放量3.5倍，但横盘仅25日、未要求试盘日最大量，备份 shrink_breakout_v2.py
+  v3 ★当前：横盘1-3月 + 集中度≥85% + 试盘日横盘最大量
+
+接口与 stance_hint / v1 / v2 完全对齐（STANCE + scan_one），供 daily_v4.py 无缝调用。
 """
 import os
 import json
@@ -32,44 +43,94 @@ import pandas as pd
 
 import lib
 
-# -------- 参数（回测最优，勿随意修改）--------
+# -------- 参数（黄金样本严格拟合口径，勿随意修改）--------
 STANCE = {
-    # 平台
-    "plat_days": 25,             # 平台观察窗口（交易日）
-    "plat_amp_max": 0.40,        # 平台高低振幅上限 (high-low)/mid
-    # 首次放量假突破
-    "break_vol_ratio": 1.8,      # 首突量 ≥ 平台均量 × 该值
-    "break_high_ratio": 1.015,   # 首突最高价 ≥ 平台上沿 × 该值
-    "upper_shadow": 1.035,       # 上影判定 high/close > 该值
-    "fail_days": 8,              # 假突破确认窗口（收盘跌回平台上沿）
-    "min_strength": 1.15,        # ★核心：突破强度 high[b1]/平台上沿 下限
-    # 缩量二次上攻（提示日）
-    "min_gap": 5,                # 提示日距首突最小间隔
-    "max_gap": 45,               # 提示日距首突最大间隔
-    "approach": 0.97,            # 提示日最高价 ≥ 平台上沿 × 该值
-    "close_conf": 0.90,          # 提示日收盘 ≥ 平台上沿 × 该值
-    "shrink": 0.60,              # ★核心：提示日量 ≤ 首突量 × 该值
-    # 方向性硬约束（2026-11-18 实测修复，见下）
-    "require_up_day": True,      # 提示日必须收涨（收盘 > 前一日收盘）
-    "close_high_min": 0.90,      # 提示日收盘 ≥ 当日最高价 × 该值（排除长上影大阴线）
+    # ★横盘平台（1-3个月）
+    "plat_days_min": 40,         # 横盘最短交易日（约2个月）
+    "plat_days_max": 60,         # 横盘最长交易日（约3个月）
+    "plat_concentration": 0.85,  # ★收盘价落在均值±plat_band内的天数占比下限
+    "plat_band": 0.05,           # 横盘集中度带宽（±5%）
+    "plat_amp_max": 0.25,        # 横盘高低振幅上限（辅助）
+    # ★首次放量假突破（试盘日）
+    "break_vol_is_max": True,    # ★试盘日必须是横盘期内成交量最大的一天
+    "break_high_ratio": 1.02,    # 首突最高价 ≥ 压力线×该值
+    "break_close_min": 1.00,     # 首突收盘 ≥ 压力线×该值
+    "break_vol_ratio": 3.0,      # 首突量 ≥ 平台均量×该值
+    # 破位与收复（2026-11-18 改：破位改用支撑线，不再用压力线×0.91）
+    "support_pct": 5,            # ★支撑线 = 横盘期收盘价 p5（滤孤立低点）
+    "recover_min": 0.98,         # 提示日收盘 ≥ 压力线×该值
+    # 洗盘间隔（2026-11-18 定：10~30 日，容纳凯众12日/仁信22日）
+    "min_gap": 10,
+    "max_gap": 30,
+    # 缩量二次上攻（2026-11-18 放宽达前高 0.97→0.95）
+    "prev_high_min": 0.95,       # 提示日最高价 ≥ 首突日最高价×该值
+    "shrink": 0.55,              # 提示日量 ≤ 首突量×该值
+    # 方向性硬约束
+    "require_up_day": True,
+    "close_high_min": 0.90,
     # 风控
     "stop_loss": 0.05,
 }
 
 
-def _signal_at_last_bar(df, as_of=None):
-    """站在最后一根K线，判断当日是否为缩量二次突破提示日。返回特征 dict 或 None。
+def _find_plateau(c, v, b1):
+    """在 b1 之前找 40~60 日的真横盘平台。
 
-    严格复刻回测 detect_signals 在 t=当日 的判定：平台上沿不含首突当日；
-    从最近的候选首突 b1 往回找，取第一个满足「假突破 + 强度 + 缩量二次上攻」者。
+    返回 (ps, pe, ph, pl, pv, concentration, plat_len, sup) 或 None。
+    sup = 支撑线 = 横盘期收盘价 p5（滤孤立低点）。
+
+    ★2026-11-18 改：在所有满足集中度约束的 40~60 日窗口中，取「集中度最高、
+    窗口最短」的紧致核心平台，而不是最长的窗口。原因：凯众最长合格窗口 L=51
+    (集中度86%刚过线)含7月低点8.72，支撑线被拉到9.04；而 L=41~45 的集中度
+    98~100%、支撑线9.69~9.79，才是用户说的箱体(支撑9.69)。取紧致核心区更贴合。
     """
+    best = None
+    for L in range(STANCE["plat_days_max"], STANCE["plat_days_min"] - 1, -1):
+        ps, pe = b1 - L, b1
+        if ps < 0:
+            continue
+        seg_c = c[ps:pe]
+        seg_v = v[ps:pe]
+        if len(seg_c) < STANCE["plat_days_min"]:
+            continue
+        mean_c = float(seg_c.mean())
+        if mean_c <= 0:
+            continue
+        # ★横盘集中度：收盘价落在均值±5%内的占比
+        concentration = float(np.mean(np.abs(seg_c / mean_c - 1) <= STANCE["plat_band"]))
+        if concentration < STANCE["plat_concentration"]:
+            continue
+        # ★压力线用收盘价 95 分位（滤掉孤立冲高，如仁信8-18的13.42）；
+        #   黄金样本实测：凯众 p95=10.48、仁信 p95=12.63（≈用户说的12.7）
+        ph = float(np.percentile(seg_c, 95))
+        pl = float(seg_c.min())
+        sup = float(np.percentile(seg_c, STANCE["support_pct"]))  # ★支撑线=收盘p5
+        if (ph - pl) / max(ph, 1e-9) > STANCE["plat_amp_max"]:
+            continue
+        pv = float(seg_v.mean())
+        # ★试盘日必须是横盘期最大量
+        if STANCE["break_vol_is_max"] and v[b1] <= seg_v.max():
+            continue
+        # 取集中度最高者；并列时取窗口更短（更紧致）者
+        cand = (concentration, -L, ps, pe, ph, pl, pv, concentration, L, sup)
+        if best is None or cand[:2] > best[:2]:
+            best = cand
+    if best is None:
+        return None
+    _, _, ps, pe, ph, pl, pv, concentration, L, sup = best
+    return ps, pe, ph, pl, pv, concentration, L, sup
+
+
+def _signal_at_last_bar(df, as_of=None):
+    """站在最后一根K线，判断当日是否为缩量二次突破提示日。返回特征 dict 或 None。"""
     df = df.reset_index(drop=True)
     df["date"] = df["date"].astype(str)
     if as_of:
         df = df[df["date"] <= str(as_of)]
-    if len(df) < 70:
+    # 横盘最长60日 + 洗盘最长45日 = 至少105日
+    if len(df) < 110:
         return None
-    df = df.tail(160).reset_index(drop=True)
+    df = df.tail(200).reset_index(drop=True)
 
     c = df["close"].values.astype(float)
     v = df["volume"].values.astype(float)
@@ -77,73 +138,66 @@ def _signal_at_last_bar(df, as_of=None):
     lo = df["low"].values.astype(float)
     d = df["date"].values
     n = len(df)
-    t = n - 1                      # 今日（提示日候选）
+    t = n - 1
 
     if c[t] < lib.MIN_PRICE:
         return None
     if float((c[-20:] * v[-20:]).mean()) < lib.MIN_AMOUNT:
         return None
 
-    plat = STANCE["plat_days"]
-    # b1 ∈ [max(plat, t-max_gap), t-min_gap]，从近到远
+    # b1 ∈ [max(plat_max+5, t-max_gap), t-min_gap]，从近到远
     start = t - STANCE["min_gap"]
-    end = max(plat, t - STANCE["max_gap"])
+    end = max(STANCE["plat_days_max"] + STANCE["min_gap"], t - STANCE["max_gap"])
     for b1 in range(start, end - 1, -1):
-        ps, pe = b1 - plat, b1
-        ph = float(h[ps:pe].max())       # 平台上沿（不含首突当日）
-        pl = float(lo[ps:pe].min())
-        pv = float(v[ps:pe].mean())
-        pmid = (ph + pl) / 2
-        amp = (ph - pl) / max(pmid, 1e-9)
-        if amp > STANCE["plat_amp_max"]:
+        plat = _find_plateau(c, v, b1)
+        if plat is None:
             continue
+        ps, pe, ph, pl, pv, concentration, plat_len, sup = plat
         # 首次放量假突破
-        if not (h[b1] > ph * STANCE["break_high_ratio"]
-                and v[b1] > pv * STANCE["break_vol_ratio"]):
+        if not (h[b1] >= ph * STANCE["break_high_ratio"]
+                and c[b1] >= ph * STANCE["break_close_min"]
+                and v[b1] >= pv * STANCE["break_vol_ratio"]):
             continue
         strength = float(h[b1] / ph)
-        if strength < STANCE["min_strength"]:
+        # 破位环节（2026-11-18 改：收盘跌破支撑线=箱体下沿，而非压力线×0.91）
+        if float(c[b1:t].min()) >= sup:
             continue
-        # 假突破确认：上影 或 数日内收盘跌回平台上沿
-        us = h[b1] / max(c[b1], 1e-9) > STANCE["upper_shadow"]
-        fb = bool(np.any(c[b1:min(b1 + STANCE["fail_days"], n)] < ph))
-        if not (us or fb):
-            continue
-        # 提示日 T：缩量二次上攻至平台上沿附近
-        if h[t] < ph * STANCE["approach"]:
-            continue
-        if c[t] < ph * STANCE["close_conf"]:
+        # 提示日：达前高 + 缩量 + 站上压力线
+        reach = float(h[t] / h[b1])
+        if reach < STANCE["prev_high_min"]:
             continue
         vr = float(v[t] / v[b1])
         if vr > STANCE["shrink"]:
             continue
-        # ★ 方向性硬约束（2026-11-18 修复）
-        # 原实现只验「盘中最高价触及平台上沿 ×0.97 + 收盘 ≥ 上沿 ×0.90 + 缩量」，
-        # 完全不检查当日涨跌，于是「冲高回落的长上影大阴线」和「下跌途中缩量横盘」
-        # 都会被判成「缩量二次上攻」——实盘 2026-11-18 选出 高凌信息 -5.72%、
-        # 尚水智能 -9.66%（提示日暴跌，买入即在 -5% 止损位下方）。
-        # 加两条硬约束：提示日必须收涨，且收盘不能远离当日最高价。
+        if c[t] < ph * STANCE["recover_min"]:
+            continue
+        # 方向性硬约束
         if STANCE["require_up_day"] and c[t] <= c[t - 1]:
             continue
         if c[t] < h[t] * STANCE["close_high_min"]:
             continue
 
-        # ---- 命中：组装与 stance_hint 对齐的返回字段 ----
+        # ---- 命中 ----
         plat_win = f"{d[ps]}~{d[pe - 1]}"
-        sw_range = round(ph / max(pl, 1e-9), 3)          # 平台上沿/下沿（高低价比）
+        sw_range = round(ph / max(pl, 1e-9), 3)
         sw_std = round(float(c[ps:pe].std() / max(c[ps:pe].mean(), 1e-9)), 4)
-        vol_x = round(float(v[t] / max(pv, 1e-9)), 2)    # 提示日量/平台均量
+        vol_x = round(float(v[t] / max(pv, 1e-9)), 2)
         chg = round(float((c[t] / c[t - 1] - 1) * 100), 2) if t > 0 else 0.0
-        # 排序分（仅用于并列时排序，方向依据回测：强度越高、越缩量越优）
-        score = round(0.55 * min((strength - 1.0) / 0.30, 1.0)
-                      + 0.45 * (1.0 - min(vr / STANCE["shrink"], 1.0)), 4)
+        break_vol_x = float(v[b1] / max(pv, 1e-9))
+        # 试盘日量排名（横盘期内，1=最大）
+        rank = int((v[ps:pe] > v[b1]).sum()) + 1
+        score = round(0.40 * min((reach - STANCE["prev_high_min"])
+                                 / (1 - STANCE["prev_high_min"]), 1.0)
+                      + 0.40 * (1.0 - min(vr / STANCE["shrink"], 1.0))
+                      + 0.20 * concentration, 4)
         return dict(
             date=str(d[t]),
-            last_close=round(float(c[t]), 2),            # 买入价 = 提示日收盘
+            last_close=round(float(c[t]), 2),
             platform_top=round(ph, 2),
-            trigger=round(ph * STANCE["break_high_ratio"], 2),   # 展示用：平台上沿
-            req_vol=int(v[t]),                            # 提示日实际量（展示用）
-            req_vol_wan=round(float(v[t] / 1e6), 2),     # 万手（新浪 volume 单位=股）
+            support=round(sup, 2),
+            trigger=round(ph, 2),
+            req_vol=int(v[t]),
+            req_vol_wan=round(float(v[t] / 1e6), 2),
             stop=round(float(c[t]) * (1 - STANCE["stop_loss"]), 2),
             sw_win=plat_win,
             sw_range=sw_range,
@@ -151,13 +205,19 @@ def _signal_at_last_bar(df, as_of=None):
             vol_x=vol_x,
             chg=chg,
             score=score,
-            # —— 缩量模型特有字段（报告/台账展示）——
             b1_date=str(d[b1]),
             break_high=round(float(h[b1]), 2),
             strength=round(strength, 3),
             vol_ratio=round(vr, 3),
             gap=t - b1,
             plat_low=round(pl, 2),
+            break_vol_x=round(break_vol_x, 2),
+            break_depth=round(float(c[b1:t].min() / sup - 1) * 100, 2),  # 相对支撑线的破位幅度
+            reach=round(reach, 3),
+            plat_len=plat_len,
+            plat_conc=round(concentration, 3),
+            b1_vol_rank=rank,
+            ph_basis="close",
         )
     return None
 
@@ -174,7 +234,7 @@ def scan_one(code, df, as_of=None):
 
 
 def main():
-    """独立调试：全市场扫描当日缩量二次突破提示（复用 lib 的数据层）。"""
+    """独立调试：全市场扫描当日缩量二次突破提示。"""
     import sys
     as_of = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y-%m-%d")
     top = int(sys.argv[2]) if len(sys.argv) > 2 else 10
@@ -205,20 +265,20 @@ def main():
             continue
     hits.sort(key=lambda x: -x["score"])
     L = [f"# 缩量二次突破提示 · {as_of}", "",
-         "> 形态：横盘 → 放量假突破(强度≥1.15) → 洗盘 → 缩量二次上攻；提示即买点。", "",
+         "> 形态：横盘(1-3月,集中度≥85%) → 试盘(横盘最大量) → 深跌破位后收复 → 缩量达前高；提示即买点。", "",
          f"全市场命中 **{len(hits)}** 只，按评分取前 {min(top, len(hits))} 只：", "",
-         "| 名称 | 代码 | 首突日 | 强度 | 量比 | 间隔 | 平台上沿 | 现价 | 止损 | 评分 |",
-         "|---|---|---|---|---|---|---|---|---|---|"]
+         "| 名称 | 代码 | 平台 | 试盘日 | 集中度 | 放量 | 破位 | 达前高 | 量比 | 现价 | 评分 |",
+         "|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in hits[:top]:
-        L.append(f"| {r['name']} | {r['code']} | {r['b1_date']} | {r['strength']} | "
-                 f"{r['vol_ratio']} | {r['gap']}日 | {r['platform_top']} | "
-                 f"{r['last_close']} | {r['stop']} | {r['score']} |")
+        L.append(f"| {r['name']} | {r['code']} | {r['sw_win']}({r['plat_len']}日) | {r['b1_date']} | "
+                 f"{r['plat_conc']} | {r['break_vol_x']}倍 | {r['break_depth']}% | {r['reach']} | "
+                 f"{r['vol_ratio']} | {r['last_close']} | {r['score']} |")
     rp = os.path.join(lib.REPORT_DIR, f"shrink_{as_of}.md")
     open(rp, "w", encoding="utf-8").write("\n".join(L))
     print(f"命中 {len(hits)} 只 → 报告 {rp}")
     for r in hits[:top]:
-        print(f"  {r['name']}({r['code']}) 强度{r['strength']} 量比{r['vol_ratio']} "
-              f"间隔{r['gap']}日 评分{r['score']}")
+        print(f"  {r['name']}({r['code']}) 平台{r['plat_len']}日 集中度{r['plat_conc']} "
+              f"放量{r['break_vol_x']}倍 达前高{r['reach']} 评分{r['score']}")
     return hits
 
 

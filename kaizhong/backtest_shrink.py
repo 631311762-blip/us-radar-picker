@@ -28,7 +28,9 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib
-import shrink_breakout as sh
+# KZ_MODEL 可指定对比模型模块名（默认 shrink_breakout），便于新旧口径同数据对比
+_MODEL = os.environ.get("KZ_MODEL") or "shrink_breakout"
+sh = __import__(_MODEL)
 
 H = (1, 3, 5, 10)
 
@@ -123,8 +125,8 @@ def main():
         print("区间内无信号（检查 K 线目录与日期区间）")
         return
     sig = pd.DataFrame(rows)
-    L = [f"# 回测 · 缩量二次突破 SVDB · {d0} ~ {d1}", "",
-         f"> 判定内核：`shrink_breakout.scan_one`（与实盘同一份代码，无未来函数）",
+    L = [f"# 回测 · 缩量二次突破 SVDB [{_MODEL}] · {d0} ~ {d1}", "",
+         f"> 判定内核：`{_MODEL}.scan_one`（与实盘同一份代码，无未来函数）",
          f"> 买入价 = 提示日收盘价；基准 = 同期全市场等权；样本 {len(sig)} 个信号", ""]
     L.append("| 持有期 | 有效样本 | 平均涨幅 | 上涨胜率 | 同期基准 | 超额 | 跑赢率 |")
     L.append("|---|---|---|---|---|---|---|")
@@ -149,7 +151,8 @@ def main():
     print(md)
     try:
         os.makedirs(lib.REPORT_DIR, exist_ok=True)
-        rp = os.path.join(lib.REPORT_DIR, f"回测_SVDB_{d0}_{d1}.md")
+        suffix = "" if _MODEL == "shrink_breakout" else f"_{_MODEL}"
+        rp = os.path.join(lib.REPORT_DIR, f"回测_SVDB_{d0}_{d1}{suffix}.md")
         open(rp, "w", encoding="utf-8").write(md)
         print(f"\n报告：{rp}")
     except Exception as e:
