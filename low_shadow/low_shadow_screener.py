@@ -92,6 +92,15 @@ SEED_STOCKS = [
     {"symbol": "688095", "name": "福昕软件"},
 ]
 
+# 原始黄金样本：用户最初给定的两只模型原型，推送时作为参照展示。
+# 数值取自 low_shadow/state/bt_oct_result.json（10-08~11-13 全市场回测）真实记录。
+GOLDEN_SAMPLES = [
+    {"symbol": "300030", "name": "阳普医疗", "date": "10-29",
+     "score": 67.59, "upper_amp": 0.0819, "r1": 20.03},
+    {"symbol": "688095", "name": "福昕软件", "date": "10-30",
+     "score": 68.70, "upper_amp": 0.0980, "r1": 16.39},
+]
+
 # ----------------------------------------------------------------------------
 # 东方财富行情层（与领湃/善水一致，requests 直连，已验证可全市场扫描）
 # 注意：列表接口 EM_UT 令牌敏感，错误令牌会返回空 data；此处使用领湃验证过的有效值。
@@ -1073,38 +1082,31 @@ def run_review(params, top_n=None):
     L = []
     L.append("## 低位上影线样本 · 收盘后模型简报")
     L.append("- 运行日：**%s**" % run_date)
-    L.append("- 样本总数：**%d 只（全市场 A 股全量扫描，非抽样）**" % total)
-    L.append("- 有效K线标的：%d 只" % data_ok)
-    L.append("- 立信审计剔除：%d 只（一票否决）" % audited_out)
-    L.append("- 符合 8 道硬条件 + H5 精选：**%d 只**（全量清单见下方）" % n_qualified)
-    L.append("- 满足模型清单：%d 只（已剔除 60 上限，每只满足的都列出）" % n_qualified)
+    L.append("- 合格（审计后）：**%d 只** ｜ 立信剔除：%d 只" % (n_qualified, audited_out))
     L.append("- 仓位状态：**%s**" % position)
     L.append("---")
     if pool:
-        L.append("前 %d 只预览（满足模型全量 %d 只，完整见 CSV/JSON）：" % (min(top_n, len(pool)), n_qualified))
+        L.append("满足模型清单（全量 %d 只）：" % n_qualified)
         for i, c in enumerate(pool, 1):
-            L.append("> %d. `%s` %s | 评分 %s | 收盘 %s | 上影/开 %s | 上影/实体 %s | 量比 %s | 距20日低 %s"
-                     % (i, c["symbol"], c["name"], c["score"], c["close"],
-                        c["upper_amp"], c["upper_to_body"], c["vol_ratio"], c["pos_pct"]))
+            L.append("> %d. `%s` %s ｜ 评分 %s" % (i, c["symbol"], c["name"], c["score"]))
     else:
         L.append("空仓提示：今日全市场无同时满足 8 道硬条件 + H5 精选的标的，保持空仓观望。")
+    L.append("---")
+    L.append("### 原始黄金样本（模型原型，供参考）")
+    for g in GOLDEN_SAMPLES:
+        L.append("> %s `%s` · %s ｜ 评分 %.1f ｜ 上影/开 %.4f ｜ 次日 %+.1f%%"
+                 % (g["name"], g["symbol"], g["date"], g["score"], g["upper_amp"], g["r1"]))
     L.append("---")
     if env_enabled:
         L.append("### 市场环境与推荐意见（L1 标注，不影响筛选结果）")
         L.extend(advice["lines"])
         L.append("---")
-    L.append("- 筛选漏斗（8 道硬条件淘汰数）：%s" % funnel)
-    L.append("- H5 精选层（启用：%s，淘汰数）：%s" % (params.get("h5_enabled"), h5_funnel))
     if backtest:
-        L.append("- 近期胜率：%s（回溯样本 %d）" % (backtest.get("win_rate"), backtest.get("backtest_samples")))
-        L.append("- 参数动作：%s" % backtest.get("action"))
+        L.append("- 近期胜率：%s（样本 %d）｜ 参数动作：%s"
+                 % (backtest.get("win_rate"), backtest.get("backtest_samples"), backtest.get("action")))
     else:
-        L.append("- 近期胜率：暂无（首批运行）")
-        L.append("- 参数动作：维持当前参数")
-    L.append("- 全量合格清单：%s" % (full_json or "写入失败"))
-    if full_csv:
-        L.append("- 全量清单(CSV)：%s" % full_csv)
-    L.append("- 归档路径：%s" % archive_path)
+        L.append("- 近期胜率：暂无 ｜ 参数：维持当前参数")
+    L.append("- 全量清单：%s ｜ 归档：%s" % (full_json or "写入失败", archive_path))
     brief = "\n".join(L)
 
     print("\n" + "=" * 56)
