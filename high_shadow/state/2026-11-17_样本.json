@@ -5,8 +5,8 @@
   "direction": "偏多（高位洗盘后再起观察名单）",
   "win_rule": "up",
   "version": "v4.2 · 看涨口径 + 偏空提醒列 + 双创板块过滤（用户口径 2026-11-17）：模型仍按 v4.0 实施（废除看跌基因的第二条件 F，量比上限 1.4→2.7 容纳放量洗盘，核心信号『强形态+高位』）；v4.1 新增 bearish_hint 偏空提醒列（量比超旧上限 1.4 标『偏空提醒·放量』，仅提示不影响入选与排序）；v4.2 新增 board_filter——选股样本池只保留创业板(300/301)+科创板(688)，剔除沪市主板、深市主板与北交所（金逸影视 002905 为深主板，按此规则排除）。位置维持双条件：比率≥0.88 ∩ 当日 60 日分位≥0.45。",
-  "count": 1,
-  "core_signals": 1,
+  "count": 0,
+  "core_signals": 0,
   "filtered_by_second_condition": 0,
   "first_condition": {
     "volume_band": [
@@ -32,36 +32,5 @@
   "position_rule": "high_hh60_ratio",
   "min_ratio": 0.88,
   "pos_quant_min": 0.45,
-  "picks": [
-    {
-      "code": "688100",
-      "name": "威胜信息",
-      "close": 26.04,
-      "score": 56.5,
-      "board": "科创板",
-      "price": 26.04,
-      "pct": -1.03,
-      "turnover": 0.54,
-      "vr": 1.02,
-      "mktcap": 12803481957.0,
-      "raw": {
-        "pct_chg": -1.03,
-        "upper_pct": 2.19,
-        "upper_range": 80.3,
-        "lower_range": 18.3,
-        "vol_ratio": 1.02,
-        "vol_ratio_prev": 0.86,
-        "pos60": 94.6,
-        "pos_quant": 67.0,
-        "posq_prev": 72.9,
-        "pre2_pattern": "阳阳",
-        "ret2": 3.58,
-        "d1": 0.8,
-        "gap": -0.99,
-        "second_condition": "off",
-        "bearish_hint": "",
-        "source": "high_shadow"
-      }
-    }
-  ]
+  "picks": []
 }
