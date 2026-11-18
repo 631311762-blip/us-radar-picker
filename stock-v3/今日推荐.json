@@ -1,9 +1,11 @@
 {
  "base_date": "2026-11-18",
  "universe": 4259,
- "generated": "2026-11-18 18:58",
+ "generated": "2026-11-18 21:20",
  "model": "v5-oya",
- "PICKS": [
+ "PICKS": [],
+ "blocked": [],
+ "followed": [
   {
    "date": "2026-11-18",
    "close": 5.76,
@@ -46,8 +48,8 @@
    "ma60_touch": 0,
    "doji": 0,
    "probe_recent": 0,
-   "dsc": 0,
-   "launch_gain": null,
+   "dsc": 3,
+   "launch_gain": 14.5,
    "vol_dry": 0,
    "code": "sz000595",
    "name": "新能股份",
@@ -2958,14 +2960,7 @@
     }
    ],
    "_idx": 319,
-   "lixin_bad": false,
-   "lixin_reason": "",
-   "firm": "利安达会计师事务所",
-   "since": {
-    "first": "2026-11-18",
-    "days": 1,
-    "fresh": true
-   }
+   "oya_repeat": 1
   },
   {
    "date": "2026-11-18",
@@ -3009,8 +3004,8 @@
    "ma60_touch": 0,
    "doji": 0,
    "probe_recent": 0,
-   "dsc": 0,
-   "launch_gain": null,
+   "dsc": 1,
+   "launch_gain": 13.3,
    "vol_dry": 0,
    "code": "sz002261",
    "name": "拓维信息",
@@ -5921,16 +5916,7 @@
     }
    ],
    "_idx": 319,
-   "lixin_bad": false,
-   "lixin_reason": "",
-   "firm": "致同会计师事务所",
-   "since": {
-    "first": "2026-11-18",
-    "days": 1,
-    "fresh": true
-   }
+   "oya_repeat": 1
   }
- ],
- "blocked": [],
- "followed": []
+ ]
 }

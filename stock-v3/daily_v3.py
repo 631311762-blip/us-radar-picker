@@ -10,7 +10,9 @@ r"""
   ② 重载模型模块（若权重已更新，必须重新读取 factor_fit.json）
   ③ oya_model.build() 用奥雅形态准入 + 当天最新权重打分选股（旧v3.1作参照）
   ④ oya_model.record() 记录今日推荐（含形态证据，供日后归因）
-  ⑤ 推送微信        昨日跟踪 + 今日奥雅主榜 + 旧模型参照 + 模型复盘
+  ⑤ 推送微信（2026-11-18 起）：今日奥雅主榜样本 + 历史推荐持续表现
+                    其余（旧模型参照/昨日跟踪/首日观察榜/影子假设/模型复盘/剔除名单）
+                    仅内部计算与记账，不再进微信正文
 
 用法：
   python daily_v3.py                # 完整跑（默认主榜 6 只）
@@ -208,7 +210,7 @@ def main():
                 ensure_ascii=False) + "\n")
         sys.exit(4)
     if not latpicks:
-        print("\n[提示] 今日无符合奥雅形态的新提示日，将推送空榜说明+跟踪+参照。")
+        print("\n[提示] 今日无符合奥雅形态的新提示日，将推送空榜说明+历史跟踪。")
     # 同一基准日、同一份清单已成功推送过 → 跳过（避免重复推送吃掉当天额度）
     cur_codes = sorted(p["code"] for p in latpicks)
     if "--force-push" not in sys.argv:
@@ -224,99 +226,24 @@ def main():
         except (FileNotFoundError, ValueError):
             pass
 
-    # ── ⑤ 组装推送（V5 奥雅主榜）
+    # ── ⑤ 组装推送（2026-11-18 起用户要求：微信只推【新模型样本】+【历史推荐持续表现】）
+    #    旧 v3.1 参照、昨日跟踪、首日观察榜、影子假设、模型复盘、各类剔除名单
+    #    一律不再进微信正文；各模块自身的计算/记账闭环照常执行，不受影响。
     md = [f"> **主升浪 V5·奥雅式突破**｜基准日 **{r['base_date']}**｜候选池 {r['universe']} 只\n"]
 
-    # 昨日跟踪（用户最关心：昨天推的到底行不行）
-    if fb.get("track"):
-        md.append(f"### 📌 昨日（{fb['last_date']}）推荐跟踪")
-        for o in fb["track"]:
-            kinds = "/".join(k.replace("-", "") for k in o["kinds"])
-            arrow = "🔴" if o["gain"] >= 0 else "🟢"
-            md.append(f"- {arrow} **{o['name']}** `{o['code']}`〔{kinds}〕　{o['days']}日 "
-                      f"**{'+' if o['gain']>=0 else ''}{o['gain']:.2f}%**"
-                      f"｜最高 {'+' if o['best']>=0 else ''}{o['best']:.2f}%"
-                      f"｜最低 {'+' if o['worst']>=0 else ''}{o['worst']:.2f}%"
-                      f"｜{o['status']}")
-        md.append("")
-
-    # 奥雅主榜（试盘→破位→盘中放量突破首日推）；旧 v3.1 降为参照
+    # 新模型当日样本（试盘→破位→盘中放量突破首日推）
     try:
         md += OY.render_oya_md(r)
     except Exception as e:
         print("  [警告] 奥雅主榜渲染异常：", e)
         for i, p in enumerate(latpicks, 1):
             md.append(f"{i}. {fmt(p)}")
-    # 旧模型参照（同池轻量计算，仅供对照，非主推）
-    try:
-        _ref = OY.legacy_ref(r.get("pool") or [], topn=3)
-        md += OY.render_legacy_md(_ref)
-    except Exception as e:
-        print("  [警告] 旧模型参照生成失败，不影响主榜：", e)
-    if blocked:
-        md.append("### 已剔除（年报审计机构为立信，一票否决）")
-        # 2026-11-13：并入统一流水线共同前置层的离线立信排除集，
-        # 东财公告接口异常导致联网审计降级时仍能拦住（堵住 UNKNOWN 放行）。
-        try:
-            import lixin_gate as _lg
-            if _lg.list_loaded():
-                _i = _lg.info()
-                md.append(f"　口径：联网公告审计 + 流水线离线排除集（{_i['n']} 只，"
-                          f"更新于 {_i['updated']}），命中任一即剔除；"
-                          "主榜出榜前另有最终硬闸门复核。")
-        except Exception:
-            pass
-        md.append("　" + "、".join(f"{b['name']}({b['code']})" for b in blocked))
-        md.append("")
 
-    # ── 形态剔除名单（2026-11-09 应用户「破位反弹要先删除掉」新增）
-    #    纯展示：build() 已在出榜前完成过滤，这里只把被删的票和依据列出来，
-    #    不写状态、不参与结算。异常绝不影响主闭环。
-    try:
-        import shape_gate
-        _sx_md = shape_gate.render_md(r.get("shape_excluded") or [],
-                                      total=r.get("shape_excluded_total"))
-        if _sx_md:
-            md += _sx_md
-            md.append("")
-    except Exception as e:
-        print("  [警告] 形态剔除名单生成失败，不影响主流程：", e)
-
-    # ── 启动首日观察榜（2026-11-09 应用户「能不能第一天就推荐」新增）
-    #    纯展示：复用 build() 已算好的全市场因子行，不改主榜/权重/参数/状态，
-    #    异常绝不影响主闭环。是否纳入正式选股仍走影子验证闸门，人工不得手改。
-    try:
-        import firstday_board
-        _lixin = {b["code"] for b in blocked}
-        _fd = firstday_board.render(r.get("pool") or [], _lixin)
-        if _fd:
-            md += _fd
-            md.append("")
-    except Exception as e:
-        print("  [警告] 首日观察榜生成失败，不影响主流程：", e)
-
-    # 奥雅信号跟踪（30日内已首推，次日量能1.0~2.0确认回填）
+    # 历史推荐持续表现（只跟涨的，破位/放量下跌/阴包阳即停）
     try:
         md += OY.render_follow_md(r)
     except Exception as e:
         print("  [警告] 奥雅跟踪段生成失败，不影响主流程：", e)
-
-    # 影子假设跟踪段
-    if sh and sh.get("md"):
-        md += sh["md"]
-        md.append("")
-    if sh2 and sh2.get("md"):
-        md += sh2["md"]
-        md.append("")
-
-    # 模型复盘
-    try:
-        import feedback
-        md += feedback.review_md(fb.get("db") or [], fb.get("att"),
-                                 fb.get("evo"), None, fb.get("hold_stats"))
-        md.append("")
-    except Exception:
-        pass
 
     md.append("---")
     md.append("风控：提示日收盘价买；跌破试盘支撑/突破日最低×0.96 离场；持有5个交易日；"
