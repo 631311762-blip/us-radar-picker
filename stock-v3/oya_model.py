@@ -318,10 +318,11 @@ def record(r):
     have = {(d.get("date"), d.get("code"), d.get("model")) for d in db}
     for x in r["latpicks"]:
         kind = "C-创科" if x.get("board") in ("创业板", "科创板") else "B-埋伏"
-        k = (r["base_date"], x["code"], MODEL_TAG)
+        pdate = x.get("date") or r["base_date"]     # 该票真实提示日（形态命中当天）
+        k = (pdate, x["code"], MODEL_TAG)
         if k in have:
             continue
-        db.append(dict(model=MODEL_TAG, kind=kind, date=r["base_date"],
+        db.append(dict(model=MODEL_TAG, kind=kind, date=pdate,
                        code=x["code"], name=x["name"], close=x["close"],
                        score=x["score"], factors=FACTORS, pct=x.get("pct"),
                        dsc=0, launch_gain=None, since=x.get("since"),
@@ -424,10 +425,46 @@ def _first_picks():
     return list(first.values())
 
 
+def _c0_px(x, ret):
+    """由首推收盘价与累计涨幅反推当前价"""
+    c0 = x["close"] or 0
+    return c0 * (1 + ret / 100.0)
+
+
+def _vol_ma(b, j, n=5):
+    """第 j 根之前 n 根（不含 j）的均量"""
+    w = b[max(0, j - n):j]
+    if not w:
+        return 0.0
+    return sum(z.get("volume", 0) for z in w) / len(w)
+
+
+def _bad_signals(b, i, stop):
+    """提示日之后逐根扫描，返回最早出现的看跌/终止信号 (日期, 原因, 说明)
+       终止信号三类：破位（收盘跌破止损线）/ 放量下跌 / 阴包阳"""
+    for j in range(i + 1, len(b)):
+        z = b[j]
+        prev = b[j - 1] if j > 0 else None
+        # 1) 破位：收盘跌破止损线
+        if z["last"] < stop:
+            return z["date"], "破位", f"收盘{z['last']:.2f}跌破止损{stop}"
+        # 2) 放量下跌：跌幅≥5% 且 成交量≥前5日均量×1.5
+        if prev:
+            vma = _vol_ma(b, j, 5)
+            chg = (z["last"] / prev["last"] - 1) * 100 if prev["last"] else 0.0
+            if chg <= -5.0 and vma > 0 and z.get("volume", 0) >= vma * 1.5:
+                return z["date"], "放量下跌", f"{chg:.1f}%且量{z.get('volume',0):.0f}≥前5日均量×1.5"
+        # 3) 阴包阳：当日阴线实体完全吞没前一日阳线实体
+        if prev and prev["last"] > prev["open"] and z["last"] < z["open"]:
+            if z["open"] >= prev["last"] and z["last"] <= prev["open"]:
+                return z["date"], "阴包阳", f"开{z['open']:.2f}收{z['last']:.2f}吞没前日阳线"
+    return None, None, None
+
+
 def render_follow_md(r):
-    """历史推荐跟踪（用户 2026-11-18）：
-       · 只跟踪【未破位】的票，一直强就一直跟（无天数上限）；
-       · 破位当次标注说明并写入停止台账，之后不再推送；
+    """历史推荐跟踪（用户 2026-11-18二次修订）：
+       · 只跟【当前仍上涨】（累计收益>0）的票，涨不动的不再展示；
+       · 终止信号三类：破位 / 放量下跌 / 阴包阳，命中即标注说明、写停止台账，之后不再推送；
        · 已停止的票永久退出跟踪。"""
     picks = _first_picks()
     if not picks:
@@ -437,7 +474,7 @@ def render_follow_md(r):
     except Exception:
         return []
     stopped = _load_stopped()
-    md = ["### 🔁 历史推荐跟踪（未破位持续跟，破位即停）"]
+    md = ["### 🔁 历史推荐跟踪（只跟涨的｜破位/放量下跌/阴包阳即停）"]
     active, just_stopped = [], []
     for x in picks:
         code = x["code"]
@@ -452,29 +489,29 @@ def render_follow_md(r):
         i = idxs[0]
         c0 = x["close"] if x["close"] else b[i]["last"]
         stop = x["stop"] if x["stop"] else round(b[i]["low"] * 0.96, 2)
-        # 破位判定：提示日之后任一根 K 线收盘跌破止损线
         after = b[i + 1:]
-        broke = any(z["last"] < stop for z in after)
+        sd, sreason, sdetail = _bad_signals(b, i, stop)
         last = b[-1]["last"]
         ret = (last / c0 - 1) * 100
         hi = max((z["high"] for z in after), default=c0)
         hi_ret = (hi / c0 - 1) * 100
         days = len(after)
-        if broke:
-            just_stopped.append((x, ret, hi_ret, stop, days))
-        else:
+        if sd:
+            just_stopped.append((x, ret, hi_ret, stop, days, sd, sreason, sdetail))
+        elif ret > 0:
+            # 只跟还涨的
             active.append((x, ret, hi_ret, stop, days))
 
-    # 未破位：一直跟
+    # 未触发终止信号且仍上涨：一直跟
     for x, ret, hi_ret, stop, days in active:
-        flag = "🔥" if ret >= 20 else ("↗" if ret > 0 else "→")
+        flag = "🔥" if ret >= 20 else "↗"
         md.append(f"- {flag} **{x['name']}** `{x['code']}` 首推{x['date']} 第{days+1}日｜"
-                  f"现价{(x['close'] or 0)*(1+ret/100):.2f}　累计 **{ret:+.1f}%**（最高{hi_ret:+.1f}%）｜"
-                  f"止损{stop} 未破位")
-    # 刚破位：说明一次并写入台账
-    for x, ret, hi_ret, stop, days in just_stopped:
+                  f"现价{_c0_px(x, ret):.2f}　累计 **{ret:+.1f}%**（最高{hi_ret:+.1f}%）｜"
+                  f"止损{stop} 仍强势")
+    # 刚触发终止信号：说明一次并写入台账
+    for x, ret, hi_ret, stop, days, sd, sreason, sdetail in just_stopped:
         md.append(f"- ⛔ **{x['name']}** `{x['code']}` 首推{x['date']}｜"
-                  f"已破位（收盘跌破止损{stop}）　跟踪终止，累计{ret:+.1f}%（最高{hi_ret:+.1f}%）")
+                  f"{sd} {sreason}（{sdetail}）　跟踪终止，累计{ret:+.1f}%（最高{hi_ret:+.1f}%）")
         stopped[x["code"]] = x["date"]
     if just_stopped:
         _save_stopped(stopped)

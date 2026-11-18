@@ -5081,5 +5081,93 @@
    "days": 3,
    "fresh": false
   }
+ },
+ {
+  "model": "v5-oya",
+  "kind": "C-创科",
+  "date": "2026-11-17",
+  "code": "sz300824",
+  "name": "北鼎股份",
+  "close": 9.98,
+  "score": 96.38,
+  "factors": [
+   "lu10",
+   "brk60",
+   "chg5",
+   "brk20",
+   "dist_hi",
+   "vr5",
+   "pos",
+   "lu20",
+   "shrink"
+  ],
+  "pct": [
+   0.8985,
+   1.0,
+   0.9988,
+   1.0,
+   0.9709,
+   0.9948,
+   0.9901,
+   0.8475,
+   0.9089
+  ],
+  "dsc": 0,
+  "launch_gain": null,
+  "since": {
+   "first": "2026-11-12",
+   "days": 1,
+   "fresh": true
+  },
+  "oya_probe_date": "2026-09-28",
+  "oya_pressure": 8.34,
+  "oya_break": 23.5,
+  "oya_vol_x": 5.3,
+  "oya_breakdown": true,
+  "oya_stop": 8.16
+ },
+ {
+  "model": "v5-oya",
+  "kind": "C-创科",
+  "date": "2026-11-12",
+  "code": "sz300629",
+  "name": "新劲刚",
+  "close": 19.53,
+  "score": 68.86,
+  "factors": [
+   "lu10",
+   "brk60",
+   "chg5",
+   "brk20",
+   "dist_hi",
+   "vr5",
+   "pos",
+   "lu20",
+   "shrink"
+  ],
+  "pct": [
+   0.0,
+   0.9965,
+   0.9361,
+   0.9939,
+   0.9941,
+   0.8687,
+   0.9937,
+   0.0,
+   0.0
+  ],
+  "dsc": 0,
+  "launch_gain": null,
+  "since": {
+   "first": "2026-11-12",
+   "days": 1,
+   "fresh": true
+  },
+  "oya_probe_date": "2026-10-30",
+  "oya_pressure": 18.82,
+  "oya_break": 4.94,
+  "oya_vol_x": 1.41,
+  "oya_breakdown": true,
+  "oya_stop": 17.4
  }
 ]
