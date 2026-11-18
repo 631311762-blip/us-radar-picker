@@ -163,7 +163,7 @@ def _audit(cand):
     return ok, blocked
 
 
-def build(topn=6):
+def build():
     p = PARAMS
     pool = R.universe()
     name = {x["code"]: x["name"] for x in pool}
@@ -261,15 +261,9 @@ def build(topn=6):
     except Exception:
         lx = []
 
-    # 按打分排序 → 板块配额（主板3 + 创业/科创3）
+    # 评分只用于排序；全量输出合格信号，不再限制 Top N 或板块配额
     fresh_hits.sort(key=lambda x: -x["score"])
-    mains = [x for x in fresh_hits if x.get("board") not in ("创业板", "科创板")]
-    cybs = [x for x in fresh_hits if x.get("board") in ("创业板", "科创板")]
-    final = mains[:3] + cybs[:3]
-    if len(final) < topn:
-        used = {x["code"] for x in final}
-        rest = [x for x in mains[3:] + cybs[3:] if x["code"] not in used]
-        final += rest[:topn - len(final)]
+    final = fresh_hits
 
     # 审计一票否决（在最终名单上）
     final, blocked = _audit(final)

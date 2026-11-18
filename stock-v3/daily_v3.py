@@ -15,8 +15,7 @@ r"""
                     仅内部计算与记账，不再进微信正文
 
 用法：
-  python daily_v3.py                # 完整跑（默认主榜 6 只）
-  python daily_v3.py --top 3        # 主榜只取 3 只
+  python daily_v3.py                # 完整跑（全量输出当日合格信号）
   python daily_v3.py --nopush       # 只跑不推
   python daily_v3.py --noevolve     # 跳过进化，只用现权重选股
   python daily_v3.py --legacy       # 额外跑旧 v3.1 作为参照（默认用同池轻量参照）
@@ -83,14 +82,9 @@ def main():
         except Exception as e:
             print("[警告] 云端备份失败（不影响本地状态与推送）：", e)
 
-    topn = 6
     push = True
     evolve = True
     args = sys.argv[1:]
-    if "--top" in args:
-        i = args.index("--top")
-        if i + 1 < len(args) and args[i + 1].isdigit():
-            topn = int(args[i + 1])
     if "--nopush" in args:
         push = False
     if "--noevolve" in args:
@@ -124,7 +118,7 @@ def main():
         print("\n" + "=" * 78)
         print(f"【第二步】奥雅式形态准入 + {ver} 权重打分选股（旧v3.1作参照）")
         print("=" * 78)
-        r = OY.build(topn)
+        r = OY.build()
 
         # ── ②③b 推送前最终硬闸门（2026-11-13 用户：「立信审计票不该推送给我」）
         #    无条件生效：只要流水线共同前置层产出的 lixin_exclude.json 存在，
