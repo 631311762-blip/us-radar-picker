@@ -124,6 +124,7 @@ def detect(code, b, idx, p, ma=None):
         oya_break=round((b[idx]["high"] / pressure - 1) * 100, 2),
         oya_vol_x=round(b[idx]["volume"] / pvol, 2), oya_probe_vr=pvr,
         oya_box_amp=box["amp"], oya_breakdown=bd, oya_bd_pct=bd_pct,
+        oya_stop=round(b[idx]["low"] * 0.96, 2),   # 破位线：突破日最低×0.96
         oya_nxt_ratio=None, oya_confirm="待次日确认",
     )
 
@@ -328,7 +329,8 @@ def record(r):
                        oya_pressure=x.get("oya_pressure"),
                        oya_break=x.get("oya_break"),
                        oya_vol_x=x.get("oya_vol_x"),
-                       oya_breakdown=x.get("oya_breakdown")))
+                       oya_breakdown=x.get("oya_breakdown"),
+                       oya_stop=x.get("oya_stop")))
     json.dump(db, open(f, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     out = dict(base_date=r["base_date"], universe=r["universe"],
                generated=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -372,44 +374,111 @@ def render_legacy_md(ref):
 
 
 def render_oya_md(r):
-    """奥雅主榜的展示段（供 daily_v3 组装推送）"""
+    """当日主推：精简到每只 1 行关键信息（用户 2026-11-18 要求）"""
     md = []
     fp = r.get("latpicks", [])
-    md.append("### 🎯 今日主推 · 奥雅式放量突破（试盘→破位→盘中突破，首日推）")
+    md.append("### 🎯 今日主推（奥雅式放量突破·首日推）")
     if not fp:
         md.append("　今日无符合奥雅形态的新提示日（宁缺勿滥，不硬凑）。")
     for i, x in enumerate(fp, 1):
-        arrow = "+" if x["day_chg"] >= 0 else ""
+        bd = {"创业板": "创", "科创板": "科"}.get(x.get("board", ""), "主")
         md.append(
-            f"{i}. **{x['name']}**[{x.get('board','-')}] `{x['code']}` 分{x['score']:.0f}  \n"
-            f"　收 {x['close']}　当日 {arrow}{x['day_chg']:.2f}%　"
-            f"试盘压力 {x.get('oya_pressure')}（突破 {x.get('oya_break'):+.1f}%）　"
-            f"量/试盘 {x.get('oya_vol_x')}×  \n"
-            f"　破位洗盘 {'✓' if x.get('oya_breakdown') else '—'}　"
-            f"次日量能待确认（1.0~2.0×为通过）　{x.get('firm','').replace('会计师事务所','')}  \n"
-            f"　[行情](https://gu.qq.com/{x['code']})")
+            f"{i}. **{x['name']}**[{bd}] `{x['code']}` 分{x['score']:.0f}｜"
+            f"收{x['close']} 当日{x['day_chg']:+.1f}%｜"
+            f"破{x.get('oya_pressure')}({x.get('oya_break'):+.0f}%) 量{x.get('oya_vol_x')}× "
+            f"{'洗盘✓' if x.get('oya_breakdown') else ''}")
     md.append("")
     return md
 
 
-def render_follow_md(r):
-    """30日内已推过、仍在跟踪期的奥雅信号（次日量能确认回填）"""
-    fl = r.get("followed", [])
-    if not fl:
+STOP_FILE = "oya_follow_stop.json"   # 破位停止台账：code -> 首推日（已宣告停止，不再推送）
+
+
+def _load_stopped():
+    try:
+        return json.load(open(os.path.join(HERE, STOP_FILE), encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_stopped(d):
+    json.dump(d, open(os.path.join(HERE, STOP_FILE), "w", encoding="utf-8"),
+              ensure_ascii=False, indent=1)
+
+
+def _first_picks():
+    """从 predictions 取所有 v5-oya 首推（每只票取最早首推日），返回 [{code,name,date,stop,close}]"""
+    try:
+        db = json.load(open(os.path.join(HERE, "predictions.json"), encoding="utf-8"))
+    except Exception:
         return []
-    md = ["### 🔁 奥雅信号跟踪（30日内已首推，次日量能确认）"]
-    for x in fl[:8]:
-        b = None
-        try:
-            b = json.load(open(os.path.join(HERE, "kline_cache.json"), encoding="utf-8"))["data"][x["code"]]
-        except Exception:
-            pass
-        ratio, conf = (None, "—")
-        if b:
-            idxs = [i for i, z in enumerate(b) if z["date"] == x["date"]]
-            if idxs and idxs[0] + 1 < len(b):
-                ratio, conf = confirm_next(x["code"], b, idxs[0], PARAMS)
-        md.append(f"- {x['name']} `{x['code']}` 首推 {x['date']}　"
-                  f"次日量比 {ratio if ratio is not None else '—'}　**{conf}**")
+    first = {}
+    for d in db:
+        if d.get("model") != MODEL_TAG or not d.get("code") or not d.get("date"):
+            continue
+        c, dt = d["code"], d["date"]
+        if c not in first or dt < first[c]["date"]:
+            first[c] = dict(code=c, name=d.get("name", ""), date=dt,
+                            close=d.get("close"), stop=d.get("oya_stop"),
+                            pressure=d.get("oya_pressure"))
+    return list(first.values())
+
+
+def render_follow_md(r):
+    """历史推荐跟踪（用户 2026-11-18）：
+       · 只跟踪【未破位】的票，一直强就一直跟（无天数上限）；
+       · 破位当次标注说明并写入停止台账，之后不再推送；
+       · 已停止的票永久退出跟踪。"""
+    picks = _first_picks()
+    if not picks:
+        return []
+    try:
+        cache = json.load(open(os.path.join(HERE, "kline_cache.json"), encoding="utf-8"))["data"]
+    except Exception:
+        return []
+    stopped = _load_stopped()
+    md = ["### 🔁 历史推荐跟踪（未破位持续跟，破位即停）"]
+    active, just_stopped = [], []
+    for x in picks:
+        code = x["code"]
+        if stopped.get(code) == x["date"]:      # 已宣告停止，永久退出
+            continue
+        b = cache.get(code)
+        if not b:
+            continue
+        idxs = [i for i, z in enumerate(b) if z["date"] == x["date"]]
+        if not idxs:
+            continue
+        i = idxs[0]
+        c0 = x["close"] if x["close"] else b[i]["last"]
+        stop = x["stop"] if x["stop"] else round(b[i]["low"] * 0.96, 2)
+        # 破位判定：提示日之后任一根 K 线收盘跌破止损线
+        after = b[i + 1:]
+        broke = any(z["last"] < stop for z in after)
+        last = b[-1]["last"]
+        ret = (last / c0 - 1) * 100
+        hi = max((z["high"] for z in after), default=c0)
+        hi_ret = (hi / c0 - 1) * 100
+        days = len(after)
+        if broke:
+            just_stopped.append((x, ret, hi_ret, stop, days))
+        else:
+            active.append((x, ret, hi_ret, stop, days))
+
+    # 未破位：一直跟
+    for x, ret, hi_ret, stop, days in active:
+        flag = "🔥" if ret >= 20 else ("↗" if ret > 0 else "→")
+        md.append(f"- {flag} **{x['name']}** `{x['code']}` 首推{x['date']} 第{days+1}日｜"
+                  f"现价{(x['close'] or 0)*(1+ret/100):.2f}　累计 **{ret:+.1f}%**（最高{hi_ret:+.1f}%）｜"
+                  f"止损{stop} 未破位")
+    # 刚破位：说明一次并写入台账
+    for x, ret, hi_ret, stop, days in just_stopped:
+        md.append(f"- ⛔ **{x['name']}** `{x['code']}` 首推{x['date']}｜"
+                  f"已破位（收盘跌破止损{stop}）　跟踪终止，累计{ret:+.1f}%（最高{hi_ret:+.1f}%）")
+        stopped[x["code"]] = x["date"]
+    if just_stopped:
+        _save_stopped(stopped)
+    if not active and not just_stopped:
+        return []
     md.append("")
     return md
