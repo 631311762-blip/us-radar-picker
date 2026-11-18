@@ -78,6 +78,8 @@ CONST = {
     "MAX_GAP": 10,      # 破位→收复间隔硬上限（交易日，≈两周内必须回来；越快越优）
     "RECLAIM_BODY_MIN": 0.03,  # 收复日实体最小涨幅（长阳底线；排除小短线/十字/阴线收复）
     "RECLAIM_UPPER_MAX": 0.40, # 收复日上影/振幅 上限（排除长上影冲高回落假收复）
+    "RECLAIM_FAIL_DROP": 0.05, # 【已废弃·兜底保留】旧规则：收盘较收复日收盘跌超5%剔除
+    "RECLAIM_FAIL_FIB": 0.618, # 收复后失效门槛（现行）：以「破位低点→收复高点」为一波，收盘跌破该波0.618黄金回撤位→收复失败，剔除
     "MAX_AGE": 3,       # 仅输出近 N 个交易日发生收复的信号
     "TOP_N": 30,        # 进入推荐台账 / 推送的前 N 只
     "KLINE_COUNT": 330, # 拉取的 K 线根数
@@ -156,6 +158,8 @@ def detect(bars, const=None):
     WIN = c["WIN"]; RANGE_MAX = c["RANGE_MAX"]; TOUCH_MIN = c["TOUCH_MIN"]
     BREAK_PCT = c["BREAK_PCT"]; RECLAIM_WIN = c["RECLAIM_WIN"]; RECLAIM_PCT = c["RECLAIM_PCT"]
     MAX_GAP = c["MAX_GAP"]; RECLAIM_BODY_MIN = c["RECLAIM_BODY_MIN"]; RECLAIM_UPPER_MAX = c["RECLAIM_UPPER_MAX"]
+    RECLAIM_FAIL_DROP = c.get("RECLAIM_FAIL_DROP", 0.05)
+    RECLAIM_FAIL_FIB = c.get("RECLAIM_FAIL_FIB", 0.618)
     if len(bars) < WIN + 20:
         return []
     N = len(bars)
@@ -218,6 +222,17 @@ def detect(bars, const=None):
             t += 1; continue
         if rb_up / rb_rng > RECLAIM_UPPER_MAX:         # 上影过长（冲高回落假收复）
             t += 1; continue
+        # ── 收复后失效门槛（0.618 黄金分割回撤）──
+        # 以「破位低点→收复日最高点」为一波拉升，取 0.618 回撤位作防线：
+        #   floor = H - 0.618*(H-L)，L=破位日前后最低、H=收复日最高
+        # 收复日后任一交易日收盘跌破该防线 → 有效跌破黄金支撑 → 收复失败，剔除。
+        # 相对旧「跌超5%」：用随波动自适应的黄金分割位，避免绝对值一刀切误杀（如超越科技）。
+        wave_lo = min(x["low"] for x in bars[max(0, break_idx - 1):sig + 1])
+        wave_hi = bars[sig]["high"]
+        fib_floor = wave_hi - RECLAIM_FAIL_FIB * (wave_hi - wave_lo) if wave_hi > wave_lo else sig_close * (1 - RECLAIM_FAIL_DROP)
+        fail = any(bars[j]["close"] < fib_floor for j in range(sig + 1, N))
+        if fail:
+            t = sig + 1; continue
         avgvol = sum(x["volume"] for x in win[-20:]) / 20
         def ret(n):
             j = min(sig + n, N - 1)
@@ -303,7 +318,12 @@ OPER_RULE = """**操作策略（本模型「管三天」，每次推荐必附）
 - **买入后第三天必须卖出**（固定持有 ≤3 日，不恋战）。
 - **买点量能（分层参考·非硬过滤）**：回测显示「买点放量 + 破位→收复间隔≤3」组合未来 3 日胜率最高（71.5%），列为**量能精选层（优先关注）**；缩量承接型仍保留但排序靠后。两者均不剔除。
 - **二次确认（二次提示点）**：收复后 1~5 日内再现「放量上涨（收涨≥3%）」即确认非单纯反弹；**仅当确认日距今 ≤1 交易日**才列为**第一优先级**推送，确认日距今 >1 交易日（涨势已兑现/回落）则**自动降级为观察样本**，避免旧信号霸榜。**二次确认是「优先级提示」而非「买点」**：回测确认日追高买入为负期望（3日胜率44.5%／均收−0.57%），正期望买点仍在收复日 T+1/T+2；未达确认条件的作为**观察样本**继续跟踪。
+- **收复后失效剔除（0.618 黄金分割）**：以「破位低点→收复日最高」为一波拉升，取 0.618 黄金回撤位作防线（floor = 收复日最高 − 0.618×(收复日最高−破位低点)）；收复日后任一交易日**收盘跌破该防线**即视为有效跌破黄金支撑、收复失败，直接剔除，不再推送、不再"管三天"（如北方长龙/内蒙一机/华联股份）。仅盘中插针不算，以收盘为准。
 - 风控：跌破支撑下 3~5% 止损；到达 +8~12% 或放量滞涨可提前止盈。"""
+
+# 模型原始样本（用于回忆模型来源/标定口径；每条推送末尾附，便于对照）
+ORIGINAL_SAMPLES = ("📌 **模型原始样本**（建模标尺，供回忆对照）："
+                    "均普智能 sh688306、幸福蓝海 sz300528、仁信新材 sz301395。")
 
 # T+1 形态识别阈值
 UPPER_SHADOW_RATIO = 0.5   # 上影 >= 0.5×实体 视为「带上影」
@@ -537,7 +557,8 @@ def run_review(ctx, max_age=None, top_n=None):
 def _push_report(cands, today):
     if not cands:
         push("%s %s（无信号）" % (MODEL_LABEL, today),
-             "### %s\n\n今日无「假破位后收复支撑」候选（近 %d 交易日）。" % (MODEL_LABEL, CONST["MAX_AGE"]))
+             "### %s\n\n今日无「假破位后收复支撑」候选（近 %d 交易日）。\n\n%s" % (
+                 MODEL_LABEL, CONST["MAX_AGE"], ORIGINAL_SAMPLES))
         return
     _fresh = CONST["SECOND_CONFIRM_FRESH"]
     confirmed = [e for e in cands if isinstance(e.get("second_confirm"), dict)
@@ -547,7 +568,7 @@ def _push_report(cands, today):
     lines = ["### %s · 每日候选（%s）" % (MODEL_LABEL, today),
              "> 近 **%d** 交易日发生「收复支撑」的候选共 **%d** 只：其中 **第一优先级·二次确认 %d** 只（收复后放量上涨确认、且确认日距今 ≤%d 交易日），**观察样本 %d** 只（待确认或确认已过时效）。博反弹信号，须严格止盈止损，非投资建议。" % (
                  CONST["MAX_AGE"], len(cands), len(confirmed), CONST["SECOND_CONFIRM_FRESH"], len(watch)),
-             "> ⚠️ **二次确认是「优先级提示」而非「买点」**：回测显示确认日追高买入为负期望（3日胜率 44.5%／均收 −0.57%，涨停确认更差）；真正正期望买点仍在收复日 T+1/T+2。确认日距今 >%d 交易日的信号自动降级为观察样本、不再列第一优先级。" % CONST["SECOND_CONFIRM_FRESH"],
+             "> ⚠️ **二次确认是「优先级提示」而非「买点」**：回测显示确认日追高买入为负期望（3日胜率 44.5%%／均收 −0.57%%，涨停确认更差）；真正正期望买点仍在收复日 T+1/T+2。确认日距今 >%d 交易日的信号自动降级为观察样本、不再列第一优先级。" % CONST["SECOND_CONFIRM_FRESH"],
              ""]
     # ── 第一优先级：二次确认 ──
     if confirmed:
@@ -578,8 +599,8 @@ def _push_report(cands, today):
             lines.append("- %s %s：支撑 %.2f ｜ 破位 %s → 收复 %s ｜ 量比 %s ｜ 买点量比 %.2f ｜ 评分 %d" % (
                 e["code"], e.get("name", ""), e["support"], e["break_day"], e["sig_day"],
                 e.get("vol_ratio"), (e["op"].get("vol_ratio_buy") or 0), score(e)))
-    # 固定操作策略（每次必附）
-    lines += ["", OPER_RULE]
+    # 固定操作策略（每次必附）+ 模型原始样本标注（便于回忆）
+    lines += ["", OPER_RULE, "", ORIGINAL_SAMPLES]
     push("%s %s（%d只）" % (MODEL_LABEL, today, len(cands)), "\n".join(lines))
 
 

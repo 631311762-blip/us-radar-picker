@@ -8,9 +8,17 @@
     "RECLAIM_WIN": 12,
     "RECLAIM_PCT": 1.0,
     "MAX_GAP": 10,
+    "RECLAIM_BODY_MIN": 0.03,
+    "RECLAIM_UPPER_MAX": 0.4,
+    "RECLAIM_FAIL_DROP": 0.05,
+    "RECLAIM_FAIL_FIB": 0.618,
     "MAX_AGE": 3,
     "TOP_N": 30,
-    "KLINE_COUNT": 330
+    "KLINE_COUNT": 330,
+    "SECOND_CONFIRM_WIN": 5,
+    "SECOND_CONFIRM_UP": 0.03,
+    "SECOND_CONFIRM_VOL": 1.2,
+    "SECOND_CONFIRM_FRESH": 1
   },
-  "updated_at": "2026-11-13 22:31"
+  "updated_at": "2026-11-18 23:07"
 }
