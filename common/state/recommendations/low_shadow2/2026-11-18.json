@@ -1,0 +1,29 @@
+{
+  "date": "2026-11-18",
+  "model": "low_shadow2",
+  "count": 1,
+  "picks": [
+    {
+      "code": "002104",
+      "name": "恒宝股份",
+      "close": 8.45,
+      "score": 63.9,
+      "board": "",
+      "raw": {
+        "code": "002104",
+        "name": "恒宝股份",
+        "close": 8.45,
+        "score": 63.9,
+        "board": ""
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 777,
+    "universe": 4604,
+    "dropped": 0
+  },
+  "written_at": "2026-11-18T16:44:50+08:00"
+}

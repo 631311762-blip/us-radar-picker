@@ -1,97 +1,109 @@
 {
-  "generated_at": "2026-11-16T18:54:02+08:00",
+  "generated_at": "2026-11-18T17:26:49+08:00",
   "results": [
     {
       "name": "shanshui",
       "label": "善水模型 v10",
       "exit": 0,
-      "seconds": 115.5
+      "seconds": 115.4
     },
     {
       "name": "low_shadow",
       "label": "低位上影线模型",
       "exit": 0,
-      "seconds": 3.8
+      "seconds": 7.3
     },
     {
       "name": "low_shadow2",
       "label": "低位上影模型2（双栏拆分·低位栏）",
       "exit": 0,
-      "seconds": 19.9
+      "seconds": 34.4
     },
     {
       "name": "lingpei",
       "label": "领湃模型 B_V3.3（K线企稳·长下影探底回升）",
       "exit": 0,
-      "seconds": 156.0
+      "seconds": 177.6
     },
     {
       "name": "kaizhong",
-      "label": "凯众模型 v4",
+      "label": "缩量二次突破模型 SVDB（2026-11-18 替换凯众v4）",
       "exit": 0,
-      "seconds": 15.1
+      "seconds": 18.4
     },
     {
       "name": "yidian",
       "label": "易点模型",
       "exit": 0,
-      "seconds": 161.4
+      "seconds": 974.6
     },
     {
       "name": "powei",
       "label": "破位后上涨模型（假破位收复）",
-      "exit": 0,
-      "seconds": 44.1
+      "exit": 1,
+      "seconds": 102.3
     },
     {
       "name": "zhushanglang",
-      "label": "主升浪 V4",
+      "label": "主升浪 V5·奥雅式突破",
       "exit": 0,
-      "seconds": 2567.3
+      "seconds": 1234.5
+    },
+    {
+      "name": "high_shadow",
+      "label": "高位上影线模型（洗盘再起观察名单·看涨）",
+      "exit": 0,
+      "seconds": 9.5
     }
   ],
   "settlements": [
     {
       "model": "shanshui",
-      "batches": 3,
-      "samples": 6,
-      "win_rate": 0.3333
+      "batches": 4,
+      "samples": 7,
+      "win_rate": 0.1429
     },
     {
       "model": "low_shadow",
-      "batches": 3,
-      "samples": 7,
-      "win_rate": 0.0
+      "batches": 4,
+      "samples": 9,
+      "win_rate": 0.0556
     },
     {
       "model": "low_shadow2",
-      "batches": 3,
-      "samples": 81,
-      "win_rate": 0.037
+      "batches": 4,
+      "samples": 83,
+      "win_rate": 0.0482
     },
     {
       "model": "lingpei",
-      "batches": 3,
-      "samples": 22,
-      "win_rate": 0.0
+      "batches": 4,
+      "samples": 30,
+      "win_rate": 0.0882
     },
     {
       "model": "kaizhong",
-      "batches": 4,
-      "samples": 18,
-      "win_rate": 0.0
+      "batches": 5,
+      "samples": 20,
+      "win_rate": 0.0833
     },
     {
       "model": "yidian",
-      "batches": 4,
-      "samples": 18,
-      "win_rate": 0.2223
+      "batches": 5,
+      "samples": 19,
+      "win_rate": 0.1594
     },
     {
       "model": "powei",
-      "batches": 2,
-      "samples": 11,
-      "win_rate": 0.1818
+      "batches": 3,
+      "samples": 41,
+      "win_rate": 0.0732
+    },
+    {
+      "model": "high_shadow",
+      "batches": 4,
+      "samples": 13,
+      "win_rate": 0.4961
     }
   ]
 }

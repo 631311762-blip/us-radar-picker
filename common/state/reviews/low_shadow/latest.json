@@ -1,19 +1,19 @@
 {
   "model": "low_shadow",
-  "generated_at": "2026-11-16T18:54:02+08:00",
-  "batches": 3,
-  "samples": 7,
-  "win_rate": 0.0,
+  "generated_at": "2026-11-18T17:26:48+08:00",
+  "batches": 4,
+  "samples": 9,
+  "win_rate": 0.0556,
   "by_horizon": {
     "t1": {
-      "samples": 7,
-      "win_rate": 0.0,
-      "avg_return": -0.0401
+      "samples": 9,
+      "win_rate": 0.1111,
+      "avg_return": -0.0342
     },
     "t5": {
-      "samples": 0,
-      "win_rate": null,
-      "avg_return": null
+      "samples": 1,
+      "win_rate": 0.0,
+      "avg_return": -0.0997
     },
     "t10": {
       "samples": 0,
@@ -26,7 +26,8 @@
       "code": "300600",
       "name": "国瑞科技",
       "date": "2026-11-11",
-      "t1": -0.0147
+      "t1": -0.0147,
+      "t5": -0.0997
     },
     {
       "code": "301259",
@@ -63,6 +64,18 @@
       "name": "津荣天宇",
       "date": "2026-11-13",
       "t1": -0.0316
+    },
+    {
+      "code": "300266",
+      "name": "兴源环境",
+      "date": "2026-11-16",
+      "t1": -0.0566
+    },
+    {
+      "code": "300141",
+      "name": "和顺电气",
+      "date": "2026-11-16",
+      "t1": 0.0289
     }
   ]
 }
