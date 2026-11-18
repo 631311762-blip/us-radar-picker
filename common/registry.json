@@ -29,9 +29,10 @@
     },
     {
       "name": "kaizhong",
-      "label": "凯众模型 v4",
+      "label": "缩量二次突破模型 SVDB（2026-11-18 替换凯众v4）",
       "cmd": "python3 kaizhong/daily_v4.py",
-      "enabled": true
+      "enabled": true,
+      "_note": "同口径回测：缩量二次突破10日胜率63.2%/收益+4.51%，凯众v4放量突破仅41.7%/+0.29%，用户决定替换。选股内核 shrink_breakout.scan_one 对齐原 stance_hint 接口，运维框架(台账/复盘/推送/合规)不变；独立台账 shrink_history.json，v4_history.json 保留供回退。"
     },
     {
       "name": "yidian",

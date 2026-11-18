@@ -35,7 +35,7 @@ import numpy as np
 import pandas as pd
 
 import lib
-import stance_hint as sh
+import shrink_breakout as sh      # 2026-11-18 替换：凯众v4 → 缩量二次突破模型
 import recommend as rec
 
 TOP = int(os.environ.get("KZ_TOP", "6"))
@@ -45,8 +45,8 @@ NO_PUSH = os.environ.get("KZ_NO_PUSH", "0") == "1"
 DEDUP_DAYS = int(os.environ.get("KZ_DEDUP_DAYS", "5"))
 TODAY = datetime.now().strftime("%Y-%m-%d")
 HORIZONS = (1, 3, 5, 10)
-V4_HIST = os.path.join(lib.DATA, "v4_history.json")
-MODEL_DESC = "横盘约两个月 → 站稳 MA5 → 放量突破当天提示（不考虑试盘因素）"
+V4_HIST = os.path.join(lib.DATA, "shrink_history.json")   # 独立台账，原 v4_history.json 保留供回退
+MODEL_DESC = "缩量二次突破：横盘→放量假突破(强度≥1.15)→洗盘→缩量二次上攻，提示即买点"
 
 
 def z6(c):
@@ -377,66 +377,53 @@ def review_lines(rv):
     return L
 
 
-NOTE = ("收盘 ≥ 触发价 **且** 成交量 ≥ 所需量同时满足才是买点；"
-        "回踩不买；止损按买入价 -5%；提示即买点、无等待期。")
+NOTE = ("缩量二次上攻当日收盘价买入（提示即买点、无等待期）；"
+        "务必确认大盘非空头趋势；止损按买入价 -5%。")
 
 
-# ---------------- 超额倾向标注（纯提示，不参与选股/排序/阈值） ----------------
-# 依据：2026-11-10 对台账 324 只完整走完 10 个交易日的样本分组统计——
-#   全样本平均 10 日超额 -1.36%（正超额率 36.7%）
-#   横盘收盘比 ≤ 1.10：             +1.63%（58.5%）
-#   横盘收盘比 ≤ 1.10 且首日 ≥7%：   +3.69%（54.5%）
-#   首日 <4%：                      -2.40%
-#   score 与 10 日超额相关系数仅 0.064（排序几乎无预测力）
-# 因此按「横盘够紧 + 突破够狠但不失控」叠加三星/两星/一星，仅作研究参考。
-EXCESS_TIGHT = 1.10      # 唯一有效分界：≤1.10 组历史平均超额为正，>1.10 组为负
-
+# ---------------- 信号质量标注（纯提示，不参与选股/排序/阈值） ----------------
+# 依据：2026-11 对缩量二次突破模型的全A股回测（2016-2026，同口径对比）——
+#   基线缩量模型(强度≥1.15)：10日胜率 63.2%、平均收益 +4.51%、盈亏比 1.61
+#   同期凯众v4放量突破：       10日胜率 41.7%、平均收益 +0.29%（故 2026-11-18 替换）
+#   单因子分组结论：
+#     突破强度越高越优（强度≥1.15 是核心胜负手；原始宽松参数近随机）
+#     量比越低越优（极缩量 <0.4：10日胜率 46.8%、收益 +1.91%；巨量 >2.0 转负）
+#     大盘多头下最优（多头胜率 65.5%/+5.08%，空头仅 40.7% 且亏钱 → 空头坚决不用）
+#     洗盘间隔 8~25 日优于 ≤7 日（案例凯众 11 日、仁信 14 日落在优质区间）
+# 因此按「突破够猛 + 缩量够狠 + 洗盘充分」叠加星级，仅作研究参考。
 
 def excess_tag(h):
     """返回 (星级标注, 依据说明, 排序权重)。仅用于展示与并列时的参考排序。
 
-    分级严格依据台账 335 只完整 10 日样本的分组统计（全市场等权基准）：
-      横盘比 ≤1.10            : n=53,  平均 +1.66%, 正率 60.4%   ← 唯一正超额分组
-        └ 首日 4~7%          : n=19,  平均 +3.05%, 正率 68.4%   ← 最优子组
-        └ 首日 7~12%         : n=11,  平均 +3.69%, 正率 54.5%
-        └ 首日 <4%           : n=23,  平均 -0.47%, 正率 56.5%
-      横盘比 1.10~1.15       : n=137, 平均 -1.39%（组内首日涨幅几乎无区分度）
-      横盘比 >1.15           : n=145, 平均 -2.57%
-    因此 >1.10 时一律降档，不再按首日涨幅给出「够狠」之类的正向措辞——
-    数据不支持，避免误导。
+    分级依据上面回测的单因子结论（方向确定，具体数值为分组均值）：
+      强度 ≥1.25 且 量比 ≤0.4 : ★★★ 强（强突破 + 极缩量，最优组合）
+      强度 ≥1.15 且 量比 ≤0.6 : ★★ 中（核心参数达标）
+      其余（边缘达标）        : ★ 弱（注意大盘环境，空头不用）
     """
-    rng = float(h.get("sw_range") or 9)
-    chg = float(h.get("chg") or 0)
-    vol_x = float(h.get("vol_x") or 0)
+    strength = float(h.get("strength") or 0)
+    vr = float(h.get("vol_ratio") or 1)
+    gap = int(h.get("gap") or 0)
 
-    if rng <= EXCESS_TIGHT:
-        if 4 <= chg < 7:
-            return "★★★ 强", f"横盘比 {rng:.3f}≤1.10 + 首日 {chg:+.1f}% 落在最优子组（+3.05%/68% 正率）", 3
-        if 7 <= chg < 12:
-            return "★★★ 强", f"横盘比 {rng:.3f}≤1.10 + 首日 {chg:+.1f}%（+3.69%/55% 正率）", 3
-        if chg >= 12:
-            return "★★ 中", f"横盘比 {rng:.3f}≤1.10 但首日 {chg:+.1f}% 偏猛，防冲高回落", 2
-        return "★★ 中", f"横盘比 {rng:.3f}≤1.10（有效特征）但首日仅 {chg:+.1f}%，力度不足", 2
-
-    # 横盘比 > 1.10：进入历史负超额区间，统一降档
-    if rng <= 1.15:
-        return "★ 弱", f"横盘比 {rng:.3f}>1.10，落在此前平均超额 -1.39% 的区间", 1
-    return "★ 弱", f"横盘比 {rng:.3f}>1.15，历史该组平均超额 -2.57%", 1
+    if strength >= 1.25 and vr <= 0.4:
+        return "★★★ 强", f"强度 {strength:.3f}≥1.25 + 量比 {vr:.2f}≤0.4（强突破+极缩量最优组）", 3
+    if strength >= 1.15 and vr <= 0.6:
+        g = f"，洗盘 {gap} 日{'' if 8 <= gap <= 25 else '（间隔偏短/偏长）'}" if gap else ""
+        return "★★ 中", f"强度 {strength:.3f}≥1.15 + 量比 {vr:.2f}≤0.6（核心参数达标）{g}", 2
+    return "★ 弱", f"强度 {strength:.3f}/量比 {vr:.2f} 边缘达标，务必确认大盘非空头", 1
 
 
 def excess_note():
-    return ("超额倾向（研究参考，不影响选股）：依据台账 335 只完整 10 日样本（全市场等权基准），"
-            "**横盘收盘比 ≤ 1.10 是唯一能把平均超额拉正的分组**（n=53，平均 +1.66%、正率 60.4%，"
-            "全样本 -1.42%、正率 36.7%）；其中首日 4~7% 最优（+3.05%/68.4%），7~12% 为 +3.69%，"
-            "<4% 降至 -0.47%。横盘比一过 1.10 就翻负：1.10~1.15 为 -1.39%、>1.15 为 -2.57%，"
-            "且该区间内首日涨幅几乎无区分度。**模型 score 与 10 日超额相关系数仅 0.064，"
-            "排序基本无预测力**，故本列仅作研究参考，不改变选股与排序。")
+    return ("信号质量标注（研究参考，不影响选股）：缩量二次突破模型全A股回测显示，"
+            "**突破强度 ≥1.15 是核心胜负手**（10日胜率 63.2%/收益 +4.51%，vs 凯众v4放量突破 41.7%/+0.29%）；"
+            "量比越低越优（极缩量 <0.4 为 +1.91%），强度≥1.25 且量比≤0.4 为最优组合。"
+            "**大盘空头趋势下胜率仅 40.7% 且亏损，空头市场坚决不用**；洗盘 8~25 日优于 ≤7 日。"
+            "本列仅作研究参考，不改变选股与排序。")
 
 
 
 # ---------------- 输出 ----------------
 def build_push(hits, last_date, tracked_n, fmap, cal, rv, new_n, dup_n):
-    L = [f"# 凯众横盘突破 · {last_date}", ""]
+    L = [f"# 缩量二次突破 · {last_date}", ""]
     L.append(f"> 模型：{MODEL_DESC}；**提示即买点**，同一标的只记一次「首日推荐」，"
              "之后再提示标「推荐第 N 天」。")
     L.append("")
@@ -459,7 +446,7 @@ def build_push(hits, last_date, tracked_n, fmap, cal, rv, new_n, dup_n):
         L.append("")
         L.append("> " + excess_note())
     else:
-        L.append("- 今日无样本放量突破，不推送。")
+        L.append("- 今日无缩量二次突破信号，不推送。")
     L.append("")
     L.append("## 二、前期推荐复盘")
     L.append("")
@@ -470,25 +457,25 @@ def build_push(hits, last_date, tracked_n, fmap, cal, rv, new_n, dup_n):
 
 
 def build_report(hits, last_date, tracked_n, fmap, cal, rv, new_n, dup_n, candidate_n):
-    L = [f"# 凯众形态相似股模型 v4 · {last_date}", ""]
+    L = [f"# 缩量二次突破模型（SVDB）· {last_date}", ""]
     L.append(f"> 选股模型：{MODEL_DESC}")
-    L.append("> 硬前置：提示日前 40 个交易日收盘价横盘（max/min≤1.20、std/mean≤0.045），"
-             "前后各 20 日分别横盘；仅用收盘价，避免影线干扰。")
+    L.append("> 形态：横盘(25日) → 放量假突破(强度≥1.15) → 洗盘5~45日 → 缩量二次上攻(量比≤0.6)；"
+             "提示日收盘买入。")
     L.append(f"> 覆盖本地日线 {candidate_n} 只，命中 **{len(hits)}** 只"
              f"（台账新增 {new_n} 笔、5 日内重复去重 {dup_n} 笔）；取评分前 {min(TOP, len(hits))} 只推送。")
     L.append("")
-    L.append("## 一、今日突破提示")
+    L.append("## 一、今日缩量二次突破提示")
     L.append("")
-    L.append("| 名称 | 代码 | 推荐标注 | 首推日 | 横盘区间 | 收盘振幅/std | 平台上沿 | 触发价 | 所需量(万手) | 止损 | 收盘 | 涨幅 | 量比 | 评分 | 超额倾向 |")
-    L.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    L.append("| 名称 | 代码 | 推荐标注 | 首推日 | 首突日 | 突破强度 | 量比 | 洗盘间隔 | 平台上沿 | 止损 | 收盘 | 涨幅 | 评分 | 信号质量 |")
+    L.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for h in hits:
         tg, fd = rec.tag_of(h["code"], last_date, fmap, cal)
         stop = round(float(h["last_close"]) * (1 - sh.STANCE["stop_loss"]), 2)
         star, why_x, _ = excess_tag(h)
-        L.append(f"| {h['name']} | {z6(h['code'])} | {tg} | {fd} | {h['sw_win']} | "
-                 f"{h['sw_range']}/{h['sw_std']} | {h['platform_top']} | {h['trigger']} | "
-                 f"{h['req_vol_wan']} | {stop} | {h['last_close']} | {h['chg']}% | "
-                 f"{h['vol_x']} | {h['score']} | {star}（{why_x}） |")
+        L.append(f"| {h['name']} | {z6(h['code'])} | {tg} | {fd} | {h['b1_date']} | "
+                 f"{h['strength']} | {h['vol_ratio']} | {h['gap']}日 | "
+                 f"{h['platform_top']} | {stop} | {h['last_close']} | {h['chg']}% | "
+                 f"{h['score']} | {star}（{why_x}） |")
     L.append("")
     L.append("> " + excess_note())
     L.append("")
@@ -501,26 +488,26 @@ def build_report(hits, last_date, tracked_n, fmap, cal, rv, new_n, dup_n, candid
 
 
 def build_ledger(hits, hist, last_date, fmap, cal, rv, candidate_n):
-    """资料库台账《凯众台账_<日期>.md》—— 字段齐全、真实涨跌幅，避免执行端编造。"""
-    L = [f"# 凯众形态相似股模型 · 每日推荐台账 · {last_date}", ""]
+    """资料库台账《缩量台账_<日期>.md》—— 字段齐全、真实涨跌幅，避免执行端编造。"""
+    L = [f"# 缩量二次突破模型 · 每日推荐台账 · {last_date}", ""]
     L.append(f"- 基准日：{last_date}")
-    L.append(f"- 模型名：凯众形态相似股 v4（{MODEL_DESC}）")
+    L.append(f"- 模型名：缩量二次突破（SVDB，{MODEL_DESC}）")
     L.append(f"- 候选池数量：{candidate_n}")
     L.append("")
     L.append(f"## 今日最优 {min(TOP, len(hits))} 只")
     L.append("")
-    L.append("| 名称 | 6位代码 | 推荐标注 | 首推日 | 题材 | 一句话原因 | 触发价 | 所需量(万手) | 止损 | 当日收盘 | 当日涨跌幅 | 超额倾向 |")
-    L.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
+    L.append("| 名称 | 6位代码 | 推荐标注 | 首推日 | 题材 | 一句话原因 | 平台上沿 | 止损 | 当日收盘 | 当日涨跌幅 | 信号质量 |")
+    L.append("|---|---|---|---|---|---|---|---|---|---|---|")
     for h in hits[:TOP]:
         tg, fd = rec.tag_of(h["code"], last_date, fmap, cal)
         theme = (h.get("concepts", "").split(",")[0] if h.get("concepts") else "") \
                 or h.get("industry", "") or "—"
         stop = round(float(h["last_close"]) * (1 - sh.STANCE["stop_loss"]), 2)
-        why = (f"横盘 {h['sw_win']}（收盘比 {h['sw_range']}/std {h['sw_std']}），"
-               f"放量 {h['vol_x']} 倍突破平台 {h['platform_top']}")
+        why = (f"横盘 {h['sw_win']} → {h['b1_date']} 放量假突破（强度 {h['strength']}）"
+               f"→ 洗盘 {h['gap']} 日 → 缩量二次上攻（量比 {h['vol_ratio']}）")
         star, why_x, _ = excess_tag(h)
         L.append(f"| {h['name']} | {z6(h['code'])} | {tg} | {fd} | {theme} | {why} | "
-                 f"{h['trigger']} | {h['req_vol_wan']} | {stop} | "
+                 f"{h['platform_top']} | {stop} | "
                  f"{h['last_close']} | {h['chg']:+.2f}% | {star}（{why_x}） |")
     L.append("")
     L.append("> " + excess_note())
@@ -593,7 +580,7 @@ def main():
         print("[2/5] 抓取全市场快照并增量更新日线 ...")
         names = refresh_data(last_date)
 
-    print("[3/5] 全市场 v4 扫描（合规剔除静默执行）...")
+    print("[3/5] 全市场缩量二次突破扫描（合规剔除静默执行）...")
     hits, dates, px, lo = scan_and_matrix(last_date, f10, names)
     cal = [d for d in dates if d <= last_date]
     # 共同前置层：写统一推荐台账（出口 gate 强制再剔一次 ST/立信）
@@ -606,8 +593,10 @@ def main():
 
     hist = load_hist()
     if not hist:
-        print("      首次上线：从 v4 回测明细导入历史提示，作为「前期推荐」复盘基线")
-        hist = bootstrap_from_backtest(last_date, cal)
+        # 2026-11-18：缩量模型独立台账首次上线，从零开始积累真实信号。
+        # 不再调用 bootstrap_from_backtest —— 那份是凯众 v4 回测 CSV，口径与
+        # 缩量模型不同，混入会污染「前期推荐复盘」统计。原函数保留仅作研究参考。
+        print("      缩量模型台账首次上线：从零积累，不导入 v4 历史（口径不同）")
     fmap = rec.first_rec_map(hist)
     print("[4/5] 首次突破去重 + 写台账 + 刷新持仓状态 ...")
     new_n, dup_n = update_ledger(hist, hits, last_date, cal, dates, px, lo)
@@ -623,7 +612,7 @@ def main():
                      new_n, dup_n, len(px.columns)))
     json.dump(hits[:TOP], open(os.path.join(lib.REPORT_DIR, f"v4_{last_date}.json"), "w",
                                encoding="utf-8"), ensure_ascii=False, indent=2)
-    lp = os.path.join(lib.REPORT_DIR, f"凯众台账_{last_date}.md")
+    lp = os.path.join(lib.REPORT_DIR, f"缩量台账_{last_date}.md")
     open(lp, "w", encoding="utf-8").write(
         build_ledger(hits, hist, last_date, fmap, cal, rv, len(px.columns)))
     print(f"      报告：{rp}\n      台账：{lp}")
@@ -634,7 +623,7 @@ def main():
     print(f"      推送内容：{sp}")
 
     if hits and not NO_PUSH:
-        lib.push_ftqq(f"凯众横盘突破 {last_date}（{len(hits)}只）", push_md)
+        lib.push_ftqq(f"缩量二次突破 {last_date}（{len(hits)}只）", push_md)
     elif NO_PUSH:
         print("[push] KZ_NO_PUSH=1，离线验证模式，未推送")
     else:
