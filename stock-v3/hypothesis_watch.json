@@ -47,7 +47,7 @@
   "log": "shadow_log.jsonl",
   "db": "shadow_db.jsonl",
   "start_from": "2026-11-06",
-  "n_recorded": 7,
+  "n_recorded": 8,
   "n_settled": 0,
   "stat": null
  }

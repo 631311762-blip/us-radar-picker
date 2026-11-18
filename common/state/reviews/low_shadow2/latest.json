@@ -1,14 +1,14 @@
 {
   "model": "low_shadow2",
-  "generated_at": "2026-11-16T18:54:02+08:00",
-  "batches": 3,
-  "samples": 81,
-  "win_rate": 0.037,
+  "generated_at": "2026-11-18T17:26:48+08:00",
+  "batches": 4,
+  "samples": 83,
+  "win_rate": 0.0482,
   "by_horizon": {
     "t1": {
-      "samples": 81,
-      "win_rate": 0.037,
-      "avg_return": -0.0567
+      "samples": 83,
+      "win_rate": 0.0482,
+      "avg_return": -0.0544
     },
     "t5": {
       "samples": 0,
@@ -507,6 +507,18 @@
       "name": "华曙高科",
       "date": "2026-11-13",
       "t1": -0.1556
+    },
+    {
+      "code": "000759",
+      "name": "中百集团",
+      "date": "2026-11-16",
+      "t1": -0.0382
+    },
+    {
+      "code": "301392",
+      "name": "汇成真空",
+      "date": "2026-11-16",
+      "t1": 0.1177
     }
   ]
 }

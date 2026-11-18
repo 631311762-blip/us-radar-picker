@@ -44,3 +44,14 @@
 {"date": "2026-11-16", "model": "powei", "code": "301163", "name": "宏德股份", "sig_day": "2026-11-11", "sig_close": 21.12, "support": 20.53, "break_to_sig": 10, "score": 11}
 {"date": "2026-11-16", "model": "powei", "code": "300947", "name": "德必集团", "sig_day": "2026-11-11", "sig_close": 13.92, "support": 13.88, "break_to_sig": 10, "score": 11}
 {"date": "2026-11-16", "model": "powei", "code": "688385", "name": "复旦微电", "sig_day": "2026-11-11", "sig_close": 53.06, "support": 52.56, "break_to_sig": 10, "score": 10}
+{"date": "2026-11-18", "model": "powei", "code": "300324", "name": "旋极信息", "sig_day": "2026-11-13", "sig_close": 3.88, "support": 3.47, "break_to_sig": 10, "score": 32}
+{"date": "2026-11-18", "model": "powei", "code": "301077", "name": "星华新材", "sig_day": "2026-11-13", "sig_close": 22.12, "support": 20.71, "break_to_sig": 10, "score": 32}
+{"date": "2026-11-18", "model": "powei", "code": "002214", "name": "大立科技", "sig_day": "2026-11-17", "sig_close": 16.31, "support": 16.31, "break_to_sig": 1, "score": 26}
+{"date": "2026-11-18", "model": "powei", "code": "002748", "name": "世龙实业", "sig_day": "2026-11-13", "sig_close": 12.39, "support": 11.89, "break_to_sig": 10, "score": 19}
+{"date": "2026-11-18", "model": "powei", "code": "002853", "name": "皮阿诺", "sig_day": "2026-11-13", "sig_close": 21.77, "support": 20.41, "break_to_sig": 10, "score": 17}
+{"date": "2026-11-18", "model": "powei", "code": "603686", "name": "福龙马", "sig_day": "2026-11-13", "sig_close": 13.6, "support": 12.8, "break_to_sig": 10, "score": 16}
+{"date": "2026-11-18", "model": "powei", "code": "301575", "name": "艾芬达", "sig_day": "2026-11-13", "sig_close": 22.84, "support": 22.35, "break_to_sig": 10, "score": 16}
+{"date": "2026-11-18", "model": "powei", "code": "002039", "name": "黔源电力", "sig_day": "2026-11-13", "sig_close": 19.35, "support": 18.89, "break_to_sig": 9, "score": 15}
+{"date": "2026-11-18", "model": "powei", "code": "002124", "name": "天邦食品", "sig_day": "2026-11-13", "sig_close": 2.31, "support": 2.22, "break_to_sig": 10, "score": 14}
+{"date": "2026-11-18", "model": "powei", "code": "000766", "name": "通化金马", "sig_day": "2026-11-13", "sig_close": 16.5, "support": 15.7, "break_to_sig": 10, "score": 14}
+{"date": "2026-11-18", "model": "powei", "code": "301004", "name": "嘉益股份", "sig_day": "2026-11-13", "sig_close": 33.97, "support": 33.18, "break_to_sig": 10, "score": 14}

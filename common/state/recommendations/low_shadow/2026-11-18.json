@@ -1,0 +1,135 @@
+{
+  "date": "2026-11-18",
+  "model": "low_shadow",
+  "count": 5,
+  "picks": [
+    {
+      "code": "301608",
+      "name": "博实结",
+      "close": 46.29,
+      "score": 74.0,
+      "board": "",
+      "raw": {
+        "symbol": "301608",
+        "name": "博实结",
+        "date": "2026-11-18",
+        "close": 46.29,
+        "upper_amp": 0.0677,
+        "upper_to_body": 14.32,
+        "vol_ratio": 1.522,
+        "pos_pct": 0.021,
+        "amount": 124395117.0,
+        "pct_chg": 1.45,
+        "ma20": 50.75,
+        "low_20": 45.34,
+        "comp_path": false,
+        "auditor": "未知",
+        "score": 74.0
+      }
+    },
+    {
+      "code": "001387",
+      "name": "雪祺电气",
+      "close": 10.51,
+      "score": 65.0,
+      "board": "",
+      "raw": {
+        "symbol": "001387",
+        "name": "雪祺电气",
+        "date": "2026-11-18",
+        "close": 10.51,
+        "upper_amp": 0.052,
+        "upper_to_body": 4.5,
+        "vol_ratio": 2.462,
+        "pos_pct": 0.0334,
+        "amount": 74039797.0,
+        "pct_chg": 0.86,
+        "ma20": 10.8,
+        "low_20": 10.17,
+        "comp_path": false,
+        "auditor": "未知",
+        "score": 65.0
+      }
+    },
+    {
+      "code": "301013",
+      "name": "利和兴",
+      "close": 24.14,
+      "score": 62.0,
+      "board": "",
+      "raw": {
+        "symbol": "301013",
+        "name": "利和兴",
+        "date": "2026-11-18",
+        "close": 24.14,
+        "upper_amp": 0.0723,
+        "upper_to_body": 5.06,
+        "vol_ratio": 1.864,
+        "pos_pct": 0.1008,
+        "amount": 645165640.0,
+        "pct_chg": 3.07,
+        "ma20": 25.2,
+        "low_20": 21.93,
+        "comp_path": false,
+        "auditor": "未知",
+        "score": 62.0
+      }
+    },
+    {
+      "code": "300137",
+      "name": "先河环保",
+      "close": 6.69,
+      "score": 59.0,
+      "board": "",
+      "raw": {
+        "symbol": "300137",
+        "name": "先河环保",
+        "date": "2026-11-18",
+        "close": 6.69,
+        "upper_amp": 0.0604,
+        "upper_to_body": 5.71,
+        "vol_ratio": 1.657,
+        "pos_pct": 0.0388,
+        "amount": 168387300.0,
+        "pct_chg": 2.29,
+        "ma20": 7.3,
+        "low_20": 6.44,
+        "comp_path": false,
+        "auditor": "未知",
+        "score": 59.0
+      }
+    },
+    {
+      "code": "600113",
+      "name": "浙江东日",
+      "close": 22.75,
+      "score": 40.0,
+      "board": "",
+      "raw": {
+        "symbol": "600113",
+        "name": "浙江东日",
+        "date": "2026-11-18",
+        "close": 22.75,
+        "upper_amp": 0.0493,
+        "upper_to_body": 2.62,
+        "vol_ratio": 2.072,
+        "pos_pct": 0.0762,
+        "amount": 227459050.0,
+        "pct_chg": 2.02,
+        "ma20": 24.11,
+        "low_20": 21.14,
+        "comp_path": false,
+        "auditor": "未知",
+        "score": 40.0
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 777,
+    "universe": 4604,
+    "dropped": 0
+  },
+  "written_at": "2026-11-18T16:44:16+08:00"
+}
