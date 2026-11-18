@@ -5169,5 +5169,93 @@
   "oya_vol_x": 1.41,
   "oya_breakdown": true,
   "oya_stop": 17.4
+ },
+ {
+  "model": "v5-oya",
+  "kind": "B-埋伏",
+  "date": "2026-11-18",
+  "code": "sz000595",
+  "name": "新能股份",
+  "close": 5.76,
+  "score": 95.8,
+  "factors": [
+   "lu10",
+   "brk60",
+   "chg5",
+   "brk20",
+   "dist_hi",
+   "vr5",
+   "pos",
+   "lu20",
+   "shrink"
+  ],
+  "pct": [
+   0.9958,
+   0.9371,
+   0.9922,
+   0.8786,
+   0.9373,
+   0.9955,
+   0.9549,
+   0.9812,
+   0.9354
+  ],
+  "dsc": 0,
+  "launch_gain": null,
+  "since": {
+   "first": "2026-11-18",
+   "days": 1,
+   "fresh": true
+  },
+  "oya_probe_date": "2026-11-09",
+  "oya_pressure": 5.92,
+  "oya_break": 1.52,
+  "oya_vol_x": 1.14,
+  "oya_breakdown": true,
+  "oya_stop": 4.96
+ },
+ {
+  "model": "v5-oya",
+  "kind": "B-埋伏",
+  "date": "2026-11-18",
+  "code": "sz002261",
+  "name": "拓维信息",
+  "close": 24.6,
+  "score": 69.0,
+  "factors": [
+   "lu10",
+   "brk60",
+   "chg5",
+   "brk20",
+   "dist_hi",
+   "vr5",
+   "pos",
+   "lu20",
+   "shrink"
+  ],
+  "pct": [
+   0.0,
+   0.8511,
+   0.9927,
+   0.9974,
+   0.9119,
+   0.9892,
+   0.9342,
+   0.0,
+   0.0
+  ],
+  "dsc": 0,
+  "launch_gain": null,
+  "since": {
+   "first": "2026-11-18",
+   "days": 1,
+   "fresh": true
+  },
+  "oya_probe_date": "2026-11-13",
+  "oya_pressure": 22.99,
+  "oya_break": 7.05,
+  "oya_vol_x": 1.92,
+  "oya_breakdown": true,
+  "oya_stop": 21.33
  }
 ]

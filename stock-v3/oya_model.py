@@ -383,11 +383,12 @@ def render_oya_md(r):
         md.append("　今日无符合奥雅形态的新提示日（宁缺勿滥，不硬凑）。")
     for i, x in enumerate(fp, 1):
         bd = {"创业板": "创", "科创板": "科"}.get(x.get("board", ""), "主")
+        probe = x.get("oya_probe_date") or "—"
         md.append(
             f"{i}. **{x['name']}**[{bd}] `{x['code']}` 分{x['score']:.0f}｜"
             f"收{x['close']} 当日{x['day_chg']:+.1f}%｜"
-            f"破{x.get('oya_pressure')}({x.get('oya_break'):+.0f}%) 量{x.get('oya_vol_x')}× "
-            f"{'洗盘✓' if x.get('oya_breakdown') else ''}")
+            f"试盘{probe} 压力线{x.get('oya_pressure')}(破{x.get('oya_break'):+.0f}%) "
+            f"量{x.get('oya_vol_x')}× {'洗盘✓' if x.get('oya_breakdown') else ''}")
     md.append("")
     return md
 
