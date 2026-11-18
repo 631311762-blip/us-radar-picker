@@ -1,22 +1,27 @@
 # -*- coding: utf-8 -*-
 """
-凯众模型 v4（横盘突破提示）· 每日自动化入口
+缩量二次突破模型（SVDB）· 每日自动化入口
+（2026-11-18 起替换原凯众 v4「横盘突破提示」，台账/复盘/推送/合规运维框架不变）
 
-选股模型：stance_hint.py  v4「横盘约两个月 → 站稳 MA5 → 放量突破当天提示」
-  - 不考虑试盘因素；提示即买点（收盘 ≥ 触发价 且 成交量 ≥ 所需量 同时满足）
-  - 硬前置：提示日前 40 个交易日收盘 max/min≤1.20、std/mean≤0.045，前后各 20 日分别横盘
+选股内核：shrink_breakout.py
+  横盘(25日) → 放量假突破(强度≥1.15) → 洗盘 5~45 日 → 缩量二次上攻(量比≤0.6)
+  - 提示日收盘价买入（提示即买点、无等待期）；止损 = 买入价 ×0.95
+  - 大盘空头趋势下不用
   - 首次突破去重：同一标的 5 个交易日内已提示过则不再新增推荐记录（仍标注「推荐第 N 天」）
 
 推送规则（沿用 recommend.py 的归口口径）：
   - 每只标注「首日推荐」或「推荐第 N 天」+ 首推日
-  - 附「前期推荐复盘」：1/3/5/10 日平均涨幅、上涨胜率、跑赢率、超额、止损率、收益明细
-  - 有突破提示才推送，无提示不推（与既有「只在突破当天推送」偏好一致）
+  - 第一部分：当日突破提示精简表（标的/推荐标注/首推日/当日涨幅/题材/信号质量）
+  - 第二部分：只跟踪相对提示日买入价「仍优」的历史标的；破位标的说明一次后
+    写入 push_track_state.json 出局名单，此后不再推送（2026-11-18 用户要求）
+  - 完整明细与前期推荐复盘仍保留在报告 v4_<日期>.md 与台账 缩量台账_<日期>.md
+  - 有突破提示才推送，无提示不推
 
 重要边界：
   - 不改动 lib.py 的 SCHEME='breakout' / BUY_P / analyze / screen —— 生产库保持原样，可随时回退
-  - 独立台账 data/v4_history.json，不污染生产 history.json
-  - 买入价 = 提示日收盘价（上一轮回测论证的唯一可执行口径）；纪律止损 = 买入价 ×0.95
-  - 首次上线从 v4 回测明细导入历史提示作为复盘基线，收益一律用真实 K 线重算
+  - 独立台账 shrink_history.json；旧 v4_history.json 保留供回退；
+    push_track_state.json 仅控制推送展示，不碰台账归口与选股口径
+  - 买入价 = 提示日收盘价；纪律止损 = 买入价 ×0.95；收益一律用真实 K 线重算
   - 合规剔除静默执行，不在任何汇报中提及
 
 用法：
@@ -46,6 +51,8 @@ DEDUP_DAYS = int(os.environ.get("KZ_DEDUP_DAYS", "5"))
 TODAY = datetime.now().strftime("%Y-%m-%d")
 HORIZONS = (1, 3, 5, 10)
 V4_HIST = os.path.join(lib.DATA, "shrink_history.json")   # 独立台账，原 v4_history.json 保留供回退
+# 微信推送的「破位出局名单」：独立于台账，不碰归口口径。写入后不可逆，确保破位标的不再推送。
+TRACK_STATE = os.path.join(lib.DATA, "push_track_state.json")
 MODEL_DESC = "缩量二次突破：横盘→放量假突破(强度≥1.15)→洗盘→缩量二次上攻，提示即买点"
 
 
@@ -121,6 +128,23 @@ def load_hist():
 
 def save_hist(hist):
     json.dump(hist, open(V4_HIST, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+
+
+def load_track_state():
+    """读取微信推送出局名单。文件不存在或损毁时返回空结构（首次上线 / 容错）。"""
+    if os.path.exists(TRACK_STATE):
+        try:
+            d = json.load(open(TRACK_STATE, encoding="utf-8"))
+            if isinstance(d, dict) and isinstance(d.get("out"), dict):
+                return d
+        except Exception:
+            pass
+    return {"out": {}}
+
+
+def save_track_state(state):
+    json.dump(state, open(TRACK_STATE, "w", encoding="utf-8"),
+              ensure_ascii=False, indent=2)
 
 
 def trade_gap(cal, d0, d1):
@@ -377,6 +401,78 @@ def review_lines(rv):
     return L
 
 
+def build_tracking(hist, last_date, cal, state):
+    """微信推送第二部分：只跟踪相对提示日买入价「还优」的历史推荐。
+
+    2026-11-18 用户要求：
+      - 只列「还优」：未触及纪律止损、且现价不低于买入价（ret >= 0）的标的；
+        当日首推已在第一部分展示，此处不重复。
+      - 破位 = 触及 -5% 纪律止损（台账 status=bad 且 note 标「止损」）
+               或 收盘跌破买入价（ret < 0）。
+      - 破位标的本期「说明一次」，随即写入不可逆出局名单 state['out']；
+        之后既不在跟踪表、也不再出现在破位说明里 —— 不再推送。
+
+    仅决定「推送里显示哪些历史标的」，不改台账、不选股、不改止损与去重口径。
+    返回 (markdown 行列表, 本期新破位数)；state['out'] 被原地更新。
+    """
+    out = state["out"]
+    # 按 6 位代码归口，取最早一条为首推（与 recommend 首推口径一致）
+    first = {}
+    for r in hist:
+        c = z6(r["code"])
+        if c not in first or str(r["date"]) < str(first[c]["date"]):
+            first[c] = r
+
+    alive, broken_new = [], []
+    for c, r in sorted(first.items(), key=lambda kv: str(kv[1]["date"])):
+        if c in out:                       # 已出局 → 不再推送（既不跟踪也不再说明）
+            continue
+        buy = float(r.get("buy_price") or 0)
+        if buy <= 0:
+            continue
+        if str(r["date"]) == last_date:    # 当日首推已在第一部分，避免重复
+            continue
+        ret = r.get("ret")
+        ret = None if ret is None else float(ret)
+        status = str(r.get("status") or "")
+        note = str(r.get("note") or "")
+        hit_stop = (status == "bad" and "止损" in note)
+        broken_price = (ret is not None and ret < 0)
+        if hit_stop or broken_price:
+            if hit_stop:
+                reason = "触及 -5% 止损，按纪律离场"
+            else:
+                reason = (f"收盘跌破买入价（现价 {buy * (1 + ret / 100):.2f}，"
+                          f"较买入 {ret:+.2f}%）")
+            out[c] = {"date": last_date, "first": str(r["date"]),
+                      "name": r.get("name", c), "reason": reason}
+            broken_new.append((r.get("name", c), c, reason))
+            continue
+        cur = buy * (1 + (ret or 0) / 100)
+        held = trade_gap(cal, str(r["date"]), last_date)
+        alive.append((r.get("name", c), c, str(r["date"]), buy, cur, ret, held))
+
+    L = []
+    if alive:
+        L.append("| 标的 | 首推日 | 买入价 | 现价 | 浮动 | 持有 |")
+        L.append("|---|---|---|---|---|---|")
+        for nm, c, d0, buy, cur, ret, held in alive:
+            r_s = f"{ret:+.2f}%" if ret is not None else "--"
+            L.append(f"| {nm}({c}) | {d0} | {buy:.2f} | {cur:.2f} | **{r_s}** | {held} 日 |")
+        L.append("")
+        L.append(f"> 仅跟踪相对提示日买入价**仍优**的 {len(alive)} 只；"
+                 "破位标的说明一次后移出，后续不再推送。")
+    else:
+        L.append("- 暂无仍在跟踪且相对买入价仍优的标的。")
+    if broken_new:
+        L.append("")
+        L.append(f"**本期破位离场（{len(broken_new)} 只，说明一次后不再推送）：**")
+        L.append("")
+        for nm, c, reason in broken_new:
+            L.append(f"- {nm}({c})：{reason}")
+    return L, len(broken_new)
+
+
 NOTE = ("缩量二次上攻当日收盘价买入（提示即买点、无等待期）；"
         "务必确认大盘非空头趋势；止损按买入价 -5%。")
 
@@ -422,19 +518,19 @@ def excess_note():
 
 
 # ---------------- 输出 ----------------
-def build_push(hits, last_date, tracked_n, fmap, cal, rv, new_n, dup_n):
+def build_push(hits, last_date, tracked_n, fmap, cal, rv, new_n, dup_n, track_lines):
     L = [f"# 缩量二次突破 · {last_date}", ""]
-    L.append(f"> 模型：{MODEL_DESC}；**提示即买点**，同一标的只记一次「首日推荐」，"
+    L.append(f"> 模型：{MODEL_DESC}；同一标的只记一次「首日推荐」，"
              "之后再提示标「推荐第 N 天」。")
     L.append("")
     L.append(f"## 一、今日突破提示（全市场命中 {len(hits)} 只：台账新增 {new_n} 笔、"
              f"5 日内重复去重 {dup_n} 笔；取评分前 {min(TOP, len(hits))} 只推送）")
     L.append("")
     if hits:
-        # 推送表单按用户要求精简：只保留 推荐标注 / 首推日 / 当日涨幅 / 题材 / 超额倾向。
+        # 推送表单按用户要求精简：只保留 推荐标注 / 首推日 / 当日涨幅 / 题材 / 信号质量。
         # 触发价、所需量、止损、收盘、量比等行情数据由用户自行在同花顺查看，
         # 完整明细仍保留在报告与台账（build_report / build_ledger）中。
-        L.append("| 标的 | 推荐标注 | 首推日 | 当日涨幅 | 题材 | 超额倾向 |")
+        L.append("| 标的 | 推荐标注 | 首推日 | 当日涨幅 | 题材 | 信号质量 |")
         L.append("|---|---|---|---|---|---|")
         for h in hits[:TOP]:
             tg, fd = rec.tag_of(h["code"], last_date, fmap, cal)
@@ -448,9 +544,9 @@ def build_push(hits, last_date, tracked_n, fmap, cal, rv, new_n, dup_n):
     else:
         L.append("- 今日无缩量二次突破信号，不推送。")
     L.append("")
-    L.append("## 二、前期推荐复盘")
+    L.append("## 二、在跟踪标的（相对提示日仍优）")
     L.append("")
-    L += review_lines(rv)
+    L += track_lines
     L.append("")
     L.append(f"> 台账共跟踪 {tracked_n} 笔记录。{NOTE}")
     return "\n".join(L)
@@ -617,15 +713,23 @@ def main():
         build_ledger(hits, hist, last_date, fmap, cal, rv, len(px.columns)))
     print(f"      报告：{rp}\n      台账：{lp}")
 
-    push_md = build_push(hits, last_date, len(hist), fmap, cal, rv, new_n, dup_n)
+    # 微信推送第二部分：只跟踪仍优的历史标的；破位说明一次并写入不可逆出局名单。
+    # 出局名单只在「本次确实发出推送」时落盘，避免离线/无信号日把说明名额消耗掉。
+    state = load_track_state()
+    track_lines, broken_n = build_tracking(hist, last_date, cal, state)
+    push_md = build_push(hits, last_date, len(hist), fmap, cal, rv,
+                         new_n, dup_n, track_lines)
     sp = os.path.join(lib.REPORT_DIR, f"推送样例_v4_{last_date}.md")
     open(sp, "w", encoding="utf-8").write(push_md)
     print(f"      推送内容：{sp}")
 
     if hits and not NO_PUSH:
         lib.push_ftqq(f"缩量二次突破 {last_date}（{len(hits)}只）", push_md)
+        if broken_n:
+            save_track_state(state)
+            print(f"      [track] 本期 {broken_n} 只破位离场，出局名单已落盘（不再推送）")
     elif NO_PUSH:
-        print("[push] KZ_NO_PUSH=1，离线验证模式，未推送")
+        print("[push] KZ_NO_PUSH=1，离线验证模式，未推送（出局名单不落盘）")
     else:
         print("[push] 今日无突破提示，不推送（报告与台账照常落盘）")
     return hits
