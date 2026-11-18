@@ -1,19 +1,23 @@
 # -*- coding: utf-8 -*-
 r"""
-主升浪 v3.1 · 每日收盘后自动跑【回溯 → 进化 → 选股 → 推送】
+主升浪 V5「奥雅式放量突破」· 每日收盘后自动跑【回溯 → 进化 → 选股 → 推送】
 ================================================================================
+2026-11-18 用户授权：禁改文件约束解除，主榜由 v3.1 切换为「奥雅最优」模型
+（oya_model.py，试盘→破位→盘中放量突破；旧 v3.1 降为参照观察）。
+
 执行顺序很关键，闭环才成立：
   ① feedback.run()  回溯昨日推荐 → 结算到期样本 → 因子归因 → 条件更新权重
   ② 重载模型模块（若权重已更新，必须重新读取 factor_fit.json）
-  ③ build()         用【当天最新权重】重新给全市场打分选股
-  ④ record()        记录今日推荐（含因子百分位，供日后归因）
-  ⑤ 推送微信        昨日跟踪 + 今日三榜 + 模型复盘
+  ③ oya_model.build() 用奥雅形态准入 + 当天最新权重打分选股（旧v3.1作参照）
+  ④ oya_model.record() 记录今日推荐（含形态证据，供日后归因）
+  ⑤ 推送微信        昨日跟踪 + 今日奥雅主榜 + 旧模型参照 + 模型复盘
 
 用法：
-  python daily_v3.py                # 完整跑（默认每榜 6 只）
-  python daily_v3.py --top 3        # 每榜只取 3 只
+  python daily_v3.py                # 完整跑（默认主榜 6 只）
+  python daily_v3.py --top 3        # 主榜只取 3 只
   python daily_v3.py --nopush       # 只跑不推
   python daily_v3.py --noevolve     # 跳过进化，只用现权重选股
+  python daily_v3.py --legacy       # 额外跑旧 v3.1 作为参照（默认用同池轻量参照）
 """
 import os, sys, json, datetime, importlib.util, importlib
 
@@ -107,24 +111,22 @@ def main():
         except Exception as e:
             print("  [警告] 回溯环节异常，继续用现权重选股：", e)
 
-    # ── ②③ 加载模型并选股（失败必须中止，绝不推空榜——2026-11-02 空榜事故的教训）
+    # ── ②③ 加载奥雅模型并选股（失败必须中止，绝不推空榜——2026-11-02 空榜事故的教训）
     try:
-        import 每日推荐 as R
+        import oya_model as OY
         import model2 as M
         if fb.get("changed"):
-            importlib.reload(R)          # 关键：重新读取 factor_fit.json 的新权重
+            importlib.reload(OY)         # 关键：重新读取 factor_fit.json 的新权重
         ver = json.load(open(os.path.join(HERE, "factor_fit.json"),
                              encoding="utf-8")).get("ver", "v3.1")
         print("\n" + "=" * 78)
-        print(f"【第二步】用 {ver} 权重给全市场打分选股")
+        print(f"【第二步】奥雅式形态准入 + {ver} 权重打分选股（旧v3.1作参照）")
         print("=" * 78)
-        r = R.build(topn)
+        r = OY.build(topn)
 
         # ── ②③b 推送前最终硬闸门（2026-11-13 用户：「立信审计票不该推送给我」）
         #    无条件生效：只要流水线共同前置层产出的 lixin_exclude.json 存在，
         #    主榜里出现名单内个股就直接 ABORT —— 不 record、不推送、不污染台账。
-        #    这是独立于打分阶段 LIXIN_GATE 的最后一道防线，专门堵住
-        #    「联网审计降级为 UNKNOWN → 被当成通过」这一类静默漏筛。
         try:
             import lixin_gate
             if lixin_gate.guard_enabled() and lixin_gate.list_loaded():
@@ -140,9 +142,14 @@ def main():
         except Exception as e:
             print("  [警告] 推送前立信终检异常（不影响主流程）：", e)
 
-        R.show(r)
+        OY.show = getattr(OY, "show", None)
+        if OY.show:
+            OY.show(r)
+        else:
+            for p in r["latpicks"]:
+                print(f"  主推 {p['name']} {p['code']} 分{p['score']}")
         if "--norecord" not in sys.argv:   # 调试用：跳过预测记录写入，不污染结算口径
-            R.record(r)
+            OY.record(r)
     except Exception as e:
         print(f"\n[ABORT] 选股环节失败，本次不推送：{e}")
         with open(os.path.join(HERE, "push_log.jsonl"), "a", encoding="utf-8") as fp:
@@ -189,16 +196,19 @@ def main():
     cyb = r.get("cybpicks", [])
     logf = os.path.join(HERE, "push_log.jsonl")
 
-    # ── ⑤ 推送前两道闸（2026-11-02 两次空榜事故的教训：
-    #    数据源断裂时照样"推送成功"，把 Server酱 每天仅 5 条的额度浪费在空榜上）
-    if not latpicks and not picks:
-        print("\n[FAIL] 单榜为空（候选池或取数异常），已拒绝推送空榜")
+    # ── ⑤ 推送前置校验（2026-11-02 空榜事故的教训：数据源断裂时照样"推送成功"，
+    #    浪费 Server酱 额度）。V5 奥雅：主榜当天无形态命中是合法结果（宁缺勿滥），
+    #    但若候选池本身异常（build 已抛错中止）则不推送——build 的成功即代表数据正常。
+    if r.get("universe", 0) < 1000:
+        print("\n[FAIL] 候选池异常（<1000），已拒绝推送")
         with open(logf, "a", encoding="utf-8") as fp:
             fp.write(json.dumps(dict(
                 ts=datetime.datetime.now().isoformat(timespec="seconds"),
-                date=r["base_date"], ok=False, msg="空榜拦截：单榜为空"),
+                date=r["base_date"], ok=False, msg="候选池异常拦截"),
                 ensure_ascii=False) + "\n")
         sys.exit(4)
+    if not latpicks:
+        print("\n[提示] 今日无符合奥雅形态的新提示日，将推送空榜说明+跟踪+参照。")
     # 同一基准日、同一份清单已成功推送过 → 跳过（避免重复推送吃掉当天额度）
     cur_codes = sorted(p["code"] for p in latpicks)
     if "--force-push" not in sys.argv:
@@ -214,8 +224,8 @@ def main():
         except (FileNotFoundError, ValueError):
             pass
 
-    # ── ⑤ 组装推送
-    md = [f"> **主升浪 V4**｜基准日 **{r['base_date']}**｜候选池 {r['universe']} 只\n"]
+    # ── ⑤ 组装推送（V5 奥雅主榜）
+    md = [f"> **主升浪 V5·奥雅式突破**｜基准日 **{r['base_date']}**｜候选池 {r['universe']} 只\n"]
 
     # 昨日跟踪（用户最关心：昨天推的到底行不行）
     if fb.get("track"):
@@ -230,18 +240,19 @@ def main():
                       f"｜{o['status']}")
         md.append("")
 
-    md.append("### 🎯 今日主推（新鲜度优先：先取启动1~2天的票，不足再退3~4天；同层内按模型分排序，已剔除涨停股）")
-    if latpicks:
-        n_d1 = sum(1 for p in latpicks if p.get("dsc", 99) <= 1)
-        n_d3 = sum(1 for p in latpicks if 1 < p.get("dsc", 99) <= 3)
-        n_late = sum(1 for p in latpicks if 3 < p.get("dsc", 99) < 99)
-        md.append(f"　新鲜度：{n_d1}/{len(latpicks)} 只属启动 2 天内（★=突破当天）"
-                  + (f"；{n_d3} 只启动 3~4 天" if n_d3 else "")
-                  + (f"；{n_late} 只更晚（标 ⚠追高风险，新鲜票不足时的兜底）" if n_late else ""))
-        md.append("")
-    for i, p in enumerate(latpicks, 1):
-        md.append(f"{i}. {fmt(p)}")
-    md.append("")
+    # 奥雅主榜（试盘→破位→盘中放量突破首日推）；旧 v3.1 降为参照
+    try:
+        md += OY.render_oya_md(r)
+    except Exception as e:
+        print("  [警告] 奥雅主榜渲染异常：", e)
+        for i, p in enumerate(latpicks, 1):
+            md.append(f"{i}. {fmt(p)}")
+    # 旧模型参照（同池轻量计算，仅供对照，非主推）
+    try:
+        _ref = OY.legacy_ref(r.get("pool") or [], topn=3)
+        md += OY.render_legacy_md(_ref)
+    except Exception as e:
+        print("  [警告] 旧模型参照生成失败，不影响主榜：", e)
     if blocked:
         md.append("### 已剔除（年报审计机构为立信，一票否决）")
         # 2026-11-13：并入统一流水线共同前置层的离线立信排除集，
@@ -284,6 +295,12 @@ def main():
     except Exception as e:
         print("  [警告] 首日观察榜生成失败，不影响主流程：", e)
 
+    # 奥雅信号跟踪（30日内已首推，次日量能1.0~2.0确认回填）
+    try:
+        md += OY.render_follow_md(r)
+    except Exception as e:
+        print("  [警告] 奥雅跟踪段生成失败，不影响主流程：", e)
+
     # 影子假设跟踪段
     if sh and sh.get("md"):
         md += sh["md"]
@@ -302,11 +319,12 @@ def main():
         pass
 
     md.append("---")
-    md.append("风控：跌破近10日最低价离场；10日内浮盈≥20% 分批了结；单票仓位≤1/5。")
+    md.append("风控：提示日收盘价买；跌破试盘支撑/突破日最低×0.96 离场；持有5个交易日；"
+              "次日开盘涨幅>7%不追；单票仓位≤1/5。")
     md.append("\n本内容为统计研究，不构成投资建议。")
 
     body = "\n".join(md)
-    title = f"主升浪 V4 · {r['base_date']} 主推{len(latpicks)}只"
+    title = f"主升浪V5·奥雅突破 · {r['base_date']} 主推{len(latpicks)}只"
     open(os.path.join(HERE, "push_body.md"), "w", encoding="utf-8").write(body)
     json.dump(dict(changed=fb.get("changed"), n_new=fb.get("n_new"),
                    ver=ver, base_date=r["base_date"],

@@ -48,11 +48,11 @@
     },
     {
       "name": "zhushanglang",
-      "label": "主升浪 V4",
+      "label": "主升浪 V5·奥雅式突破",
       "cmd": "python3 stock-v3/daily_v3.py",
       "enabled": true,
       "settle": false,
-      "_note": "自带 回溯/进化/选股/推送/云端备份 的独立子系统，不消费共同前置层 universe/K线缓存；settle=false 跳过公共回溯（它有自己的 feedback 闭环）。"
+      "_note": "2026-11-18 起主榜切换为奥雅式模型(oya_model.py)：横盘→放量试盘→破位洗盘→盘中放量突破首日推；旧v3.1降为参照。自带 回溯/进化/选股/推送/云端备份 独立子系统；settle=false 跳过公共回溯（自有 feedback 闭环）。"
     },
     {
    "name": "high_shadow",

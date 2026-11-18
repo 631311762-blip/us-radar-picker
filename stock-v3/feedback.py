@@ -220,19 +220,23 @@ def observe(preds, last_date):
 
 # ────────────────────────────── 版本口径（2026-11-18）──────────────────────────────
 def is_v3(r):
-    """一条结算样本是否属于当前 v3.1 主榜口径。
+    """一条结算样本是否属于「当前主榜口径」。
 
     2026-11-18 用户指出「结算不该用旧模型」。历史账本（feedback_db.jsonl）里
     混有 2026-10-23 的 v1 旧模型样本（kind='v1-旧模型'、pct=null）。这些样本
-    只应作为历史参考，不能参与 v3.1 的命中率统计/因子归因/进化门槛计数。
+    只应作为历史参考，不能参与当前模型的命中率统计/因子归因/进化门槛计数。
+
+    2026-11-18 起主榜切换为奥雅式模型 oya_model.py（model='v5-oya'），它是 v3.1
+    的继承者（同样用 9 因子横截面打分排序，只把准入换成奥雅形态），故与 v3 同族，
+    一起计入当前口径；v1 旧模型仍单列参考。
 
     判定优先级：
-      1) 有 model 字段 → 只认 'v3'（新账本 settle_one 已写入 model）；
-      2) 无 model 字段（历史遗留）→ 按 kind 兜底：'v1-旧模型' 为旧，其余为 v3。
+      1) 有 model 字段 → 认 'v3' / 'v5-oya'（均为当前口径）；
+      2) 无 model 字段（历史遗留）→ 按 kind 兜底：'v1-旧模型' 为旧，其余为当前。
     """
     m = r.get("model")
     if m is not None:
-        return m == "v3"
+        return m in ("v3", "v5-oya")
     return r.get("kind") != "v1-旧模型"
 
 
@@ -352,23 +356,23 @@ def track_md(obs, last_date):
 
 
 def review_md(db, att, evo, state, hold_stats):
-    """模型复盘段 —— 统计口径按 v3.1 主榜，v1 旧模型单列历史参考（2026-11-18）"""
+    """模型复盘段 —— 统计口径按当前主榜（v3.1 及其继承者 V5-奥雅），v1 旧模型单列历史参考"""
     md = ["### 🔬 模型复盘（自我进化）"]
     # 2026-11-18：把 v1 旧模型样本从 v3.1 口径中隔离
     done = [r for r in db if r.get("settled") and is_v3(r)]
     done_old = [r for r in db if r.get("settled") and not is_v3(r)]
     if not done:
         n_pend = len([r for r in db if not r.get("settled") and is_v3(r)])
-        md.append(f"　v3.1 已结算样本 0 条（{n_pend} 条仍在观察期，推荐满 11 个交易日后结算）。")
+        md.append(f"　当前主榜已结算样本 0 条（{n_pend} 条仍在观察期，推荐满 11 个交易日后结算）。")
         md.append(f"　达到 {MIN_NEW} 条后才会触发权重重估——宁可慢，也不拿几天的噪声改模型。")
         if done_old:
-            md.append(f"　（另有 {len(done_old)} 条 v1 旧模型历史样本，不计入 v3.1 口径。）")
+            md.append(f"　（另有 {len(done_old)} 条 v1 旧模型历史样本，不计入当前主榜口径。）")
         return md
     hit = sum(1 for r in done if r.get("hit"))
     n = len(done)
     g = sum(r.get("g10", 0) for r in done) / n
     d = sum(r.get("d10", 0) for r in done) / n
-    md.append(f"　**v3.1 口径**：已结算 **{n}** 条｜10日浮盈≥20% 命中 **{hit}** 条（**{hit/n*100:.1f}%**）"
+    md.append(f"　**当前主榜口径（v3.1 / V5-奥雅）**：已结算 **{n}** 条｜10日浮盈≥20% 命中 **{hit}** 条（**{hit/n*100:.1f}%**）"
               f"｜平均最大浮盈 {g:.1f}%｜平均最大回撤 {d:.1f}%")
     if done_old:
         ho = sum(1 for r in done_old if r.get("hit"))
