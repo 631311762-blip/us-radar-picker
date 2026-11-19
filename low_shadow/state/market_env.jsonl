@@ -27,3 +27,4 @@
 {"date": "2026-11-13", "eq_chg_pct": -2.082, "regime": "弱", "n_base": 13, "n_qualified": 10, "source": "env_factor_result.json/panel (10-08~11-13 全市场回测)"}
 {"date": "2026-11-16", "eq_chg_pct": -2.354, "adv_ratio_pct": 20.66, "regime": "弱", "n_base": 6, "n_qualified": 2}
 {"date": "2026-11-18", "eq_chg_pct": -1.088, "adv_ratio_pct": 23.7, "regime": "弱", "n_base": 8, "n_qualified": 5}
+{"date": "2026-11-19", "eq_chg_pct": -2.572, "adv_ratio_pct": 11.45, "regime": "弱", "n_base": 13, "n_qualified": 10}
