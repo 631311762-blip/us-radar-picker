@@ -96,6 +96,9 @@ jobs:
           # 日常增量缺省 900s；首次完整回填请勾选手动 history_backfill。
           KLINE_BATCH_BUDGET: ${{ vars.KLINE_BATCH_BUDGET || '900' }}
           LIST_FETCH_DEADLINE: ${{ vars.LIST_FETCH_DEADLINE || '300' }}
+          # 2026-11-20 提速：样本池快照优先(跳过东财列表退避)、立信F10复用、
+          # 当日行情批量快照写入。凯众不复权预填并发 4→16（原先 4306 只约8分钟）。
+          KZ_WORKERS: ${{ vars.KZ_WORKERS || '16' }}
         run: |
           set -o pipefail
           ARGS=""
@@ -177,6 +180,12 @@ jobs:
           SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
           KZ_DATA_DIR: kaizhong/state
           STATE_DIR: ${{ github.workspace }}/state
+          # 2026-11-20 提速改造：9 个模型彼此独立，并行执行（取最慢者而非串行
+          # 累加），单模型超时 300s + 重试1次。此前串行 + 600s 超时导致 11-19
+          # 善水等模型连续超时把 180min 总预算耗尽、只推送 2/9 个模型。
+          MODEL_WORKERS: ${{ vars.MODEL_WORKERS || '9' }}
+          MODEL_TIMEOUT: ${{ vars.MODEL_TIMEOUT || '300' }}
+          MODEL_RETRIES: '1'
         run: |
           ONLY="${{ github.event.inputs.only_model }}"
           if [ -n "$ONLY" ]; then

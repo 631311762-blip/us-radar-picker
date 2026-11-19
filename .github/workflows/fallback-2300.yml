@@ -8,7 +8,9 @@ name: A股模型 23点独立兜底
 #
 # 判断依据：查统一流水线 workflow(412216318) 的运行记录
 #   - 近 18 小时内有 conclusion=success  -> skip（结果已出）
-#   - 有 in_progress / queued 在途       -> skip（只是延迟，避免双跑）
+#   - in_progress / queued 在途且 <90min -> skip（只是延迟，避免双跑）
+#   - in_progress 在途超 90min           -> dispatch（判定卡死，强制兜底）
+#       2026-11-19 曾因主流水线卡死3h，本兜底看到 in_progress 就 skip 而错过窗口
 #   - 其余（失败 / 取消 / 漏跑）         -> dispatch 各模型独立流程
 #   - 查询 API 异常                      -> dispatch（产出优先，宁重勿漏）
 #
@@ -81,7 +83,12 @@ jobs:
               with urllib.request.urlopen(req, timeout=30) as resp:
                   runs = json.load(resp)['workflow_runs']
 
-              has_success, has_running = False, False
+              has_success, has_running, stuck_run = False, False, None
+              # 主流水线正常应在 90 分钟内跑完（并行后实际仅几分钟）。若
+              # in_progress 已超过STALE_MINUTES，视为卡死：不能因「在途就skip」
+              # 错过兜底窗口（2026-11-19 曾因主流水线卡死3h、本兜底在23:50
+              # 看到 in_progress 就 skip，差点导致当日全部模型无推送）。
+              STALE_MINUTES = 90
               for r in runs:
                   created = datetime.datetime.fromisoformat(
                       r['created_at'].replace('Z', '+00:00'))
@@ -89,7 +96,13 @@ jobs:
                   st, con = r['status'], r.get('conclusion')
                   if st in ('in_progress', 'queued', 'pending', 'requested'):
                       has_running = True
-                      print('在途: run %s %s @ %s' % (r['id'], st, r['created_at']))
+                      age_min = age.total_seconds() / 60
+                      print('在途: run %s %s @ %s（已 %.0f 分钟）'
+                            % (r['id'], st, r['created_at'], age_min))
+                      if age_min > STALE_MINUTES:
+                          stuck_run = r['id']
+                          print('[WARN] 主流水线 run %s 在途超 %d 分钟，判定卡死'
+                                % (r['id'], STALE_MINUTES))
                       continue
                   if st == 'completed' and con == 'success' and datetime.timedelta(0) <= age <= window:
                       has_success = True
@@ -100,8 +113,11 @@ jobs:
                   decision, reason = 'dispatch', '手动 force=true 强制兜底'
               elif has_success:
                   decision, reason = 'skip', '主流水线近18h已成功，跳过兜底'
+              elif stuck_run is not None:
+                  decision, reason = 'dispatch', ('主流水线 run %s 在途超 %d 分钟判定卡死，强制兜底'
+                                                  % (stuck_run, STALE_MINUTES))
               elif has_running:
-                  decision, reason = 'skip', '主流水线仍在途，避免双跑'
+                  decision, reason = 'skip', '主流水线仍在途（未超时），避免双跑'
               else:
                   decision, reason = 'dispatch', '主流水线当日失败/取消/漏跑，启动兜底'
           except Exception as e:

@@ -22,6 +22,7 @@ import os
 import sys
 import json
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -41,9 +42,15 @@ def load_registry():
 # 单模型超时：模型已通过共同前置层离线读缓存，正常几秒~几十秒完成。
 # 历史上 3600s 超时会导致偶发的进程启动阻塞卡满 1 小时，把一个模型的问题
 # 放大成整条流水线超时（2026-11-19 善水卡 3600s + 低位 3581s 拖垮全局）。
-# 600s 足够任何正常离线扫描；超时即杀掉并自动重试一次（偶发阻塞重试即恢复）。
-MODEL_TIMEOUT = int(os.environ.get("MODEL_TIMEOUT", "600"))
+# 超时即杀掉并自动重试一次（偶发阻塞重试即恢复）；并行后单模型超时不再
+# 累加到全局，设为 300s 足以覆盖任何正常离线扫描 + 一次重试的最坏情形。
+MODEL_TIMEOUT = int(os.environ.get("MODEL_TIMEOUT", "300"))
 MODEL_RETRIES = int(os.environ.get("MODEL_RETRIES", "1"))
+
+# 并行度：9 个模型彼此独立（各自读同一份共享 K 线缓存、写各自 state 子目录），
+# 无共享写冲突，可安全并行。默认 9 路全开；受 runner CPU/内存限制可用环境变量
+# 调低（如 MODEL_WORKERS=4）。设为 1 即退回串行，便于排障对比。
+MODEL_WORKERS = max(1, int(os.environ.get("MODEL_WORKERS", "9")))
 
 
 def _run_once(cmd, env, timeout):
@@ -123,7 +130,30 @@ def main():
         models = [m for m in models if m["name"] in want]
 
     print("[run_all] 注册模型 %d 个，本次执行 %d 个" % (len(reg["models"]), len(models)))
-    results = [run_model(m) for m in models]
+
+    # 并行执行：取最慢模型耗时，而非串行累加。单模型异常隔离（run_model 内部
+    # 已兜底返回 exit=1），线程池 here 再包一层保险，确保任何模型抛错都不阻断
+    # 其余结果与 state 回写。结果按注册表顺序排列，保证汇总稳定可复现。
+    results_by_name = {}
+    workers = min(MODEL_WORKERS, len(models)) if models else 1
+    print("[run_all] 并行度 = %d（单模型超时 %ss，重试 %d 次）"
+          % (workers, MODEL_TIMEOUT, MODEL_RETRIES), flush=True)
+    if workers <= 1:
+        for m in models:
+            r = run_model(m)
+            results_by_name[r["name"]] = r
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futures = {ex.submit(run_model, m): m["name"] for m in models}
+            for fut in as_completed(futures):
+                name = futures[fut]
+                try:
+                    r = fut.result()
+                except Exception as e:
+                    print("[run_all] 模型 %s 线程级异常（已隔离）: %s" % (name, e), flush=True)
+                    r = {"name": name, "label": name, "exit": 1, "seconds": 0.0}
+                results_by_name[name] = r
+    results = [results_by_name[m["name"]] for m in models]
 
     # 条件④：回溯 + 参数修正，对所有已登记模型生效（即使模型自身没实现）。
     # settle=false 的模型（如主升浪，自带 feedback 闭环）跳过公共回溯，避免无谓报错。

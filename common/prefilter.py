@@ -71,8 +71,11 @@ def _alert(title, content):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--f10-only", action="store_true", help="立信仅 F10 通道，跳过 26 公告扫描")
+    ap.add_argument("--f10-full", action="store_true", help="立信 A 通道强制全量重扫 F10（默认复用已入库命中，省约4分钟）")
     ap.add_argument("--ann-full", action="store_true", help="立信 B 通道跑 2026 全年基线（默认增量窗口）")
     ap.add_argument("--no-kline", action="store_true", help="跳过全市场 K 线批量缓存（调试）")
+    ap.add_argument("--no-snapshot", action="store_true", help="跳过当日行情快照批量写入，退回逐只 K 线（调试/回退）")
+    ap.add_argument("--no-fast-universe", action="store_true", help="禁用样本池快照优先（回退东财列表退避重试，调试用）")
     ap.add_argument("--no-kz", action="store_true", help="跳过凯众不复权 K 线预填（调试）")
     ap.add_argument("--no-lixin", action="store_true", help="跳过立信排除集更新，复用已有")
     args = ap.parse_args()
@@ -81,6 +84,11 @@ def main():
     print("=" * 64)
     print("共同前置层 prefilter  %s" % today)
     print("=" * 64)
+
+    # 【提速】快照优先开关：健康的基础快照直接复用 + 腾讯批量补当日价，
+    # 跳过东财列表接口在云 IP 下的 300s×多轮退避重试（实测烧掉约 10 分钟）。
+    fast_universe = not args.no_fast_universe
+    print("[prefilter] 样本池快照优先：%s" % ("开启" if fast_universe else "关闭"))
 
     meta = {
         "date": today,
@@ -119,15 +127,26 @@ def main():
         meta["lixin_count"] = len(lixin)
     else:
         import lixin as lx
-        base_u = cm.get_universe(verbose=False, apply_lixin=False)
+        base_u = cm.get_universe(verbose=False, apply_lixin=False,
+                                 prefer_snapshot=fast_universe)
         codes = [x["code"] for x in base_u]
+        # 【提速】F10 通道逐股扫描约 4 分钟，且命中结果与历史并集合并、永不自动
+        # 释放（见 lixin.build）。日常复用已入库的 f10: 命中即可，语义完全等价；
+        # 仅当排除集尚未建立（首次）或手动 --f10-full 时才全量重扫。
+        has_f10_base = bool(cm.load_lixin_exclude())
+        skip_f10 = (not args.f10_full) and has_f10_base
+        if skip_f10:
+            print("[prefilter] 立信 A 通道(F10)复用已入库命中（省约4分钟）；"
+                  "全量重扫请加 --f10-full")
         _, stats = lx.build(codes, do_ann=not args.f10_only,
-                            ann_mode="full" if args.ann_full else "incremental")
+                            ann_mode="full" if args.ann_full else "incremental",
+                            skip_f10=skip_f10)
         meta["lixin_count"] = stats.get("total_excluded", 0)
         meta["lixin_stats"] = stats
+        meta["lixin_f10_skipped"] = bool(skip_f10)
 
     # ---- 条件③ + 生成样本池（ST 名称硬剔除 + 立信物理剔除） ----
-    universe = cm.get_universe()      # 内部已应用 ST + 立信 剔除
+    universe = cm.get_universe(prefer_snapshot=fast_universe)  # 内部已应用 ST + 立信 剔除
     if not universe:
         # fail-degraded：常规路径（已含 get_universe 内部的快照回退）都拿不到样本池，
         # 再用「已通过健康校验」的快照强制重建一次，而不是直接 exit 1 让整条流水线红。
@@ -162,6 +181,21 @@ def main():
     else:
         market_universe = cm.get_market_universe()
         meta["market_universe_count"] = len(market_universe)
+
+        # 【提速核心】历史分片已完整持久化（2024 起），每日只需追加当日一根。
+        # 用腾讯批量快照一次写入当日全市场（约数秒），替代逐只 K 线抓取
+        # （原 5576 只 × 超时叠加 = 前置层 22 分钟的主因）。
+        snap = {"inserted": 0, "ok": 0, "targets": 0, "coverage": 0.0}
+        if not args.no_snapshot:
+            try:
+                snap = cm.update_today_bars(market_universe, quote_date, verbose=True)
+            except Exception as e:
+                print("[prefilter] 当日快照写入异常（回退逐只抓取）：%s" % e)
+                snap = {"error": str(e)}
+        meta["snapshot_bars"] = snap
+
+        # 快照已覆盖标的的 last_date 已更新到当日，fetch_klines_batch 会自动判
+        # 为 fresh 跳过逐只抓取；本步退化为「补快照漏掉的少数标的 + 物化 CSV」。
         ok, fail = cm.fetch_klines_batch(
             market_universe, count=cm.KLINE_CACHE_COUNT,
             workers=cm.KLINE_WORKERS, quote_date=quote_date,

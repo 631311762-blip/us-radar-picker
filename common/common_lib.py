@@ -407,7 +407,8 @@ def check_base_universe_health(rows=None):
     return True, "ok（%d 只，价格健全率 %.1f%%）" % (n, ratio * 100), rows
 
 
-def get_universe(verbose=True, apply_lixin=True, force_snapshot=False):
+def get_universe(verbose=True, apply_lixin=True, force_snapshot=False,
+                 prefer_snapshot=False):
     """东方财富全市场列表，应用硬共识剔除，返回统一结构的样本池。
 
     apply_lixin=False 时只做 ST/次新/无行情 剔除，用于「立信排除集生成」阶段
@@ -424,11 +425,37 @@ def get_universe(verbose=True, apply_lixin=True, force_snapshot=False):
     force_snapshot=True：跳过实时源，直接用「已通过健康校验」的基础快照构建
     样本池。仅供 prefilter 的 fail-degraded 二次兜底使用（实时源与常规回退都
     返回空时）。走的是同一套 ST / 立信 硬剔除逻辑，降级不改变任何准入条件。
+
+    prefer_snapshot=True：【提速】基础快照健康时优先直接复用（配合腾讯批量
+    补当日价），跳过东财列表接口的 300s×多轮退避重试（实测云 IP 下填塞 10 分钟）。
+    与 force_snapshot 的区别：这是主动提速而非故障降级，不写 meta.degraded、
+    不发告警，且快照不健康时自动回退常规实时路径。准入剔除逻辑完全一致。
     """
     lixin = load_lixin_exclude() if apply_lixin else set()
     st_drop = lixin_drop = 0
 
-    if force_snapshot:
+    # 快照优先快路径：仅当调用方要求且快照通过健康校验时启用。
+    if prefer_snapshot and not force_snapshot:
+        healthy, _why, snap_rows = check_base_universe_health()
+        if healthy:
+            print("[common] 快照优先：复用健康基础快照 %d 只，跳过东财列表退避"
+                  % len(snap_rows))
+            raw = snap_rows
+            used_fallback = True
+            snap = snap_rows
+            prices = _refresh_prices_tx([r.get("code", "") for r in raw])
+            if prices:
+                for r in raw:
+                    pr = prices.get(str(r.get("code", "")).zfill(6))
+                    if pr:
+                        r["f2"] = pr[0]; r["f3"] = pr[1]
+                print("[common] 腾讯实时行情补价成功 %d 只" % len(prices))
+        else:
+            # 快照不健康 → 不走近路，落到下方常规实时路径。
+            raw = _fetch_raw_universe()
+            used_fallback = False
+            snap = load_base_universe()
+    elif force_snapshot:
         healthy, reason, snap_rows = check_base_universe_health()
         if not healthy:
             print("[common] 强制快照降级不可用：%s" % reason)
@@ -908,6 +935,120 @@ def _read_kline_csv(code, count=None, start=None, end=None):
     return bars
 
 
+def latest_quote_date_fast():
+    """从本地行情表 manifest 读最新交易日（零网络）。
+
+    收盘后行情表由 update_today_bars() 写入当日分片，此函数即可替代
+    latest_quote_date() 的「拉 4 只样本 K 线」判定，省去前置层启动时的
+    若干次外网往返。行情表缺失/为空时回退原联网判定，保证向后兼容。
+    """
+    try:
+        cov = MARKET_STORE.coverage()
+        last = cov.get("last_date")
+        if last:
+            return last
+    except Exception:
+        pass
+    return latest_quote_date()
+
+
+def _parse_tx_snapshot_line(line):
+    """解析腾讯实时快照单行 → 规范 bar。字段索引见 _refresh_prices_tx。
+
+    腾讯 parts: [3]现价/收盘 [4]昨收 [5]今开 [33]最高 [34]最低
+                [36]成交量(手) [37]成交额(万) [30]时间戳(YYYYMMDDHHMMSS)。
+    收盘后（15:00 后）现价即当日收盘价，快照即当日完整 OHLCV。
+    """
+    line = line.strip()
+    if not line.startswith("v_"):
+        return None
+    _, _, val = line.partition("=")
+    val = val.strip().strip('"')
+    parts = val.split("~") if val else []
+    if len(parts) < 38:
+        return None
+    try:
+        code = str(parts[2]).zfill(6)
+        close = float(parts[3]); prev = float(parts[4]); openp = float(parts[5])
+        high = float(parts[33]); low = float(parts[34])
+        vol = float(parts[36]); amount_wan = _to_float(parts[37])
+        stamp = str(parts[30])
+    except (ValueError, TypeError):
+        return None
+    if len(code) != 6 or not code.isdigit() or close <= 0:
+        return None
+    # 快照时间戳长度不足（部分标的字段缺失）时用外部传入的 quote_date。
+    date = ("%s-%s-%s" % (stamp[0:4], stamp[4:6], stamp[6:8])) if len(stamp) >= 8 else None
+    if min(openp, close, high, low) <= 0:
+        openp = openp or close; high = max(high, openp, close); low = low or min(openp, close)
+    return {
+        "code": code, "date": date,
+        "open": openp, "close": close, "high": max(high, openp, close),
+        "low": min(low, openp, close) if low > 0 else min(openp, close),
+        "volume": vol, "turnover": amount_wan * 10000.0,
+    }
+
+
+def update_today_bars(universe, quote_date, batch=80, verbose=True):
+    """【提速核心】用腾讯批量快照一次性写入当日全市场 K 线到行情表。
+
+    替代 fetch_klines_batch 的「逐只请求 2024 年起历史」重活：历史分片已完整
+    持久化（2024 起），每日只需追加当日一根。腾讯 q= 接口每批 80 只、约 0.1s，
+    全市场约 70 批、数秒完成，较逐只抓取提速两个数量级。
+
+    写入口径：快照为不复权当日价，而当日（最新交易日）前复权价 == 不复权价
+    （前复权以最新为基准向前调整，最新一天不调整），与历史分片口径一致。
+    仅写入 quote_date 当日；已有记录不覆盖（save_bars 语义）。返回写入统计。
+    失败/部分覆盖不影响流水线：调用方仍可回退 fetch_klines_batch 补缺。
+    """
+    codes = []
+    seen = set()
+    for it in universe or []:
+        c = str(it.get("code") or "").zfill(6)
+        if c and c != "000000" and c not in seen:
+            seen.add(c); codes.append(c)
+    if not codes:
+        return {"inserted": 0, "targets": 0, "ok": 0, "failed": 0}
+
+    bars = []
+    ok_codes = set()
+    for i in range(0, len(codes), batch):
+        chunk = codes[i:i + batch]
+        q = ",".join(tx_secid_of(c) for c in chunk)
+        try:
+            r = _session().get("https://%s/q=%s" % (TX_QUOTE_HOST, q),
+                               headers={"User-Agent": HEADERS["User-Agent"],
+                                        "Referer": "https://gu.qq.com/"},
+                               timeout=8)
+            txt = r.text
+        except Exception:
+            continue
+        for line in txt.split(";"):
+            bar = _parse_tx_snapshot_line(line)
+            if not bar:
+                continue
+            # 统一强制当日日期（避免个别标的快照时间戳滞后）
+            bar["date"] = quote_date
+            bars.append(bar)
+            ok_codes.add(bar["code"])
+        time.sleep(0.05)
+
+    saved = MARKET_STORE.save_bars(bars, complete_codes=sorted(ok_codes))
+    cov = MARKET_STORE.coverage()
+    result = {
+        "targets": len(codes), "ok": len(ok_codes), "failed": len(codes) - len(ok_codes),
+        "inserted": saved.get("inserted", 0), "shards_written": saved.get("shards_written", 0),
+        "coverage": round(len(ok_codes) / float(len(codes)), 4) if codes else 0.0,
+        "last_date": cov.get("last_date"),
+    }
+    if verbose:
+        print("[common] 当日行情快照写入：成功 %d / 目标 %d（%.1f%%），新增 %d 行，"
+              "行情表最新日=%s"
+              % (result["ok"], result["targets"], result["coverage"] * 100,
+                 result["inserted"], result["last_date"]), flush=True)
+    return result
+
+
 def fetch_klines_batch(universe, count=KLINE_CACHE_COUNT, workers=KLINE_WORKERS,
                        skip_existing=True, verbose=True, budget=KLINE_BATCH_BUDGET,
                        quote_date=None, materialize_codes=None, force=False):
@@ -1062,7 +1203,8 @@ def _csv_last_date(path):
 
 
 def cache_kaizhong_klines(universe, count=KAIZHONG_LOOKBACK,
-                          workers=KLINE_WORKERS, quote_date=None, verbose=True,
+                          workers=max(4, _env_int("KZ_WORKERS", 16)),
+                          quote_date=None, verbose=True,
                           budget=KLINE_BATCH_BUDGET):
     """为凯众预填「不复权」K 线 CSV，使其 update_cache 零网络抓取。
 
