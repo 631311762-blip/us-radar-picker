@@ -1,116 +1,15 @@
 {
-  "ok": true,
-  "date": "2026-11-09",
+  "ok": false,
+  "error": "数据源异常，样本偏小",
   "meta": {
-    "date": "2026-11-09",
-    "total": 2793,
-    "cyb_kcb": 1977,
-    "cyb": 1372,
-    "kcb": 605,
-    "bj": 816,
-    "page_fails": 0
+    "date": "2026-11-20",
+    "total": 257,
+    "cyb_kcb": 257,
+    "cyb": 257,
+    "kcb": 0,
+    "bj": 0,
+    "page_fails": 127,
+    "bj_excluded": 0
   },
-  "qualified_count": 31,
-  "audit_veto_count": 6,
-  "yin_removed": 15,
-  "require_yang": true,
-  "top": [
-    {
-      "name": "陇神戎发",
-      "code": "300534",
-      "board": "创业板",
-      "status": "观察",
-      "startup_day": 0,
-      "score": 85.9,
-      "close": 10.22,
-      "chg_pct": 3.44,
-      "entity_pct": 2.92,
-      "audit_firm": "希格玛会计师事务所"
-    },
-    {
-      "name": "柏星龙",
-      "code": "920075",
-      "board": "北交所",
-      "status": "已启动",
-      "startup_day": 1,
-      "score": 81.34,
-      "close": 15.5,
-      "chg_pct": 6.31,
-      "entity_pct": 6.24,
-      "audit_firm": "天职国际会计师事务所"
-    },
-    {
-      "name": "天溯计量",
-      "code": "301449",
-      "board": "创业板",
-      "status": "已启动",
-      "startup_day": 1,
-      "score": 81.31,
-      "close": 36.22,
-      "chg_pct": 6.22,
-      "entity_pct": 4.14,
-      "audit_firm": "天健会计师事务所"
-    },
-    {
-      "name": "贝仕达克",
-      "code": "300822",
-      "board": "创业板",
-      "status": "临界",
-      "startup_day": 0,
-      "score": 75.96,
-      "close": 10.04,
-      "chg_pct": 4.8,
-      "entity_pct": 3.08,
-      "audit_firm": "天健会计师事务所"
-    },
-    {
-      "name": "天山生物",
-      "code": "300313",
-      "board": "创业板",
-      "status": "观察",
-      "startup_day": 0,
-      "score": 75.63,
-      "close": 11.51,
-      "chg_pct": 0.79,
-      "entity_pct": 6.87,
-      "audit_firm": "中兴华会计师事务所"
-    },
-    {
-      "name": "天润科技",
-      "code": "920564",
-      "board": "北交所",
-      "status": "已启动",
-      "startup_day": 1,
-      "score": 74.32,
-      "close": 13.09,
-      "chg_pct": 7.56,
-      "entity_pct": 6.42,
-      "audit_firm": "希格玛会计师事务所"
-    }
-  ],
-  "review": {
-    "samples": 0,
-    "wins": 0,
-    "losses": 0,
-    "pending": 0,
-    "win_rate": null,
-    "note": "首次运行/同日重跑，无此前归档候选，昨日复盘无样本"
-  },
-  "cum_win_rate": null,
-  "cum_settled": 0,
-  "watch_pool_count": 17,
-  "archive": {
-    "json": "yidian/state/archive/qualified_20261109.json",
-    "csv": "yidian/state/archive/qualified_20261109.csv",
-    "index": "yidian/state/index.jsonl",
-    "state": "yidian/state/state.json",
-    "push_md": "yidian/state/archive/push_20261109.md"
-  },
-  "push": {
-    "ok": false,
-    "msg": "本条为本地修正复跑(未配置 PUSHPLUS_TOKEN)；云端 yidian.yml 运行 42638227450 完成后自动推送修正版",
-    "source": "local_rerun"
-  },
-  "kline_failed": 0,
-  "source": "local_rerun_synced_2026-11-09"
+  "date": "2026-11-20"
 }
