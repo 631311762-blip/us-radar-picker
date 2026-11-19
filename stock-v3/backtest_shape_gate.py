@@ -16,7 +16,7 @@ r"""
 口径与实盘 feedback.settle_one 一致（2026-11-10 用 21 条已结算样本交叉验证：
 误差 <0.15pp 一致 21/21，平均绝对误差 0.002pp）。
 
-依赖：本地 kline_cache.json（子目录软链或仓库根目录）、factor_fit.json。
+依赖：共同历史行情库 common/state/market_daily、factor_fit.json。
 """
 import os, sys, json, math, statistics, argparse
 from collections import defaultdict
@@ -28,6 +28,7 @@ sys.path.insert(0, HERE)
 import features as F
 import model2 as M
 import shape_gate as SG
+import datafetch
 
 
 def _find(fname):
@@ -35,7 +36,7 @@ def _find(fname):
     return p if os.path.exists(p) else os.path.join(ROOT, fname)
 
 
-CACHE = json.load(open(_find("kline_cache.json"), encoding="utf-8"))["data"]
+CACHE = datafetch.load_market_cache(count=500)
 W = json.load(open(os.path.join(HERE, "factor_fit.json"), encoding="utf-8"))["weights"]
 FACTORS = list(W.keys())
 TOT = sum(W.values())

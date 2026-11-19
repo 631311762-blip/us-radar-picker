@@ -105,6 +105,18 @@ def get_stocklist():
 # ---------------- 行情抓取（带缓存）----------------
 import requests
 def fetch_kline(code, use_cache=True):
+    # 回测/缓存读取优先使用统一历史库；use_cache=True 时严格离线。
+    if use_cache:
+        try:
+            sys.path.insert(0, os.path.abspath(os.path.join(HERE, '..', 'common')))
+            import common_lib as cm
+            bars = cm.load_kline(_bare(code), count=330, offline=True)
+            if bars:
+                return [{'day': b['date'], 'open': b['open'], 'high': b['high'],
+                         'low': b['low'], 'close': b['close'],
+                         'volume': b['volume'] * 100.0} for b in bars]
+        except Exception:
+            pass
     os.makedirs(CACHE_DIR, exist_ok=True)
     cache=os.path.join(CACHE_DIR, code+'.json')
     if use_cache and os.path.exists(cache):
@@ -112,6 +124,8 @@ def fetch_kline(code, use_cache=True):
             d=json.load(open(cache)); 
             if d and len(d) >= 130: return d
         except: pass
+    if use_cache:
+        return None  # 回测缺数据时明确跳过，禁止回退外网
     try:
         r=requests.get(KLINE_URL.format(code=code), timeout=8)
         d=json.loads(r.text)

@@ -47,6 +47,10 @@ on:
         description: "跳过全市场 K 线批量缓存（调试）"
         required: false
         default: "false"
+      history_backfill:
+        description: "先回填/修复 2024 年起全市场历史分片（长时间任务）"
+        required: false
+        default: "false"
 
 permissions:
   contents: write
@@ -58,7 +62,7 @@ concurrency:
 jobs:
   pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: ${{ github.event.inputs.history_backfill == 'true' && 300 || 180 }}
     env:
       TZ: Asia/Shanghai
     steps:
@@ -73,6 +77,14 @@ jobs:
           python3 -m pip install --quiet --upgrade pip
           python3 -m pip install --quiet requests numpy pandas
 
+      - name: 全市场历史回填（2024 年起，手动）
+        if: github.event.inputs.history_backfill == 'true'
+        env:
+          HISTORY_BACKFILL_BUDGET: ${{ vars.HISTORY_BACKFILL_BUDGET || '7200' }}
+        run: |
+          # 历史 code+date 不覆盖，只补缺；已回填股票也会重新检查完整区间。
+          python3 common/market_store.py backfill --workers 4 --budget "$HISTORY_BACKFILL_BUDGET"
+
       - name: 共同前置层（交易日 + 立信 + ST + 全市场行情记录）
         id: prefilter
         env:
@@ -81,8 +93,8 @@ jobs:
           KZ_DATA_DIR: kaizhong/state
           # 2026-11-13：抓取时间预算改为仓库变量可配置
           # （Settings → Secrets and variables → Actions → Variables），
-          # 缺省仍为 300s，无需改代码即可按运行状况调整。
-          KLINE_BATCH_BUDGET: ${{ vars.KLINE_BATCH_BUDGET || '300' }}
+          # 日常增量缺省 900s；首次完整回填请勾选手动 history_backfill。
+          KLINE_BATCH_BUDGET: ${{ vars.KLINE_BATCH_BUDGET || '900' }}
           LIST_FETCH_DEADLINE: ${{ vars.LIST_FETCH_DEADLINE || '300' }}
         run: |
           set -o pipefail
@@ -112,6 +124,7 @@ jobs:
           alerts = m.get("alerts") or []
           k = m.get("kline") or {}
           kz = m.get("kz_kline") or {}
+          hist = m.get("market_history") or {}
           sh = m.get("snapshot_health") or {}
           out = os.environ.get("GITHUB_OUTPUT")
           if out:
@@ -132,6 +145,11 @@ jobs:
           if kz:
               lines.append("- 凯众K线覆盖率：%.1f%%（成功 %s / 需预填 %s）" % (
                   kz.get("coverage", 0) * 100, kz.get("ok", "-"), kz.get("targets", "-")))
+          if hist:
+              lines.append("- 历史行情库：%s ~ %s，%s 个交易日分片，%s 只股票，%s 行（完整回填 %s 只）" % (
+                  hist.get("first_date", "-"), hist.get("last_date", "-"),
+                  hist.get("trading_days", "-"), hist.get("stocks", "-"),
+                  hist.get("rows", "-"), hist.get("backfilled_stocks", "-")))
           if alerts:
               lines += ["", "#### 本次告警"]
               for a in alerts:
@@ -167,12 +185,13 @@ jobs:
             python3 common/run_all.py
           fi
 
-      - name: 回写状态（立信集 / 推荐台账 / 回溯 / 参数 / 基础股票池快照）
+      - name: 回写状态（历史行情 / 立信集 / 台账 / 回溯 / 参数 / 股票池快照）
         if: always()
         run: |
           git config user.name "a-share-bot"
           git config user.email "a-share-bot@users.noreply.github.com"
-          # K线缓存 / universe.json 为当日临时产物，不入库（见 .gitignore）
+          # 日分片是跨 runner 权威历史库；klines/*.csv 只是可重建物化缓存，不入库。
+          git add common/state/market_daily 2>/dev/null || true
           git add common/state/lingpei*_lixin* 2>/dev/null || true
           git add common/state/lixin_exclude.json 2>/dev/null || true
           git add common/state/recommendations 2>/dev/null || true

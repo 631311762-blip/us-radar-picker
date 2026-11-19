@@ -170,6 +170,9 @@ def update_cache(codes_symbols, workers=16, force=False, last_trade_date=None):
             todo.append((code, symbol))
     if not todo:
         return 0, 0
+    if os.environ.get("KZ_OFFLINE") == "1":
+        print(f"      离线模式：{len(todo)} 只缓存缺失/过期，跳过而不访问新浪")
+        return 0, len(todo)
 
     def work(item):
         code, symbol = item

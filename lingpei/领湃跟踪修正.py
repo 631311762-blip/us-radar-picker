@@ -10,7 +10,7 @@
 领湃模型_每日.py 合并进当日唯一一条选股清单推送。
 若临时需要完整结算简报，设 LINGPEI_SETTLE_PUSH=1 单独开启（仍按天去重）。
 
-取数优先级：本地 K 线缓存（LINGPEI_KCACHE，需显式启用）→ 东方财富 → 新浪。
+统一流水线严格读取共同历史行情库；独立运行才允许显式本地缓存 → 东方财富 → 新浪。
 **条件冻结**：本脚本只做结算，不改任何模型阈值；条件更新须在结算结果出来后单独进行。
 """
 import os
@@ -25,6 +25,11 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 os.environ.setdefault("STATE_DIR", os.path.join(_HERE, "lingpei", "state"))
 sys.path.insert(0, _HERE)
 import 领湃工具箱 as tb
+sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "common"))
+try:
+    import adapter as _ad
+except Exception:
+    _ad = None
 
 HORIZONS = (3, 5, 10)
 # 本地缓存仅在本轮验证时通过 LINGPEI_KCACHE 显式启用；云端默认走在线行情，避免误读旧缓存。
@@ -53,7 +58,12 @@ def _sina_hist(code, count=220):
 
 
 def load_bars(code):
-    """返回 ([{d,o,c,h,l,v}], 数据源)，按日期升序。"""
+    """返回 ([{d,o,c,h,l,v}], 数据源)，按日期升序；正式流水线不联网。"""
+    if _ad and _ad.ready():
+        bars = _ad.kline_for(code, "lingpei", count=220)
+        if bars and len(bars) >= 65:
+            return bars, "market_daily"
+        return None, "market_daily_miss"
     p = os.path.join(KCACHE, code + ".json") if KCACHE else ""
     if p and os.path.exists(p):
         try:
@@ -194,7 +204,7 @@ def main():
            "<tr><th>名称</th><th>代码</th><th>T+3</th><th>T+5</th><th>T+10</th></tr>"
            "%s</table>"
            "<p style='color:#888'>口径：提示日之后第 3/5/10 个交易日收盘 / 提示日收盘 − 1；"
-           "取数优先级 本地缓存 → 东财 → 新浪。</p>"
+           "统一流水线取数：共同历史行情库（严格离线）。</p>"
            ) % (today, len(samples), fresh, sum_rows, latest, len(latest_rows), det_rows)
     # 2026-11-16：默认静默，避免与当日选股清单构成第二条重复推送。
     # 结算进度已合并进 领湃模型_每日.py 的唯一推送；需要完整简报时显式开启。

@@ -28,7 +28,6 @@ WATCH = os.path.join(HERE, "hypothesis_h2.json")
 SLOG = os.path.join(HERE, "shadow_h2_log.jsonl")
 SDB = os.path.join(HERE, "shadow_h2_db.jsonl")
 FIT = os.path.join(HERE, "factor_fit.json")
-CACHE = os.path.join(HERE, "kline_cache.json")
 
 DECAY_KEYS = ("lu10", "lu20", "shrink")
 DECAY_FACTOR = 0.5
@@ -123,11 +122,11 @@ def record():
     """用缓存全市场算因子→pct→两组打分，各自选票，记一组对照名单。"""
     import features as F
     import model2 as M
+    import 每日推荐 as R
     wc, we, factors = two_weights()
-    k = jload(CACHE, None)
-    if not k or not k.get("data"):
-        return ["[影子H2] 缺少 kline_cache.json，跳过记录"]
-    data = k["data"]
+    data, _ = R.load_cache()
+    if not data:
+        return ["[影子H2] 统一K线缓存为空，跳过记录"]
 
     # 基准日 = 缓存内多数票的最后交易日（避免个别停牌票干扰）
     from collections import Counter

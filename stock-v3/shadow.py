@@ -23,7 +23,6 @@ WATCH = os.path.join(HERE, "hypothesis_watch.json")
 SLOG = os.path.join(HERE, "shadow_log.jsonl")
 SDB = os.path.join(HERE, "shadow_db.jsonl")
 FIT = os.path.join(HERE, "factor_fit.json")
-CACHE = os.path.join(HERE, "kline_cache.json")
 
 KIND = "SHADOW-H1"
 
@@ -57,6 +56,7 @@ def save_watch(w):
 def record():
     """对最新交易日计算 H1 影子名单（dsc==0 & brk20>=-2，含涨停，得分前30%）"""
     import features as F
+    import 每日推荐 as R
     w = watch()
     hyp = w["definition"]
     fit = jload(FIT, None)
@@ -64,10 +64,9 @@ def record():
         return ["[影子] 缺少 factor_fit.json，跳过记录"]
     Wd = fit["weights"]; FACTORS = list(Wd.keys()); tot = sum(Wd.values())
 
-    k = jload(CACHE, None)
-    if not k or not k.get("data"):
-        return ["[影子] 缺少 kline_cache.json，跳过记录"]
-    data = k["data"]
+    data, _ = R.load_cache()
+    if not data:
+        return ["[影子] 统一K线缓存为空，跳过记录"]
     base = max(b["date"] for b in next(iter(data.values())))
     # 幂等：同基准日不重复记
     for line in (open(SLOG, encoding="utf-8").read().splitlines() if os.path.exists(SLOG) else []):

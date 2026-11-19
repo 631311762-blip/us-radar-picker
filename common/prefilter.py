@@ -18,7 +18,8 @@ prefilter.py —— 共同前置层入口（合并流水线第一步，全局强
 产物（common/state/）：
   lixin_exclude.json  立信排除集（含命中依据）
   universe.json       已剔除 ST + 立信 的全市场样本池
-  klines/*.csv        全市场行情 K 线缓存
+  market_daily/       2024 年起全市场日 K 分片（跨 runner 持久化，回测离线读取）
+  klines/*.csv        当日模型使用的物化 K 线缓存（可重建，不入库）
   meta.json           本次运行元信息（trading_day / 各条件统计 / 降级状态 / 告警）
 
 2026-11-13 变更（诊断报告第 2、3 项）：
@@ -159,16 +160,21 @@ def main():
         print("[prefilter] --no-kline：跳过 K 线批量缓存。")
         meta["kline"] = {"skipped": True}
     else:
-        ok, fail = cm.fetch_klines_batch(universe, count=cm.KLINE_CACHE_COUNT,
-                                        workers=cm.KLINE_WORKERS)
+        market_universe = cm.get_market_universe()
+        meta["market_universe_count"] = len(market_universe)
+        ok, fail = cm.fetch_klines_batch(
+            market_universe, count=cm.KLINE_CACHE_COUNT,
+            workers=cm.KLINE_WORKERS, quote_date=quote_date,
+            materialize_codes=[x["code"] for x in universe])
         meta["kline_ok"] = ok
         meta["kline_fail"] = fail
         meta["kline"] = cm.kline_stats()
+        meta["market_history"] = cm.MARKET_STORE.coverage()
         st = meta["kline"]
         if st.get("degraded"):
             _alert("共享K线缓存覆盖率不足",
                    "成功 %d / 需拉 %d（覆盖率 %.1f%%），失败 %d、超预算跳过 %d。\n"
-                   "下游模型将回退自行抓取，耗时与数据完整度受影响；"
+                   "缺失标的会被下游模型跳过，不再逐模型访问外网；"
                    "若持续发生请调 KLINE_BATCH_BUDGET 或检查兜底源。"
                    % (st["ok"], st["targets"], st["coverage"] * 100,
                       st["fail"], st["skip"]))
@@ -186,12 +192,12 @@ def main():
             if st.get("degraded"):
                 _alert("凯众不复权K线覆盖率不足",
                        "成功 %d / 需预填 %d（覆盖率 %.1f%%），失败 %d、超预算跳过 %d；"
-                       "凯众将自行回退新浪抓取。"
+                       "凯众离线模式将跳过缺失标的，不再自行访问新浪。"
                        % (st["ok"], st["targets"], st["coverage"] * 100,
                           st["fail"], st["skip"]))
         except Exception as e:
-            # 失败不阻断：凯众会自行回退新浪抓取，仅慢一些，不影响结果与正确性
-            print("[prefilter] 凯众不复权 K 线预填失败（凯众自行回退）：%s" % e)
+            # 失败不阻断其它模型；凯众在正式流水线中离线跳过缺失标的。
+            print("[prefilter] 凯众不复权 K 线预填失败（凯众将离线跳过缺失标的）：%s" % e)
             meta["kz_kline_error"] = str(e)
 
     # ---- 可观测性汇总：写入 meta.json 供 workflow Step Summary / 排障使用 ----

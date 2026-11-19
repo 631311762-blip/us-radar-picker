@@ -6,9 +6,22 @@
   不参与模型打分（9 个权重因子全部只依赖 OHLCV）
 环境变量 KLINE_END=YYYY-MM-DD 可取历史截止日（补跑历史基准日用）。
 """
-import json, os, re, time, datetime, threading, urllib.request, urllib.parse
+import json, os, re, sys, time, datetime, threading, urllib.request, urllib.parse
 import urllib.error
 from concurrent.futures import ThreadPoolExecutor
+
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(_REPO, "common"))
+try:
+    import adapter as _adapter
+    import common_lib as cm
+except Exception:  # 独立运行且没有共同层时保留旧取数逻辑
+    _adapter = cm = None
+
+
+def shared_ready():
+    """统一流水线已产出当日共同前置层时，股票列表和 K 线严格离线。"""
+    return bool(_adapter and _adapter.ready())
 
 ST_PAT = re.compile(r"ST|退市|退")
 _UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
@@ -97,6 +110,25 @@ _UNI_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                           "universe_cache.json")
 
 
+def _universe_common(mv_lo, mv_hi, tr_lo, tr_hi):
+    """共同样本池再应用主升浪自身市值/换手率门槛，不重新请求股票列表。"""
+    if not shared_ready():
+        return None
+    out = []
+    for x in cm.load_universe() or []:
+        try:
+            code6 = str(x["code"]).zfill(6)
+            mv, tr = float(x.get("mktcap") or 0), float(x.get("turnover") or 0)
+        except (KeyError, TypeError, ValueError):
+            continue
+        name = str(x.get("name") or "")
+        if mv < mv_lo or (mv_hi is not None and mv >= mv_hi) \
+                or not (tr_lo <= tr < tr_hi) or ST_PAT.search(name):
+            continue
+        out.append({"code": _prefix(code6), "name": name})
+    return out
+
+
 def _universe_sina(mv_lo=2500000000, mv_hi=None, tr_lo=0.3, tr_hi=25.0):
     """降级①：新浪 Market_Center.getHQNodeData 分页枚举全部 A 股（hs_a，
     沪/深/北，含大市值），按 总市值(mktcap,万元)/换手率(turnoverratio,%) 过滤。
@@ -182,7 +214,10 @@ def universe(mv_lo=2500000000, mv_hi=None, tr_lo=0.3, tr_hi=25.0):
     最后用 腾讯 qt 批量行情验证历史代码清单。
     当日已成功获取过的候选池直接复用（universe_cache.json），避免重复拉取。
     返回 [{"code":"sz300447","name":"全信股份"}]"""
-    try:  # 当日缓存命中：直接复用（东财限流时每页重试极慢，必须短路）
+    common = _universe_common(mv_lo, mv_hi, tr_lo, tr_hi)
+    if common is not None:
+        return common
+    try:  # 独立模式当日缓存命中：直接复用（东财限流时每页重试极慢，必须短路）
         uc = json.load(open(_UNI_CACHE, encoding="utf-8"))
         if (uc.get("date") == datetime.date.today().isoformat()
                 and len(uc.get("stocks") or []) >= 1500):
@@ -348,10 +383,45 @@ def _kline_sina(code, days=320):
     return out
 
 
+def _v3_bars(bars):
+    """共同库规范字段转主升浪旧格式；成交量保持“手”，exchange 为换手率%。"""
+    return [{"date": b["date"], "open": b["open"], "last": b["close"],
+             "high": b["high"], "low": b["low"], "volume": b["volume"],
+             "exchange": b.get("turnover", 0.0)} for b in bars or []]
+
+
+def load_market_cache(codes=None, count=500, start=None, end=""):
+    """一次扫描统一历史分片并批量转换，供每日选股和回测共享，绝不联网。"""
+    if cm is None:
+        raise RuntimeError("共同历史行情库不可用")
+    if codes is None:
+        rows = cm.load_base_universe() or cm.load_universe() or []
+        codes = [x["code"] for x in rows]
+    pairs = []
+    for value in codes:
+        value = str(value)
+        code6 = value[2:] if value[:2] in ("sh", "sz", "bj") else value.zfill(6)
+        if len(code6) == 6 and code6.isdigit():
+            pairs.append((_prefix(code6), code6))
+    stored = cm.MARKET_STORE.load_many([c for _, c in pairs], start=start,
+                                       end=end or None, count=count)
+    out = {_prefix(code6): _v3_bars(stored.get(code6))
+           for _, code6 in pairs if stored.get(code6)}
+    if not out:
+        raise RuntimeError("统一历史行情库为空，请先运行 python3 common/market_store.py update")
+    return out
+
+
 def kline(code, days=320, end=""):
-    """腾讯前复权日K。code 形如 sz300447。返回按日期正序的 bar 列表，
-    字段与旧 westock 接口一致：date/open/last/high/low/volume/exchange。
-    end 传 YYYY-MM-DD 可取历史截止（补跑基准日用）。北交所走东财通道。"""
+    """返回旧 westock 字段格式。统一流水线只读共同历史库；独立模式保留旧通道。"""
+    end = end or os.environ.get("KLINE_END", "")
+    if shared_ready():
+        bars = cm.load_kline(code[2:], count=days, end=end or None, offline=True)
+        out = _v3_bars(bars)
+        if len(out) < 60:
+            _STATS["kline_fail"] += 1
+            return None
+        return out
     if code.startswith("bj"):
         b = _kline_em(code[2:], days, end or os.environ.get("KLINE_END", ""))
         if b:

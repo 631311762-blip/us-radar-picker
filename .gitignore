@@ -21,7 +21,9 @@ config.json
 .auto_runner.pid
 last_run*
 
-# ===== 共同前置层：当日临时产物（同一 job 内共享即可，无需入库）=====
+# ===== 共同前置层 =====
+# market_daily/ 是 2024 年起的权威历史分片，由 workflow 回写入库；
+# klines/ 只是供旧模型读取的可重建物化缓存，同一 job 内共享即可。
 common/state/klines/
 # common/state/universe.json  —— 改为入库：作为「合并流水线样本池」权威源，
 #   供云盘自动化（高位上影线模型等）筛选使用（ST+立信剔除后的全市场样本）

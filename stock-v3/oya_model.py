@@ -15,7 +15,7 @@ r"""
 次日量能比 1.0~2.0 在 T+1 才可确认 → 作为「跟踪确认」在次日跟踪段标记，不做首推前置。
 
 返回结构与 每日推荐.build() 完全一致，daily_v3.py 可直接切换主榜来源。
-读 kline_cache.json / factor_fit.json，不改任何模型权重 / holdout / 状态文件。
+统一流水线读共同历史行情库；独立模式才使用旧 JSON 缓存。不改模型权重 / holdout / 状态文件。
 """
 import os, sys, json, datetime
 from collections import Counter, defaultdict
@@ -167,13 +167,24 @@ def build():
     p = PARAMS
     pool = R.universe()
     name = {x["code"]: x["name"] for x in pool}
-    cache, key = R.load_cache()
     today = datetime.date.today().isoformat()
     NOW = datetime.datetime.now()
-    # 收盘后缓存必须覆盖当天，否则作废重拉（与 每日推荐.build 同口径）
-    if (NOW.hour * 60 + NOW.minute) >= 15 * 60 + 5 and key != today:
-        cache = {}
-    todo = [x for x in pool if x["code"] not in cache]
+    if R.datafetch.shared_ready():
+        cache = R.datafetch.load_market_cache(
+            [x["code"] for x in pool], count=320,
+            end=os.environ.get("KLINE_END", ""))
+        key = max((v[-1]["date"] for v in cache.values() if v), default="")
+        R.mark_cache(cache, key)
+        todo = []
+        print(f"奥雅模型：统一历史库离线载入 {len(cache)} 只，基准日 {key}")
+    else:
+        cache, key = R.load_cache()
+        if os.environ.get("KLINE_END"):
+            cache, key = {}, None
+        # 独立模式收盘后缓存必须覆盖当天，否则作废重拉。
+        if (NOW.hour * 60 + NOW.minute) >= 15 * 60 + 5 and key != today:
+            cache = {}
+        todo = [x for x in pool if x["code"] not in cache]
     if todo:
         print(f"奥雅模型：K线缓存 {len(cache)} 只，需补拉 {len(todo)} 只...")
         def fetch(x):
@@ -464,9 +475,8 @@ def render_follow_md(r):
     picks = _first_picks()
     if not picks:
         return []
-    try:
-        cache = json.load(open(os.path.join(HERE, "kline_cache.json"), encoding="utf-8"))["data"]
-    except Exception:
+    cache, _ = R.load_cache()
+    if not cache:
         return []
     stopped = _load_stopped()
     md = ["### 🔁 历史推荐跟踪（只跟涨的｜破位/放量下跌/阴包阳即停）"]

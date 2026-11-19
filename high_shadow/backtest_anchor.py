@@ -12,18 +12,15 @@
     上涨准确率 = T+N 收盘 > 信号日收盘 的占比（做多胜率）
     下跌命中率 = T+N 收盘 < 信号日收盘 的占比（风险名单 win_rule=down 的命中）
 
-数据：新浪财经日K 330 根（约 2025-07-07 ~ 2026-11-13），全市场 4606 只。
-      60 日窗口后仍有约 270 个信号日，覆盖通合科技 2025-08-21 那天。
-运行：python3 high_shadow/backtest_anchor.py [--refresh]
+数据：共同历史行情库 common/state/market_daily，离线读取最近 330 根日K。
+      缺数据时明确报错/跳过，不再访问新浪或其他外网。
+运行：python3 high_shadow/backtest_anchor.py
 """
 import argparse
-import gzip
 import json
 import os
 import sys
 import time
-import urllib.request
-from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import pandas as pd
@@ -31,13 +28,14 @@ import pandas as pd
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 STATE = os.path.join(BASE_DIR, "state")
-CACHE = os.path.join(STATE, "klines_cache_330.json.gz")
 UNIVERSE = os.path.join(ROOT, "common", "state", "universe.json")
 OUT_JSON = os.path.join(STATE, "backtest_anchor_T1T3.json")
 HIST_LEN = 330
 
 sys.path.insert(0, BASE_DIR)
+sys.path.insert(0, os.path.join(ROOT, "common"))
 import high_shadow_screener as hs  # noqa: E402
+import common_lib as cm  # noqa: E402
 
 # 与 anchor_refine.py 一致的条件
 def tier_of(row, close, high):
@@ -54,45 +52,16 @@ def tier_of(row, close, high):
 
 
 def fetch_all(refresh=False):
-    cache = {}
-    if os.path.exists(CACHE) and not refresh:
-        with gzip.open(CACHE, "rt", encoding="utf-8") as f:
-            cache = json.load(f)
-        print("[数据] 命中长历史缓存 %d 只" % len(cache))
+    """严格离线读取统一历史库；refresh 保留仅为兼容旧命令行。"""
     uni = json.load(open(UNIVERSE, encoding="utf-8"))
     codes = [str(x["code"]).zfill(6) for x in uni]
-    need = [c for c in codes if c not in cache]
-    if not need:
-        return cache
-    print("[数据] 需抓取 %d 只 × %d 根日K ..." % (len(need), HIST_LEN))
-    url_tpl = ("https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/"
-               "CN_MarketData.getKLineData?symbol={sym}&scale=240&ma=no&datalen=%d" % HIST_LEN)
-
-    def grab(code):
-        for k in range(3):
-            try:
-                req = urllib.request.Request(url_tpl.format(sym=hs.sina_symbol(code)), headers=hs.UA)
-                d = json.loads(urllib.request.urlopen(req, timeout=20).read().decode("utf-8", "ignore"))
-                if isinstance(d, list) and d:
-                    return code, [{"date": b["day"], "open": float(b["open"]), "high": float(b["high"]),
-                                   "low": float(b["low"]), "close": float(b["close"]),
-                                   "volume": float(b["volume"])} for b in d]
-            except Exception:
-                time.sleep(0.3 * (k + 1))
-        return code, None
-
-    t0 = time.time()
-    with ThreadPoolExecutor(max_workers=20) as ex:
-        for idx, (code, bars) in enumerate(ex.map(grab, need), 1):
-            if bars:
-                cache[code] = bars
-            if idx % 500 == 0:
-                with gzip.open(CACHE, "wt", encoding="utf-8") as f:
-                    json.dump(cache, f)
-                print("      进度 %d/%d，耗时 %.0fs" % (idx, len(need), time.time() - t0))
-    with gzip.open(CACHE, "wt", encoding="utf-8") as f:
-        json.dump(cache, f)
-    print("[数据] 完成，共 %d 只，耗时 %.0fs" % (len(cache), time.time() - t0))
+    print("[数据] 离线读取共同历史库：%d 只 × 最近 %d 根日K" % (len(codes), HIST_LEN))
+    data = cm.MARKET_STORE.load_many(codes, count=HIST_LEN)
+    cache = {code: bars for code, bars in data.items() if bars}
+    if not cache:
+        raise cm.ms.MarketDataError(
+            "共同历史库为空，请先运行 python3 common/market_store.py update")
+    print("[数据] 离线载入完成：有效 %d / %d 只" % (len(cache), len(codes)))
     return cache
 
 

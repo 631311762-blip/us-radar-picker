@@ -526,11 +526,12 @@ def main():
     t0 = time.time()
 
     def grab(code):
-        return code, shared_kline(code) or fetch_kline(code)
+        # 统一流水线只读共同行情库；缺失时跳过，禁止逐模型回退外网。
+        return code, shared_kline(code)
 
     if need:
-        print("[1/3] 抓取K线：%d 只待取（共享缓存目录 %s）..."
-              % (len(need), KLINE_DIR if os.path.isdir(KLINE_DIR) else "不存在，走新浪回退"))
+        print("[1/3] 读取本地K线：%d 只待载入（共享缓存目录 %s）..."
+              % (len(need), KLINE_DIR))
         with ThreadPoolExecutor(max_workers=args.workers) as ex:
             for code, bars in ex.map(grab, need):
                 if bars:

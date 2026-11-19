@@ -200,7 +200,8 @@ def install(model, *namespaces):
             elif len(a) >= 2 and isinstance(a[-1], int):
                 cnt = a[-1]
             bars = kline_for(code, mm, count=cnt)
-            return bars if bars else orig(code, *a, **k)
+            # 共同前置层就绪后严格离线：缺失即跳过，禁止模型自行访问外网。
+            return bars if bars else None
         w._common_patched = True
         return w
 

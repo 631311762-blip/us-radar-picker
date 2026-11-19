@@ -9,9 +9,9 @@ common_lib.py —— 多模型共享的「共同前置层」
      注意：价格下限、流动性下限、立信审计等「模型专属门槛」不在此层，
      由各模型自己保留，避免改变任何模型的选股结果。
   3) 交易日 / 行情更新判定（取若干样本 K 线最新日，与北京时间当日比较）。
-  4) 一次性批量缓存全市场 K 线到 common/state/klines/<code>.csv
-     （东财为主，东财对云 IP 阻断时自动回退新浪/腾讯兜底），
-     下游模型读缓存而非各自再拉一遍（这是合并流水线提速的关键）。
+  4) 批量保存 2024 年起全市场 K 线到 common/state/market_daily/ 日分片，
+     并物化 common/state/klines/<code>.csv 供旧模型读取（东财为主，新浪/腾讯兜底），
+     下游模型与回测只读本地缓存，不再各自联网补抓。
   5) load_universe() / load_kline() —— 下游模型读取共享结果的入口。
 
 下游模型只改「数据入口」，模型自身的指标计算、形态判定、门槛、推送一律不动。
@@ -28,11 +28,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 
 import requests
+import market_store as ms
 
 # ------------------------------------------------------------------ 路径
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_DIR = os.path.join(BASE_DIR, "state")
 KLINE_DIR = os.path.join(STATE_DIR, "klines")
+MARKET_STORE = ms.MarketStore()
 UNIVERSE_JSON = os.path.join(STATE_DIR, "universe.json")
 META_JSON = os.path.join(STATE_DIR, "meta.json")
 LIXIN_JSON = os.path.join(STATE_DIR, "lixin_exclude.json")
@@ -98,8 +100,9 @@ EM_BOARDS = [
     ("北交所", "m:0+t:81+s:2048"),
 ]
 
-# 全市场 K 线缓存统一抓取的根数（覆盖各模型最大需求：领湃 180 / low_shadow 150）
-KLINE_CACHE_COUNT = 220
+# 全市场历史从 2024-01-01 起保存；首次全量、之后按最后交易日增量补抓。
+KLINE_START_DATE = ms.START_DATE
+KLINE_CACHE_COUNT = 2000
 # 批量拉取并发数：云 IP 下 24 并发会直接撞东财 CDN 的 CC 防护，
 # 表现为持续性 502（网关回源失败）。降到 4，并同步放宽 KLINE_BATCH_BUDGET，
 # 避免吞吐不足导致缓存覆盖率下降、触发下游模型告警。
@@ -120,7 +123,7 @@ def _env_int(name, default, lo=30, hi=3600):
         return default
 
 
-# 批量任务硬上限（秒）：超时即放弃剩余（K线缓存本就是优化，模型各自会回退重抓）。
+# 批量任务硬上限（秒）：超时保留未抓股票为待回填，模型离线跳过而不补抓。
 # 2026-11-13：可由 workflow 环境变量覆盖（不改代码即可按需调预算）。
 # 并发从 24 降到 4 后，300s 不足以覆盖 4600+ 只，故默认放宽到 900s；
 # 仍远小于 180 分钟 job 预算，且网关错误快速失败 + 早熔断会提前终止东财链路。
@@ -140,8 +143,8 @@ EM_KLINE_CIRCUIT_THRESHOLD = 5
 LAST_KLINE_STATS = {}
 LAST_KZ_KLINE_STATS = {}
 LAST_UNIVERSE_STATUS = {}
-# 覆盖率低于此比例即判定「缓存降级」，写 meta 并告警（下游模型会自行回退抓数，
-# 结果不必然错，但耗时与数据完整度都受影响，必须让人看得见）。
+# 覆盖率低于此比例即判定「缓存降级」，写 meta 并告警；下游会离线跳过缺失标的，
+# 数据完整度受影响，必须让人看得见。
 KLINE_COVERAGE_WARN = 0.9
 
 _lock = threading.Lock()
@@ -347,6 +350,30 @@ def load_base_universe():
         return [r for r in (d.get("rows") or []) if r.get("code")]
     except Exception:
         return []
+
+
+def get_market_universe(refresh=False):
+    """返回未做 ST/立信/次新剔除的全市场代码表，专供历史行情库使用。
+
+    前置层每天构建样本池时已刷新基础快照，因此默认直接复用快照，避免为
+    行情更新再请求一次全市场列表。独立 CLI 可用 refresh=True 主动刷新。
+    """
+    snap = load_base_universe()
+    raw = _fetch_raw_universe() if refresh or len(snap) < UNIVERSE_SANITY_MIN else []
+    if raw and len(raw) >= UNIVERSE_SANITY_MIN and len(raw) >= int(len(snap) * 0.9):
+        save_base_universe(raw)
+    merged = {str(r.get("code") or "").zfill(6): dict(r) for r in snap}
+    for row in raw:
+        code = str(row.get("code") or "").zfill(6)
+        if code:
+            merged[code] = dict(row)
+    rows = []
+    for code, row in merged.items():
+        if len(code) == 6 and code.isdigit() and code != "000000":
+            row["code"] = code
+            row.setdefault("board", board_of(code))
+            rows.append(row)
+    return sorted(rows, key=lambda x: x["code"])
 
 
 # 快照健康判据（2026-11-13）：条数下限 + 必需字段 + 价格健全率。
@@ -603,13 +630,14 @@ def _em_kline_available():
     return False
 
 
-def _fetch_one_kline_em(code, count=KLINE_CACHE_COUNT, fqt=1):
+def _fetch_one_kline_em(code, count=KLINE_CACHE_COUNT, fqt=1, start=None):
     """从东财抓取单只 K 线，返回规范 bars 或 None。
 
     fqt=1 前复权（共享主缓存，供 善水/低位上影/易点/领湃）；
     fqt=0 不复权（供凯众：与新浪日线逐日一致，成交量单位为「手」）。
     """
-    beg = (datetime.now(BJT).date() - timedelta(days=count * 3)).strftime("%Y%m%d")
+    beg = (start.replace("-", "") if start else
+           (datetime.now(BJT).date() - timedelta(days=count * 3)).strftime("%Y%m%d"))
     params = {
         "secid": secid_of(code), "ut": EM_KUT,
         "fields1": "f1,f2,f3,f4,f5,f6",
@@ -643,53 +671,77 @@ def _fetch_one_kline_em(code, count=KLINE_CACHE_COUNT, fqt=1):
     return None
 
 
-def _fetch_one_kline_tx(code, count=KLINE_CACHE_COUNT, fqt=1):
-    """腾讯财经历史 K 线兜底（东财挂起/阻断时启用）。
+def _fetch_one_kline_tx(code, count=KLINE_CACHE_COUNT, fqt=1, start=None):
+    """腾讯财经历史 K 线兜底，按截止日向前分页以覆盖完整 start 区间。
 
-    字段顺序与东财一致：[日期,开,收,高,低,成交量(手)]，成交量单位同为「手」，
-    故下游模型无需任何改动。fqt=1→前复权(qfqday)，fqt=0→不复权(day)。
+    单页最多 640 根。fqt=1 使用 qfq 前复权，fqt=0 使用不复权日线；
+    字段转换为共同库格式，成交量单位保持「手」。
     """
     global _TX_WAF_BLOCKED
     if _TX_WAF_BLOCKED:
         return None
-    kind = "qfqday" if fqt else "day"
     sid = tx_secid_of(code)
-    # 自己发请求以识别 WAF 拦截：腾讯对云 IP 会返回 501 跳转页（非 JSON），
-    # http_json 只会当普通失败并重试，导致每只白等 超时×重试。首次识别即熔断。
-    try:
-        r = _session().get("https://%s/appstock/app/fqkline/get" % TX_KLINE_HOST,
-                        params={"param": "%s,%s,,,%d," % (sid, kind, count)},
-                        timeout=4)
-        if r.status_code in (403, 501):
-            _TX_WAF_BLOCKED = True
-            print("[common] 腾讯 K 线被 WAF 拦截（HTTP %s），后续跳过该兜底源"
-                  % r.status_code)
-            return None
-        if r.status_code != 200:
-            return None
-        j = r.json()
-    except Exception:
-        return None
-    node = ((j or {}).get("data") or {}).get(sid) or {}
-    rows = (node.get(kind) or node.get("day") or node.get("qfqday")) or []
-    bars = []
-    for p in rows:
-        if not isinstance(p, (list, tuple)) or len(p) < 6:
-            continue
+    remaining = max(int(count), 1)
+    page_start = start or ""
+    page_end = ""
+    collected = {}
+    # 自己发请求以识别 WAF 拦截：腾讯对云 IP 会返回 501 跳转页（非 JSON）。
+    for _page in range((remaining + 639) // 640):
+        page_size = min(640, remaining - len(collected))
+        param = "%s,day,%s,%s,%d,%s" % (
+            sid, page_start, page_end, page_size, "qfq" if fqt else "")
         try:
-            bars.append({
-                "date": str(p[0]),
-                "open": float(p[1]), "close": float(p[2]),
-                "high": float(p[3]), "low": float(p[4]),
-                "volume": float(p[5]),
-                "turnover": 0.0,
-            })
-        except (ValueError, TypeError):
-            continue
-    return bars if bars else None
+            r = _session().get(
+                "https://%s/appstock/app/fqkline/get" % TX_KLINE_HOST,
+                params={"param": param}, timeout=4)
+            if r.status_code in (403, 501):
+                _TX_WAF_BLOCKED = True
+                print("[common] 腾讯 K 线被 WAF 拦截（HTTP %s），后续跳过该兜底源"
+                      % r.status_code)
+                return None
+            if r.status_code != 200:
+                return None
+            j = r.json()
+        except Exception:
+            return None
+        node = ((j or {}).get("data") or {}).get(sid) or {}
+        rows = (node.get("qfqday") or node.get("day")) or []
+        page_bars = []
+        for p in rows:
+            if not isinstance(p, (list, tuple)) or len(p) < 6:
+                continue
+            try:
+                page_bars.append({
+                    "date": str(p[0]),
+                    "open": float(p[1]), "close": float(p[2]),
+                    "high": float(p[3]), "low": float(p[4]),
+                    "volume": float(p[5]),
+                    "turnover": 0.0,
+                })
+            except (ValueError, TypeError):
+                continue
+        if not page_bars:
+            break
+        page_bars.sort(key=lambda b: b["date"])
+        for b in page_bars:
+            collected[b["date"]] = b
+        if len(collected) >= remaining or len(page_bars) < page_size:
+            break
+        first = page_bars[0]["date"]
+        if page_start and first <= page_start:
+            break
+        try:
+            page_end = (datetime.strptime(first, "%Y-%m-%d").date()
+                        - timedelta(days=1)).isoformat()
+        except ValueError:
+            return None
+    bars = sorted(collected.values(), key=lambda b: b["date"])
+    if start:
+        bars = [b for b in bars if b["date"] >= start]
+    return bars[-remaining:] if bars else None
 
 
-def _fetch_one_kline_sina(code, count=KLINE_CACHE_COUNT, fqt=1):
+def _fetch_one_kline_sina(code, count=KLINE_CACHE_COUNT, fqt=1, start=None):
     """新浪历史日线兜底（东财不可用时启用，已在该 runner 环境验证可全市场扫描）。
 
     不复权日线（scale=240）；字段 day/open/high/low/close/volume，成交量单位为
@@ -698,9 +750,11 @@ def _fetch_one_kline_sina(code, count=KLINE_CACHE_COUNT, fqt=1):
     """
     sym = tx_secid_of(code)      # sh/sz/bj 前缀，与新浪代码一致
     # 走 HTTPS：部分云环境会拦明文 HTTP。
+    # 新浪 datalen 超过 1023 会返回 null，而不是自动截断。
+    datalen = min(max(int(count), 1), 1023)
     url = ("https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_=/"
            "CN_MarketDataService.getKLineData?symbol=" + sym +
-           "&scale=240&ma=no&datalen=" + str(count))
+           "&scale=240&ma=no&datalen=" + str(datalen))
     txt = None
     for _attempt in range(2):
         try:
@@ -739,20 +793,21 @@ def _fetch_one_kline_sina(code, count=KLINE_CACHE_COUNT, fqt=1):
                 continue
     except Exception:
         return None
+    if start:
+        bars = [b for b in bars if b["date"] >= start]
     return bars if bars else None
 
 
-def _fetch_one_kline(code, count=KLINE_CACHE_COUNT, fqt=1):
+def _fetch_one_kline(code, count=KLINE_CACHE_COUNT, fqt=1, start=None):
     """单只 K 线：优先东财；东财不可用时自动回退新浪→腾讯兜底（字段口径一致）。
 
-    兜底顺序 新浪→腾讯：新浪历史日线已在该 runner 环境验证可全市场扫描；腾讯历史
-    K 线字段与东财一致，作次选冗余。两者均返回不复权日线，与东财 fqt=1 前复权在
-    「无近期除权」时等价；除权股在降级日略有偏差，属可接受的兜底近似（远优于无
-    数据导致整条流水线崩溃）。
+    兜底顺序 新浪→腾讯：新浪固定返回不复权日线；腾讯按 fqt 返回前复权或
+    不复权数据。新浪与东财 fqt=1 前复权在「无近期除权」时等价；除权股在
+    降级日略有偏差，属可接受的兜底近似（远优于无数据导致整条流水线崩溃）。
     """
     global _em_fail_streak, _EM_AVAILABLE
     if _em_kline_available():
-        bars = _fetch_one_kline_em(code, count=count, fqt=fqt)
+        bars = _fetch_one_kline_em(code, count=count, fqt=fqt, start=start)
         if bars:
             with _lock:
                 _em_fail_streak = 0
@@ -765,10 +820,10 @@ def _fetch_one_kline(code, count=KLINE_CACHE_COUNT, fqt=1):
                 _EM_AVAILABLE = False
                 print("[common] 东财 K 线连续失败 %d 次，熔断切新浪/腾讯兜底"
                       % _em_fail_streak)
-    bars = _fetch_one_kline_sina(code, count=count)
+    bars = _fetch_one_kline_sina(code, count=count, start=start)
     if bars:
         return bars
-    return _fetch_one_kline_tx(code, count=count)
+    return _fetch_one_kline_tx(code, count=count, fqt=fqt, start=start)
 
 
 def _refresh_prices_tx(codes, batch=80):
@@ -824,7 +879,7 @@ def _write_kline_csv(code, bars):
                         b["close"], b["volume"], b["turnover"]])
 
 
-def _read_kline_csv(code, count=None):
+def _read_kline_csv(code, count=None, start=None, end=None):
     path = _kline_csv_path(code)
     if not os.path.exists(path):
         return None
@@ -832,6 +887,10 @@ def _read_kline_csv(code, count=None):
     try:
         with open(path, "r", encoding="utf-8") as fh:
             for row in csv.DictReader(fh):
+                if start and row["date"] < start:
+                    continue
+                if end and row["date"] > end:
+                    continue
                 bars.append({
                     "date": row["date"], "open": float(row["open"]),
                     "high": float(row["high"]), "low": float(row["low"]),
@@ -843,76 +902,133 @@ def _read_kline_csv(code, count=None):
     if not bars:
         return None
     bars.sort(key=lambda x: x["date"])
-    if count:
-        bars = bars[-count:]
+    if count is not None:
+        n = max(0, int(count))
+        bars = bars[-n:] if n else []
     return bars
 
 
 def fetch_klines_batch(universe, count=KLINE_CACHE_COUNT, workers=KLINE_WORKERS,
-                       skip_existing=True, verbose=True, budget=KLINE_BATCH_BUDGET):
-    """批量把全市场 K 线缓存到本地（共享给下游模型）。已存在且足够的跳过。
+                       skip_existing=True, verbose=True, budget=KLINE_BATCH_BUDGET,
+                       quote_date=None, materialize_codes=None, force=False):
+    """更新 2024 年起的全市场历史库，并按需物化旧版 per-code CSV。
 
-    返回 (成功数, 失败数)。本步骤是「提速优化」而非必需：设硬性时间预算 budget，
-    超时即放弃剩余（模型各自会回退重抓），避免东财挂起时把整条流水线卡死。
+    首次/未完成回填的股票请求 2024 年起历史；其余只请求最后交易日后的增量。
+    外网抓取只发生在本共同前置层，模型和回测只读本地数据。
     """
+    if quote_date is None:
+        _, quote_date, _ = check_trading_day()
+    manifest = MARKET_STORE._manifest()
+    backfilled = set(manifest["backfilled"])
+    last_by_code = manifest["last_by_code"]
     targets = []
-    for u in universe:
-        code = u["code"]
-        path = _kline_csv_path(code)
-        if skip_existing and os.path.exists(path) and os.path.getsize(path) > 0:
+    fresh = 0
+    seen = set()
+    for item in universe or []:
+        code = str(item.get("code") or "").zfill(6)
+        if not code or code == "000000" or code in seen:
             continue
-        targets.append(code)
+        seen.add(code)
+        last = last_by_code.get(code)
+        full = force or not skip_existing or code not in backfilled
+        if not full and quote_date and last and last >= quote_date:
+            fresh += 1
+            continue
+        if full or not last:
+            need, start = count, KLINE_START_DATE
+        else:
+            try:
+                age = (datetime.now(BJT).date() -
+                       datetime.strptime(last, "%Y-%m-%d").date()).days
+            except ValueError:
+                age = 30
+            need, start = min(count, max(32, age * 2 + 10)), last
+        targets.append((code, need, start, full))
 
     if verbose:
-        print("[common] K线缓存：需新拉 %d 只（已缓存跳过 %d 只），预算 %ds"
-              % (len(targets), len(universe) - len(targets), budget))
-
-    ok = fail = skip = 0
+        print("[common] 历史行情库：待更新 %d 只（已是最新 %d 只），预算 %ds"
+              % (len(targets), fresh, budget))
+    fetched = fail = skip = 0
     done = 0
-    total = len(targets)
     deadline = time.time() + budget
+    fetched_bars = []
+    complete_codes = set()
+    saved = {"inserted": 0, "shards_written": 0, "invalid": 0}
 
-    def work(code):
+    def flush():
+        """分批落盘，限制全市场回填内存，并支持中断后续跑。"""
+        if not fetched_bars:
+            return
+        result = MARKET_STORE.save_bars(
+            fetched_bars, complete_codes=complete_codes)
+        for key in saved:
+            saved[key] += result.get(key, 0)
+        fetched_bars.clear()
+        complete_codes.clear()
+
+    def work(item):
+        code, need, start, _ = item
         if time.time() > deadline:
-            return None          # 超预算，跳过（不抓）
-        bars = _fetch_one_kline(code, count=count)
-        if bars:
-            _write_kline_csv(code, bars)
-            return True
-        return False
+            return None
+        bars = _fetch_one_kline(code, count=need, start=start)
+        return bars if bars else False
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        futs = {ex.submit(work, c): c for c in targets}
+        futs = {ex.submit(work, item): item for item in targets}
         for fut in as_completed(futs):
+            item = futs[fut]
+            code, _, _, full = item
             try:
-                res = fut.result()
+                result = fut.result()
             except Exception:
-                res = False
-            if res is True:
-                ok += 1
-            elif res is False:
+                result = False
+            if result is None:
+                skip += 1
+            elif result is False:
                 fail += 1
             else:
-                skip += 1       # 超预算跳过
+                fetched += 1
+                for bar in result:
+                    row = dict(bar)
+                    row["code"] = code
+                    fetched_bars.append(row)
+                if full:
+                    complete_codes.add(code)
+            if fetched and fetched % 250 == 0:
+                flush()
             done += 1
             if verbose and done % 200 == 0:
-                print("[common] K线缓存进度 %d/%d  成功 %d 失败 %d 跳过 %d"
-                      % (done, total, ok, fail, skip))
-    if verbose:
-        print("[common] K线缓存完成：成功 %d，失败 %d，跳过 %d（预算 %ds）"
-              % (ok, fail, skip, budget))
+                print("[common] 行情更新进度 %d/%d  新抓 %d 失败 %d 跳过 %d"
+                      % (done, len(targets), fetched, fail, skip))
+
+    flush()
+    del fetched_bars
+    materialized = None
+    if materialize_codes is not None:
+        materialized = MARKET_STORE.materialize(materialize_codes, KLINE_DIR, count=count)
+        materialized["missing_count"] = len(materialized["missing"])
+        materialized["missing"] = materialized["missing"][:20]
+
+    total = fresh + len(targets)
+    ok = fresh + fetched
     coverage = (ok / float(total)) if total else 1.0
     LAST_KLINE_STATS.clear()
     LAST_KLINE_STATS.update({
         "kind": "shared", "ok": ok, "fail": fail, "skip": skip,
-        "targets": total, "budget": budget,
+        "targets": total, "needed": len(targets), "cached": fresh,
+        "fetched": fetched, "budget": budget,
         "coverage": round(coverage, 4),
         "degraded": bool(total) and coverage < KLINE_COVERAGE_WARN,
-        "source": kline_source_status(),
+        "source": kline_source_status(), "market_store": saved,
+        "materialize": materialized,
+        "history": MARKET_STORE.coverage(),
     })
+    if verbose:
+        print("[common] 行情库完成：最新 %d，新抓 %d，失败 %d，跳过 %d；新增 %d 行 / %d 分片"
+              % (fresh, fetched, fail, skip, saved["inserted"], saved["shards_written"]))
     if total and coverage < KLINE_COVERAGE_WARN:
-        print("[common][ALERT] 共享K线缓存未全覆盖：成功 %d / 需拉 %d（覆盖率 %.1f%%），"
-              "失败 %d、超预算跳过 %d；下游模型将回退自行抓取，耗时与数据完整度受影响。"
+        print("[common][ALERT] 历史行情库未全覆盖：可用 %d / 全市场 %d（%.1f%%），"
+              "失败 %d、超预算跳过 %d；缺失标的会被模型跳过，不再逐模型访问外网。"
               % (ok, total, coverage * 100, fail, skip))
     return ok, fail
 
@@ -963,8 +1079,8 @@ def cache_kaizhong_klines(universe, count=KAIZHONG_LOOKBACK,
     GitHub Actions 全新 runner 会 checkout 到仓库里的旧缓存，必须重写为当日，
     否则凯众 update_cache 判定末日过期仍会全量重抓（这正是原先慢的根源）。
 
-    返回 (成功数, 未预填数=抓取失败+超预算跳过)。这些个股由凯众自行回退
-    新浪抓取，不影响正确性；预算用于保证前置层不会拖垮整条流水线。
+    返回 (成功数, 未预填数=抓取失败+超预算跳过)。正式流水线中凯众离线跳过
+    缺失标的；预算用于保证前置层不会拖垮整条流水线。
     """
     if quote_date is None:
         _, quote_date, _ = check_trading_day()
@@ -1026,7 +1142,7 @@ def cache_kaizhong_klines(universe, count=KAIZHONG_LOOKBACK,
                 fail += 1
     if verbose:
         print("[common] 凯众不复权K线完成：成功 %d，失败 %d，超预算跳过 %d"
-              "（失败/跳过者凯众自行回退）" % (ok, fail, skipped))
+              "（失败/跳过者凯众离线跳过）" % (ok, fail, skipped))
     total = len(targets)
     coverage = (ok / float(total)) if total else 1.0
     LAST_KZ_KLINE_STATS.clear()
@@ -1039,7 +1155,7 @@ def cache_kaizhong_klines(universe, count=KAIZHONG_LOOKBACK,
     })
     if total and coverage < KLINE_COVERAGE_WARN:
         print("[common][ALERT] 凯众不复权K线未全覆盖：成功 %d / 需预填 %d（覆盖率 %.1f%%），"
-              "凯众将自行回退新浪抓取。" % (ok, total, coverage * 100))
+              "凯众离线模式将跳过缺失标的，不再自行访问新浪。" % (ok, total, coverage * 100))
     return ok, fail + skipped
 
 
@@ -1055,9 +1171,30 @@ def load_universe():
         return None
 
 
-def load_kline(code, count=None):
-    """读取共享 K 线缓存（规范格式）；缺失返回 None（下游可回退自有接口）。"""
-    return _read_kline_csv(code, count=count)
+def load_kline(code, count=None, start=None, end=None, offline=False, required=False):
+    """读取本地 K 线，支持日期区间；此函数从不访问外网。
+
+    正式模型优先读物化 CSV；offline=True 或回测需要完整历史时直接读分片库。
+    required=True 时缺数据抛出 MarketDataError，避免调用方静默联网兜底。
+    """
+    if offline:
+        return MARKET_STORE.load_bars(code, start=start, end=end,
+                                      count=count, required=required)
+    bars = _read_kline_csv(code, start=start, end=end)
+    if bars and (count is None or len(bars) >= count):
+        n = max(0, int(count)) if count is not None else None
+        return bars[-n:] if n else ([] if n == 0 else bars)
+    stored = MARKET_STORE.load_bars(code, start=start, end=end, count=count)
+    if stored and (not bars or len(stored) > len(bars)):
+        return stored
+    if bars:
+        if count is not None:
+            n = max(0, int(count))
+            return bars[-n:] if n else []
+        return bars
+    if required:
+        MARKET_STORE.load_bars(code, start=start, end=end, count=count, required=True)
+    return None
 
 
 def save_universe(universe):

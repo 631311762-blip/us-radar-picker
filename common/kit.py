@@ -111,10 +111,10 @@ class ModelContext:
         return out
 
     # ---- 条件①：共享全市场行情 K 线 ----
-    def kline(self, code, count=None, fallback=True):
-        """读共享 K 线缓存（规范格式 date/open/high/low/close/volume/turnover）。
+    def kline(self, code, count=None, fallback=False):
+        """读共享 K 线缓存；默认严格离线，缺失返回 None 并跳过该标的。
 
-        fallback=True 时缓存缺失则实时抓一次，保证模型不因缓存抖动空跑。
+        fallback 仅供独立调试显式开启；统一流水线中的所有模型不得开启。
         """
         bars = cm.load_kline(code, count=count)
         if not bars and fallback:
@@ -206,7 +206,7 @@ class ModelContext:
                 code, base = p.get("code"), p.get("close")
                 if not code:
                     continue
-                bars = cm.load_kline(code)
+                bars = cm.load_kline(code, offline=True)
                 if not bars:
                     continue
                 dates = [b["date"] for b in bars]

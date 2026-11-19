@@ -20,7 +20,7 @@ r"""
 口径与 feedback.settle_one 一致：g5/g10=其后 5/10 日最高价相对提示日收盘的最大浮盈%，
 r5=持有 5 日实际收益（跌破突破日最低×0.96 止损）。
 
-只读 kline_cache.json / factor_fit.json，不改任何模型文件、权重、holdout、状态文件。
+只读共同历史行情库 / factor_fit.json，严格离线，不改模型权重、holdout、状态文件。
 """
 import os, sys, json, math, statistics, argparse
 from collections import defaultdict
@@ -31,6 +31,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 import model2 as M
 import features as F
+import datafetch
 
 
 def _find(fname):
@@ -38,7 +39,7 @@ def _find(fname):
     return p if os.path.exists(p) else os.path.join(ROOT, fname)
 
 
-CACHE = json.load(open(_find("kline_cache.json"), encoding="utf-8"))["data"]
+CACHE = datafetch.load_market_cache(count=500)
 W = json.load(open(os.path.join(HERE, "factor_fit.json"), encoding="utf-8"))["weights"]
 FACTORS = list(W.keys())
 TOT = sum(W.values())

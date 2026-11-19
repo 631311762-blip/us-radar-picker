@@ -651,11 +651,15 @@ def main():
         _s.path.insert(0, _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "..", "common"))
         import adapter as _ad
         _ad.install("kaizhong", vars(lib))
+        os.environ["KZ_OFFLINE"] = "1"  # K 线已由 prefilter 统一预填，禁止模型外网补抓
     except Exception:
         _ad = None
     print("[1/5] 探测最新交易日 ...")
     try:
-        last_date = AS_OF or lib.market_last_date()
+        last_date = AS_OF or ((_ad.cm.load_meta() or {}).get("quote_date")
+                              if _ad else lib.market_last_date())
+        if not last_date:
+            raise RuntimeError("共同前置层缺少 quote_date")
     except Exception as e:
         print(f"行情探测失败：{e}")
         sys.exit(1)

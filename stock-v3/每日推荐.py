@@ -96,11 +96,11 @@ _CACHE_MEMO = {"key": None, "data": None}
 
 
 def load_cache():
-    """同一交易日的K线缓存，避免每天重复拉取全市场（约 28 分钟）
-    文件 120MB，feedback（回溯）与 build（选股）在同一次运行中各要读一次，
-    用模块级记忆化只解析一次。"""
+    """读取内存缓存；独立模式才可使用旧 JSON，统一流水线严格走历史分片。"""
     if _CACHE_MEMO["data"] is not None:
         return _CACHE_MEMO["data"], _CACHE_MEMO["key"]
+    if datafetch.shared_ready():
+        return {}, None
     f = os.path.join(HERE, "kline_cache.json")
     if not os.path.exists(f):
         return {}, None
@@ -138,18 +138,28 @@ def build(topn=6):
     pool = universe()
     print(f"候选宇宙 {len(pool)} 只（市值 ≥25 亿，上不封顶）")
     name = {p["code"]: p["name"] for p in pool}
-    cache, key = load_cache()
-    # 补跑模式：历史基准日必须全量按 KLINE_END 重取，禁用磁盘缓存
-    if os.environ.get("KLINE_END"):
-        cache, key = {}, None
     today = datetime.date.today().isoformat()
-    # 缓存 key 记录的是【该批数据的最后交易日】，不是运行日期。
-    # 收盘后（15:05 起）必须覆盖到"今天"，否则说明缓存是旧数据，作废重拉；
-    # 未收盘时用最近一个交易日的数据出榜是正常的，不能因为 key≠today 就白等半小时重拉。
-    if (NOW.hour * 60 + NOW.minute) >= 15 * 60 + 5 and key != today:
-        print(f"  缓存停留于 {key}，而今天({today})已收盘 → 作废重拉")
-        cache = {}
-    todo = [p for p in pool if p["code"] not in cache]
+    if datafetch.shared_ready():
+        # 正式流水线一次顺序扫描历史分片；旧 kline_cache.json 不参与选股。
+        cache = datafetch.load_market_cache(
+            [p["code"] for p in pool], count=320,
+            end=os.environ.get("KLINE_END", ""))
+        key = max((v[-1]["date"] for v in cache.values() if v), default="")
+        mark_cache(cache, key)
+        todo = []
+        print(f"统一历史库离线载入 {len(cache)} 只，基准日 {key}")
+    else:
+        cache, key = load_cache()
+        # 独立补跑模式：历史基准日必须全量按 KLINE_END 重取，禁用磁盘缓存
+        if os.environ.get("KLINE_END"):
+            cache, key = {}, None
+        # 缓存 key 记录的是【该批数据的最后交易日】，不是运行日期。
+        # 收盘后（15:05 起）必须覆盖到"今天"，否则说明缓存是旧数据，作废重拉；
+        # 未收盘时用最近一个交易日的数据出榜是正常的，不能因为 key≠today 就白等半小时重拉。
+        if (NOW.hour * 60 + NOW.minute) >= 15 * 60 + 5 and key != today:
+            print(f"  缓存停留于 {key}，而今天({today})已收盘 → 作废重拉")
+            cache = {}
+        todo = [p for p in pool if p["code"] not in cache]
     if todo:
         print(f"K线缓存 {len(cache)} 只，需补拉 {len(todo)} 只"
               f"（并发取数，约 {max(1, len(todo) // 100)} 分钟）...")
