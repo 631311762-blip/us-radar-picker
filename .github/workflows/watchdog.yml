@@ -39,6 +39,13 @@ jobs:
           data = json.load(urllib.request.urlopen(req))
           has_success = False
           has_running = False
+          stuck_run = None
+          # 主流水线正常应在 90 分钟内跑完（单模型 600s+1 次重试 × 9 + 前置层）。
+          # 若 in_progress 已超过该时限，视为卡死（2026-11-19 曾因善水卡 3600s
+          # 拖到 180 分钟总超时被取消，而 watchdog 当时仅因 in_progress 就 skip，
+          # 错过补跑窗口）。此时应主动补跑。
+          STALE_MINUTES = 90
+          now = datetime.datetime.now(datetime.timezone.utc)
           for r in data['workflow_runs']:
               if r['created_at'][:10] != today:
                   continue
@@ -49,11 +56,19 @@ jobs:
                   break
               if st in ('in_progress', 'queued', 'pending', 'requested'):
                   has_running = True
-                  print(f"今日仍在运行(可能延迟): run {r['id']} {st}")
+                  started = datetime.datetime.fromisoformat(
+                      (r.get('run_started_at') or r['created_at']).replace('Z', '+00:00'))
+                  age_min = (now - started).total_seconds() / 60
+                  print(f"今日仍在运行: run {r['id']} {st}，已运行 {age_min:.0f} 分钟")
+                  if age_min > STALE_MINUTES:
+                      stuck_run = r['id']
+                      print(f"[WARN] 主流水线 run {r['id']} 运行超 {STALE_MINUTES} 分钟仍未完成，判定卡死")
           if has_success:
               decision = 'skip'
+          elif stuck_run is not None:
+              decision = 'dispatch'   # 卡死：主动补跑
           elif has_running:
-              decision = 'skip'   # 主流程在跑，仅延迟，等其完成，避免双跑
+              decision = 'skip'       # 正常在途，等其完成避免双跑
           else:
               decision = 'dispatch'
           print(f"DECISION={decision}")
