@@ -2173,10 +2173,10 @@
         "done": true
       },
       "t5": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-19",
+        "close": 8.62,
+        "ret": -0.0293,
+        "done": true
       },
       "t10": {
         "date": null,
@@ -2214,10 +2214,10 @@
         "done": true
       },
       "t5": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-19",
+        "close": 6.5,
+        "ret": 0.045,
+        "done": true
       },
       "t10": {
         "date": null,
