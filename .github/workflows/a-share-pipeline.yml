@@ -213,6 +213,30 @@ jobs:
           git add powei/state 2>/dev/null || true
           # 主升浪子系统（kline_cache*.json 已在 .gitignore，不会入库）
           git add stock-v3/ 2>/dev/null || true
-          git commit -m "a-share pipeline state: $(date -u +%F) [skip ci]" || echo "无状态变更"
+          # 统计本次行情库变更，供 Step Summary 观测
+          CHANGED=$(git diff --cached --name-only | grep -c '^common/state/market_daily/' || true)
+          if git commit -m "a-share pipeline state: $(date -u +%F) [skip ci]"; then
+            echo "已提交：行情库变更 ${CHANGED} 个分片"
+          else
+            echo "无状态变更"
+          fi
+          # rebase 到远端最新，避免非 fast-forward；推送失败自动重试 3 次
           git pull --rebase origin main || true
-          git push || echo "推送状态失败（不影响选股）"
+          PUSH_OK=0
+          for i in 1 2 3; do
+            if git push; then PUSH_OK=1; break; fi
+            echo "推送失败，第 ${i} 次重试..."
+            sleep 5
+            git pull --rebase origin main || true
+          done
+          if [ "$PUSH_OK" -eq 1 ]; then
+            {
+              echo "### 回写状态：已推送到 GitHub"
+              echo "- 行情库新增/更新分片：${CHANGED} 个"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### 回写状态：推送失败"
+              echo "行情数据已在本地提交，但未能推送到 GitHub。请检查 Actions 日志并手动重试。"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
