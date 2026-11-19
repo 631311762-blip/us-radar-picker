@@ -38,6 +38,26 @@ def load_registry():
         return json.load(fh)
 
 
+# 单模型超时：模型已通过共同前置层离线读缓存，正常几秒~几十秒完成。
+# 历史上 3600s 超时会导致偶发的进程启动阻塞卡满 1 小时，把一个模型的问题
+# 放大成整条流水线超时（2026-11-19 善水卡 3600s + 低位 3581s 拖垮全局）。
+# 600s 足够任何正常离线扫描；超时即杀掉并自动重试一次（偶发阻塞重试即恢复）。
+MODEL_TIMEOUT = int(os.environ.get("MODEL_TIMEOUT", "600"))
+MODEL_RETRIES = int(os.environ.get("MODEL_RETRIES", "1"))
+
+
+def _run_once(cmd, env, timeout):
+    """执行一次模型命令，返回 (returncode, 是否超时)。"""
+    try:
+        r = subprocess.run(cmd, shell=True, cwd=REPO_ROOT, env=env, timeout=timeout)
+        return r.returncode, False
+    except subprocess.TimeoutExpired:
+        return 124, True
+    except Exception as e:
+        print("[run_all] 模型启动异常: %s" % e, flush=True)
+        return 1, False
+
+
 def run_model(m):
     name, cmd = m["name"], m["cmd"]
     label = m.get("label", name)
@@ -53,15 +73,15 @@ def run_model(m):
     env["COMMON_LIXIN"] = cm.LIXIN_JSON
     env["TZ"] = "Asia/Shanghai"
     t0 = datetime.now()
-    try:
-        r = subprocess.run(cmd, shell=True, cwd=REPO_ROOT, env=env, timeout=3600)
-        code = r.returncode
-    except subprocess.TimeoutExpired:
-        print("[run_all] 模型 %s 超时(3600s)" % name, flush=True)
-        code = 124
-    except Exception as e:
-        print("[run_all] 模型 %s 启动异常: %s" % (name, e), flush=True)
-        code = 1
+    code = 1
+    for attempt in range(MODEL_RETRIES + 1):
+        code, timed_out = _run_once(cmd, env, MODEL_TIMEOUT)
+        if code == 0 or not timed_out:
+            break
+        # 仅超时才重试：启动偶发阻塞重试通常秒过；真失败不重试避免浪费时间。
+        if attempt < MODEL_RETRIES:
+            print("[run_all] 模型 %s 超时(%ss)，第 %d 次自动重试…"
+                  % (name, MODEL_TIMEOUT, attempt + 1), flush=True)
     dt = (datetime.now() - t0).total_seconds()
     print("[run_all] 模型 %s 结束，退出码=%s，耗时 %.1fs" % (name, code, dt), flush=True)
     return {"name": name, "label": label, "exit": code, "seconds": round(dt, 1)}
