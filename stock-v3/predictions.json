@@ -5257,5 +5257,49 @@
   "oya_vol_x": 1.92,
   "oya_breakdown": true,
   "oya_stop": 21.33
+ },
+ {
+  "model": "v5-oya",
+  "kind": "B-埋伏",
+  "date": "2026-11-19",
+  "code": "sh600103",
+  "name": "青山纸业",
+  "close": 3.36,
+  "score": 87.57,
+  "factors": [
+   "lu10",
+   "brk60",
+   "chg5",
+   "brk20",
+   "dist_hi",
+   "vr5",
+   "pos",
+   "lu20",
+   "shrink"
+  ],
+  "pct": [
+   0.9359,
+   0.7014,
+   0.8988,
+   0.8612,
+   0.6949,
+   0.9875,
+   0.8756,
+   0.8525,
+   0.9981
+  ],
+  "dsc": 0,
+  "launch_gain": null,
+  "since": {
+   "first": "2026-11-19",
+   "days": 1,
+   "fresh": true
+  },
+  "oya_probe_date": "2026-11-16",
+  "oya_pressure": 3.35,
+  "oya_break": 2.99,
+  "oya_vol_x": 1.89,
+  "oya_breakdown": true,
+  "oya_stop": 2.84
  }
 ]

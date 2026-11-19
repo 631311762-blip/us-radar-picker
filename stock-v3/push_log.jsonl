@@ -22,3 +22,4 @@
 {"ts": "2026-11-18T12:39:58", "date": "2026-11-12", "ver": "v3.1+evo1113", "ok": false, "msg": "未配置 SendKey（sckey.txt 或环境变量 SERVERCHAN_SENDKEY）", "picks": ["sz300629", "sz300824"], "dsc": [0, 0]}
 {"ts": "2026-11-18T12:42:38", "date": "2026-11-12", "ver": "v3.1+evo1113", "ok": false, "msg": "未配置 SendKey（sckey.txt 或环境变量 SERVERCHAN_SENDKEY）", "picks": [], "dsc": []}
 {"ts": "2026-11-18T18:59:02", "date": "2026-11-18", "ver": "v3.1+evo1113", "ok": false, "msg": "未配置 SendKey（sckey.txt 或环境变量 SERVERCHAN_SENDKEY）", "picks": ["sz000595", "sz002261"], "dsc": [0, 0]}
+{"ts": "2026-11-20T00:35:14", "date": "2026-11-19", "ver": "v3.1+evo1113", "ok": true, "msg": "推送成功", "picks": ["sh600103"], "dsc": [0]}
