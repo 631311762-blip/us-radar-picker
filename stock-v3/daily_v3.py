@@ -239,6 +239,12 @@ def main():
     except Exception as e:
         print("  [警告] 奥雅跟踪段生成失败，不影响主流程：", e)
 
+    # 模型原型标杆样本（用户 2026-11-20 要求，推文结尾）
+    try:
+        md += OY.render_samples_md()
+    except Exception as e:
+        print("  [警告] 标杆样本段生成失败，不影响主流程：", e)
+
     md.append("---")
     md.append("风控：提示日收盘价买；跌破试盘支撑/突破日最低×0.96 离场；持有5个交易日；"
               "次日开盘涨幅>7%不追；单票仓位≤1/5。")

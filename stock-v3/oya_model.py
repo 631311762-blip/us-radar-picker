@@ -121,6 +121,16 @@ def detect(code, b, idx, p, ma=None):
     bd, bd_pct = breakdown(b, pday, idx, box["lo"], p)
     if p["require_breakdown"] and not bd:
         return None
+    # 中间段缩量特征（试盘日→突破日之间，仅作软标注，不参与准入）：
+    # 2026-11-20 回测显示这是弱正向信号（p>0.35），故只标注不筛票。
+    mid_vr = mid_vs_probe = low_ratio = None
+    if idx - pday >= 4:
+        vrs = [b[j]["volume"] / ma[j] for j in range(pday + 1, idx) if ma[j] > 0]
+        vols = [b[j]["volume"] for j in range(pday + 1, idx)]
+        if vrs:
+            mid_vr = round(sum(vrs) / len(vrs), 2)
+            mid_vs_probe = round((sum(vols) / len(vols)) / pvol, 2) if pvol else None
+            low_ratio = round(sum(1 for v in vrs if v < 1.5) / len(vrs), 2)
     return dict(
         oya=1, oya_probe_date=b[pday]["date"], oya_pressure=round(pressure, 2),
         oya_break=round((b[idx]["high"] / pressure - 1) * 100, 2),
@@ -128,6 +138,7 @@ def detect(code, b, idx, p, ma=None):
         oya_box_amp=box["amp"], oya_breakdown=bd, oya_bd_pct=bd_pct,
         oya_stop=round(b[idx]["low"] * 0.96, 2),   # 破位线：突破日最低×0.96
         is_limit_up=is_limit_up,                   # 涨停突破标记（仅提示，不剔除）
+        oya_mid_vr=mid_vr, oya_mid_vs_probe=mid_vs_probe, oya_low_ratio=low_ratio,
         oya_nxt_ratio=None, oya_confirm="待次日确认",
     )
 
@@ -340,6 +351,9 @@ def record(r):
                        oya_vol_x=x.get("oya_vol_x"),
                        oya_breakdown=x.get("oya_breakdown"),
                        is_limit_up=x.get("is_limit_up"),
+                       oya_mid_vr=x.get("oya_mid_vr"),
+                       oya_mid_vs_probe=x.get("oya_mid_vs_probe"),
+                       oya_low_ratio=x.get("oya_low_ratio"),
                        oya_stop=x.get("oya_stop")))
     json.dump(db, open(f, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     out = dict(base_date=r["base_date"], universe=r["universe"],
@@ -393,14 +407,31 @@ def render_oya_md(r):
     for i, x in enumerate(fp, 1):
         bd = {"创业板": "创", "科创板": "科"}.get(x.get("board", ""), "主")
         probe = x.get("oya_probe_date") or "—"
-        lu = "🔴涨停(买进难)" if x.get("is_limit_up") else ""
+        lu = " 🔴涨停(买进难)" if x.get("is_limit_up") else ""
+        # 洗盘缩量软标注（S2 口径：中间均量/试盘量<0.45），仅供参考不筛票
+        mv = x.get("oya_mid_vs_probe")
+        shrink = " 缩量✓" if mv is not None and mv < 0.45 else ""
         md.append(
             f"{i}. **{x['name']}**[{bd}] `{x['code']}` 分{x['score']:.0f}｜"
             f"收{x['close']} 当日{x['day_chg']:+.1f}%｜"
             f"试盘{probe} 压力线{x.get('oya_pressure')}(破{x.get('oya_break'):+.0f}%) "
-            f"量{x.get('oya_vol_x')}× {'洗盘✓' if x.get('oya_breakdown') else ''} {lu}")
+            f"量{x.get('oya_vol_x')}× {'洗盘✓' if x.get('oya_breakdown') else ''}"
+            f"{shrink}{lu}")
     md.append("")
     return md
+
+
+def render_samples_md():
+    """推文结尾的三个标杆样本（用户 2026-11-20 要求）：奥雅/冰山/果麦，
+    展示试盘→突破的关键形态与后续表现，作为模型原型参照。"""
+    return [
+        "---",
+        "📐 **模型原型样本**（奥雅式形态标杆）",
+        "- **奥雅股份** `sz300949`：试盘 09-08/压力25.50 → 突破 10-21（次日量比1.6）→ 5日最高浮盈 **+44%**",
+        "- **冰山冷热** `sz000530`：试盘 09-03/压力5.67 → 突破 10-13（涨停）→ 5日累计 **+42%**",
+        "- **果麦文化** `sz301052`：试盘 09-01/压力27.30 → 突破 10-12（涨停）→ 5日最高浮盈 **+31%**",
+        "",
+    ]
 
 
 STOP_FILE = "oya_follow_stop.json"   # 破位停止台账：code -> 首推日（已宣告停止，不再推送）
