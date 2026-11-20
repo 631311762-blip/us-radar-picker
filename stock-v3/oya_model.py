@@ -11,7 +11,8 @@ r"""
 
 首日可得的准入条件（T日收盘即可判定）：
   箱体振幅≤28% + 试盘(量比≥2/冲高≥3%/回落≥2%) + 破位(跌破试盘支撑)
-  + 提示日(涨幅≥5%/量比≥2/量≥试盘0.9/盘中最高≥压力线0.99/非涨停)
+  + 提示日(涨幅≥5%/量比≥2/量≥试盘0.9/盘中最高≥压力线0.99)
+    （2026-11-20起涨停突破日照样纳入，仅打 is_limit_up 标记提示买进难度）
 次日量能比 1.0~2.0 在 T+1 才可确认 → 作为「跟踪确认」在次日跟踪段标记，不做首推前置。
 
 返回结构与 每日推荐.build() 完全一致，daily_v3.py 可直接切换主榜来源。
@@ -99,8 +100,9 @@ def detect(code, b, idx, p, ma=None):
     vr = b[idx]["volume"] / ma[idx] if ma[idx] else 0
     if chg < p["sig_chg"] or vr < p["sig_vr"]:
         return None
-    if chg >= M.board_limit(code) - 0.5:      # 涨停买不进
-        return None
+    # 2026-11-20 用户要求：删除「非涨停」闸门——涨停突破日本身是强势信号，
+    # 不再因封板剔除；仅打标记 is_limit_up 供推送提示买入难度，不影响命中。
+    is_limit_up = chg >= M.board_limit(code) - 0.5
     probe = find_probe(b, idx, ma, p)
     if not probe:
         return None
@@ -125,6 +127,7 @@ def detect(code, b, idx, p, ma=None):
         oya_vol_x=round(b[idx]["volume"] / pvol, 2), oya_probe_vr=pvr,
         oya_box_amp=box["amp"], oya_breakdown=bd, oya_bd_pct=bd_pct,
         oya_stop=round(b[idx]["low"] * 0.96, 2),   # 破位线：突破日最低×0.96
+        is_limit_up=is_limit_up,                   # 涨停突破标记（仅提示，不剔除）
         oya_nxt_ratio=None, oya_confirm="待次日确认",
     )
 
@@ -336,6 +339,7 @@ def record(r):
                        oya_break=x.get("oya_break"),
                        oya_vol_x=x.get("oya_vol_x"),
                        oya_breakdown=x.get("oya_breakdown"),
+                       is_limit_up=x.get("is_limit_up"),
                        oya_stop=x.get("oya_stop")))
     json.dump(db, open(f, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     out = dict(base_date=r["base_date"], universe=r["universe"],
@@ -389,11 +393,12 @@ def render_oya_md(r):
     for i, x in enumerate(fp, 1):
         bd = {"创业板": "创", "科创板": "科"}.get(x.get("board", ""), "主")
         probe = x.get("oya_probe_date") or "—"
+        lu = "🔴涨停(买进难)" if x.get("is_limit_up") else ""
         md.append(
             f"{i}. **{x['name']}**[{bd}] `{x['code']}` 分{x['score']:.0f}｜"
             f"收{x['close']} 当日{x['day_chg']:+.1f}%｜"
             f"试盘{probe} 压力线{x.get('oya_pressure')}(破{x.get('oya_break'):+.0f}%) "
-            f"量{x.get('oya_vol_x')}× {'洗盘✓' if x.get('oya_breakdown') else ''}")
+            f"量{x.get('oya_vol_x')}× {'洗盘✓' if x.get('oya_breakdown') else ''} {lu}")
     md.append("")
     return md
 
