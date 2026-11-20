@@ -60,35 +60,36 @@ def volma20(b):
 YD_PRIOR_BACK = 10   # 突破日前回溯窗口(交易日)；回测显示 ≤10 日共振质量最高
 
 
-def yd_start(b, j, ma):
-    """b[j] 是否为易点阳线启动日（近似 hard_filter，缺换手率）→ bool"""
+def yd_start(b, j, ma=None):
+    """b[j] 是否为易点阳线启动日（近似 hard_filter，缺换手率）→ bool
+    量比口径与线上易点 2026-11-20 修正对齐：当日量/前5日均量(VR_BASIS='kline')。"""
     if j < 60:
         return False
     o = b[j]["open"]; c = b[j]["last"]
-    if c <= o:                                   # 必须阳线
+    if c <= o:                                   # 必须阳线(REQUIRE_YANG)
         return False
     prev = b[j - 1]["last"]
     chg = (c / prev - 1) * 100 if prev else 0
-    if not (0.5 <= chg <= 22.0):                 # 当日涨幅
+    if not (0.5 <= chg <= 22.0):                 # 当日涨幅 0.5~22%
         return False
-    vr = b[j]["volume"] / ma[j] if ma[j] else 0
-    if vr < 1.4:                                 # 量比
+    vol5 = sum(x["volume"] for x in b[j - 5:j]) / 5.0     # 前5日均量(易点新口径)
+    vr = b[j]["volume"] / vol5 if vol5 > 0 else 0
+    if vr < 1.4:                                 # VR_MIN=1.4
         return False
     m20 = sum(x["last"] for x in b[j - 19:j + 1]) / 20.0   # 收盘价MA20
-    if c < 0.95 * m20 or abs(c / m20 - 1) > 0.12:          # 站上MA20 + 不远离
+    if c < 0.95 * m20 or abs(c / m20 - 1) > 0.12:          # 站上MA20×0.95 + 距MA20≤12%
         return False
     r5 = c / b[j - 5]["last"] - 1 if j >= 5 else 0
-    if r5 > 0.45:                                # 近5日不追高
+    if r5 > 0.45:                                # 近5日涨幅≤45%
         return False
     return True
 
 
 def yd_prior(b, idx, back=YD_PRIOR_BACK):
     """突破日前 back 个交易日内最近一次易点阳线启动 → (date, gap) 或 (None, None)"""
-    ma = volma20(b)
     lo = max(60, idx - back)
     for j in range(idx - 1, lo - 1, -1):
-        if yd_start(b, j, ma):
+        if yd_start(b, j):
             return b[j]["date"], idx - j
     return None, None
 
