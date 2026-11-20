@@ -46,6 +46,19 @@ CHG_MIN, CHG_MAX = 0.5, 22.0     # 当日涨幅 0.5-22%（百分数）
 TURN_MIN, TURN_MAX = 2.0, 35.0   # 换手 2-35%（百分数）
 PRICE_MIN, PRICE_MAX = 2.0, 200.0
 VR_MIN = 1.4               # 量比 ≥1.4
+# 2026-11-20 用户确认：量比口径改为日K自算（当日成交量 / 前5日均量），与回溯面板/
+# 原型口径一致。旧口径取东财实时字段 f10，受盘中时点/复权/集合竞价影响且不可复现：
+# 11-16 苑东生物 f10=1.74 判达标，但日K实算仅 0.88（较上一交易日 +0.42%、相对前5日
+# 缩量），是「没放量却被推」的根因。f10 原值保留为 vr_em 供审计对照。
+VR_BASIS = "kline"         # kline = 日K自算；em = 回退东财实时 f10（仅供对照/回滚）
+VR_COARSE_MIN = 0.5        # 粗筛放宽：f10 虚低时不能误杀真实放量票；权威判断在 hard_filter
+# 历史推荐股黄金分割生命线跟踪（2026-11-20 用户要求）：
+#   生命线 = 首次推荐日最低价 L + (前一日最高价 H - L) × (1 - FIB_RATIO)
+#           = H - (H - L) × FIB_RATIO，即 0.618 回撤位；跌破意味着回撤超 61.8%、趋势破坏。
+#   「前一日」= 当前交易日的前一交易日，使生命线随趋势高点滚动上移（跟踪止盈/止损线）。
+#   未破位 → 正文标注「第N天」继续关注；破位 → 标注并在本次停止推荐。
+FIB_LOOKBACK = 10          # 只跟踪最近 10 个交易日的推荐（去重，取首次推荐日）
+FIB_RATIO = 0.618          # 黄金分割回撤比例（0.618 为经典中期生命线）
 MA20_FLOOR = 0.95          # 收盘 ≥ MA20×0.95
 MA20_DIST_MAX = 0.12       # 距MA20 ≤12%
 REQUIRE_YANG = True        # 易点模型提示点必须为阳线（收盘>开盘）：
@@ -53,7 +66,7 @@ REQUIRE_YANG = True        # 易点模型提示点必须为阳线（收盘>开�
 TOP_N = 6                  # 评分取前 6 推送
 BUY_LOW = 0.975            # 买点 = 收盘×0.975 ~ 收盘
 STOP_LOSS, TARGET = -0.05, 0.07
-MARKDOWN_LIMIT = 900       # 正文 ≤900 字
+MARKDOWN_LIMIT = 1400      # 正文上限（含历史推荐跟踪段，2026-11-20 由 900 放宽）
 MIN_UNIVERSE = 1500        # 样本明显偏小视为数据源异常；剔除北交所后正常约 1977
                            # （创业板约 1372 + 科创板约 605），留约 25% 余量
 # 2026-11-14 用户确认：自评分因子回溯（2026-11-13）后正式启用新评分。
@@ -287,7 +300,14 @@ def hard_filter(rec, bars):
         return None
     if not (PRICE_MIN <= rec["price"] <= PRICE_MAX):
         return None
-    if rec["vr"] < VR_MIN:
+    # 量比口径（2026-11-20 修正）：默认用日K自算「当日成交量 / 前5日均量」，
+    # 与回溯面板 / 原型 vr5 一致、可复现、可审计。东财实时 f10 受盘中时点/复权影响：
+    # 11-16 苑东生物 f10=1.74 判达标，但日K实算仅 0.88（实际缩量），是误推根因。
+    # f10 原值保留为 vr_em 供对照；VR_BASIS="em" 可回退旧口径。
+    vol5 = sum(b["vol"] for b in bars[-6:-1]) / 5.0 if len(bars) >= 6 else bars[-1]["vol"]
+    vr_kline = bars[-1]["vol"] / vol5 if vol5 > 0 else 0.0
+    vr_used = vr_kline if VR_BASIS == "kline" else rec["vr"]
+    if vr_used < VR_MIN:
         return None
     ma20 = ma(bars, 20)
     ma5, ma5_prev, ma60 = ma(bars, 5), ma(bars, 5, 1), ma(bars, 60)
@@ -316,6 +336,8 @@ def hard_filter(rec, bars):
               "dd90": dd90, "dd90_ref": round(ref, 2), "dd90_basis": DD90_BASIS,
               "r5": r5, "ma20": ma20, "ma5": ma5,
               "ma5_prev": ma5_prev, "ma60": ma60, "dist_ma20": dist,
+              "vr": round(vr_used, 2), "vr_em": round(rec["vr"], 2),
+              "vr_basis": VR_BASIS, "vol5_avg": round(vol5, 2),
               "ma5_up": ma5_up, "below_ma60": below_ma60,
               "high90": hi, "bars": bars})
     return d
@@ -509,8 +531,89 @@ def review(state, quote_map):
             "note": "按次日涨幅对 +7% 目标 / -5% 止损结算"}
 
 
+# ---------- 6b. 历史推荐股 · 黄金分割生命线跟踪（2026-11-20 用户要求） ----------
+def load_history_picks(lookback=FIB_LOOKBACK):
+    """读取最近 lookback 个交易日的易点推荐（统一台账 + 自有 index.jsonl 合并）。
+    返回 {code: {"name","board","first_date"}}，同一 code 取最早推荐日。
+    统一台账在 common/state/recommendations/yidian/*.json（云端主事实源）；
+    自有 index.jsonl 仅作补充（本地单跑时可能只有它有数据）。"""
+    picks = {}
+
+    def _put(code, name, board, date):
+        if not code or not re.fullmatch(r"\d{6}", str(code)):
+            return
+        code = str(code)
+        info = {"name": name or "", "board": board or "", "first_date": date}
+        if code not in picks or date < picks[code]["first_date"]:
+            picks[code] = info
+
+    rec_root = os.path.join(BASE, "..", "common", "state", "recommendations", "yidian")
+    if os.path.isdir(rec_root):
+        files = sorted(f for f in os.listdir(rec_root)
+                       if re.fullmatch(r"\d{4}-\d{2}-\d{2}\.json", f))[-lookback:]
+        for fn in files:
+            date = fn[:-5]
+            try:
+                d = json.load(open(os.path.join(rec_root, fn), encoding="utf-8"))
+            except Exception:
+                continue
+            for p in d.get("picks", []):
+                _put(p.get("code"), p.get("name"), p.get("board"), date)
+    if os.path.exists(INDEX_PATH):
+        for ln in open(INDEX_PATH, encoding="utf-8"):
+            try:
+                d = json.loads(ln.strip())
+                date = d.get("date")
+                if not date:
+                    continue
+                for p in d.get("top6", []):
+                    code = str(p.get("code") or "")
+                    board = ("科创板" if code.startswith(PREFIX_KCB) else
+                             "北交所" if code.startswith(PREFIX_BJ) else "创业板")
+                    _put(code, p.get("name"), board, date)
+            except Exception:
+                continue
+    return picks
+
+
+def golden_fib_track(history_picks):
+    """对每只历史推荐股计算黄金分割生命线状态。
+    生命线 = 首次推荐日最低价 L + (前一日最高价 H − L) × (1 − FIB_RATIO)
+           = H − (H − L) × 0.618，即经典 0.618 回撤位；
+    当前收盘 ≥ 生命线 → 未破位（显示「提示后第N天」）；跌破 → 破位（本次起不再推）。
+    返回 (tracks, broken_codes)。K线取数失败 graceful 跳过，不影响主流程。"""
+    tracks, broken = [], set()
+    for code, info in history_picks.items():
+        try:
+            bars = kline(code, info["board"], 260)
+        except Exception:
+            continue
+        if not bars or len(bars) < 3:
+            continue
+        i_rec = next((i for i, b in enumerate(bars) if b["date"] >= info["first_date"]), None)
+        # 推荐日不在K线窗口内（太久远）或就是今天（本次新推）→ 不跟踪
+        if i_rec is None or i_rec >= len(bars) - 1:
+            continue
+        L = bars[i_rec]["low"]                    # 首次推荐日最低价（启动低点）
+        H = bars[-2]["high"]                      # 前一交易日最高价（滚动趋势高点）
+        if H <= L:
+            H = max(b["high"] for b in bars[i_rec:])
+        life = L + (H - L) * (1.0 - FIB_RATIO)
+        cur = bars[-1]["close"]
+        day_n = (len(bars) - 1) - i_rec           # 推荐当天=第0天
+        is_broken = cur < life
+        if is_broken:
+            broken.add(code)
+        tracks.append({"code": code, "name": info["name"], "board": info["board"],
+                       "first_date": info["first_date"], "day_n": day_n,
+                       "low": round(L, 2), "prev_high": round(H, 2),
+                       "life": round(life, 2), "cur": round(cur, 2), "broken": is_broken})
+    tracks.sort(key=lambda x: (not x["broken"], -x["day_n"]))
+    return tracks, broken
+
+
 # ---------- 7. 归档 / 推送 ----------
-def archive(all_q, top, meta, audit_removed, watch_pool, review_res, state):
+def archive(all_q, top, meta, audit_removed, watch_pool, review_res, state, fib_tracks=None):
     stamp = TODAY.replace("-", "")
     jf = os.path.join(ARCHIVE, "qualified_%s.json" % stamp)
     cf = os.path.join(ARCHIVE, "qualified_%s.csv" % stamp)
@@ -521,6 +624,7 @@ def archive(all_q, top, meta, audit_removed, watch_pool, review_res, state):
         "top": [{k: v for k, v in t.items() if k != "bars"} for t in top],
         "watch_pool": watch_pool,
         "review": review_res,
+        "fib_track": fib_tracks or [],
     }
     json.dump(payload, open(jf, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     cols = ["code", "name", "board", "close", "open", "entity_pct", "chg_pct",
@@ -585,7 +689,7 @@ def pushplus(title, content, token):
         return False, str(e)
 
 
-def build_markdown(top, meta, audit_removed, review_res, cum_rate, qualified_count):
+def build_markdown(top, meta, audit_removed, review_res, cum_rate, qualified_count, fib_tracks=None):
     L = ["## 易点模型推荐 · %s" % TODAY, "",
          "样本 %d（创业板 %d / 科创板 %d；%s）｜合格 %d｜审计否决 %d"
          % (meta["total"], meta.get("cyb", 0), meta.get("kcb", 0),
@@ -599,6 +703,19 @@ def build_markdown(top, meta, audit_removed, review_res, cum_rate, qualified_cou
     else:
         L.append("昨日复盘：无历史归档样本；累计胜率 %s" %
                  (("%.1f%%" % (cum_rate * 100)) if cum_rate is not None else "—"))
+
+    # 历史推荐股黄金分割生命线跟踪（未破位→第N天继续关注；破位→本次起不再推）
+    if fib_tracks:
+        alive = [t for t in fib_tracks if not t["broken"]]
+        broken = [t for t in fib_tracks if t["broken"]]
+        L += ["", "### 历史推荐跟踪（黄金分割 %.1f 生命线）" % (FIB_RATIO * 100)]
+        for t in alive:
+            L.append("· %s `%s` 第%d天｜现价 %.2f ≥ 生命线 %.2f，继续关注"
+                     % (t["name"], t["code"], t["day_n"], t["cur"], t["life"]))
+        for t in broken:
+            L.append("· %s `%s` 第%d天｜现价 %.2f < 生命线 %.2f，**已破位，不再推**"
+                     % (t["name"], t["code"], t["day_n"], t["cur"], t["life"]))
+
     L += ["", "### 前 %d 只" % len(top), ""]
     for i, t in enumerate(top, 1):
         L.append("%d. **%s** `%s` %s｜%s｜启动第%d天｜%.1f分｜阳线%+.2f%%" %
@@ -611,7 +728,9 @@ def build_markdown(top, meta, audit_removed, review_res, cum_rate, qualified_cou
           "90日回撤按%s计（折中口径），避免启动阳线自我修复。"
           % {"prev_close": "启动前一日收盘", "open": "当日开盘", "low": "当日最低",
              "close": "当日收盘", "max_dd": "90日最大回撤"}.get(DD90_BASIS, DD90_BASIS),
+          "量比按日K自算(当日量/前5日均量)，可复现；不再用盘中实时字段。",
           "状态：已启动/临界/筑底/观察；观察池含下轨缩量、上影试盘。",
+          "历史推荐：未破黄金分割生命线继续关注，破位则本次起不再推。",
           "", "*统计研究，不构成投资建议。*"]
     txt = "\n".join(L)
     if len(txt) > MARKDOWN_LIMIT:
@@ -676,12 +795,15 @@ def main():
     quote_map = {r["code"]: r for r in universe}
 
     # 粗筛（批量行情字段，无市值限制）
+    # 粗筛只做放宽预筛（VR_COARSE_MIN=0.5）：权威量比判断在 hard_filter 用日K自算，
+    # 此处既不能因 f10 虚低误杀真实放量票，也保留一个下限控制 K线精算量。
     coarse = [r for r in universe
               if CHG_MIN <= r["chg_pct"] <= CHG_MAX
               and TURN_MIN <= r["turn_pct"] <= TURN_MAX
               and PRICE_MIN <= r["price"] <= PRICE_MAX
-              and r["vr"] >= VR_MIN]
-    log("批量行情粗筛：%d 只进入K线精算" % len(coarse))
+              and r["vr"] >= VR_COARSE_MIN]
+    log("批量行情粗筛：%d 只进入K线精算（量比预筛下限 %.1f，权威判断用日K自算）"
+        % (len(coarse), VR_COARSE_MIN))
 
     passed, failed, yin_removed = [], 0, 0
     with ThreadPoolExecutor(max_workers=10) as ex:
@@ -733,7 +855,17 @@ def main():
         d["target"] = round(c * (1 + TARGET), 2)
         qualified.append(d)
     qualified.sort(key=lambda x: -x["score"])
-    log("审计否决剔除 %d 只 → 合格股 %d 只" % (audit_removed, len(qualified)))
+
+    # 历史推荐股黄金分割生命线跟踪：破位票本次起不再推（用户 2026-11-20 要求）
+    history_picks = load_history_picks()
+    fib_tracks, fib_broken = golden_fib_track(history_picks)
+    blocked = [q for q in qualified if q["code"] in fib_broken]
+    if blocked:
+        qualified = [q for q in qualified if q["code"] not in fib_broken]
+        log("历史推荐破位拦截：%d 只已跌破黄金分割生命线，本次不再推（%s）"
+            % (len(blocked), ",".join(b["name"] for b in blocked)))
+    log("黄金分割跟踪：命中 %d 只历史推荐（未破 %d / 已破 %d）"
+        % (len(fib_tracks), sum(1 for t in fib_tracks if not t["broken"]), len(fib_broken)))
 
     watch_pool = [{"code": q["code"], "name": q["name"], "signals": q["signals"]}
                   for q in qualified if q["signals"]]
@@ -758,10 +890,12 @@ def main():
         % (review_res["samples"], w, l,
            ("%.2f%%" % (state["cum_win_rate"] * 100)) if state["cum_win_rate"] is not None else "—"))
 
-    jf, cf = archive(qualified, top, meta, audit_removed, watch_pool, review_res, state)
+    jf, cf = archive(qualified, top, meta, audit_removed, watch_pool, review_res, state,
+                     fib_tracks=fib_tracks)
     log("归档完成：%s / %s / index.jsonl / state.json" % (os.path.basename(jf), os.path.basename(cf)))
 
-    md = build_markdown(top, meta, audit_removed, review_res, state["cum_win_rate"], len(qualified))
+    md = build_markdown(top, meta, audit_removed, review_res, state["cum_win_rate"],
+                        len(qualified), fib_tracks=fib_tracks)
     pf = os.path.join(ARCHIVE, "push_%s.md" % TODAY.replace("-", ""))
     open(pf, "w", encoding="utf-8").write(md)
     ok, msg = pushplus("易点模型推荐 · %s · 前%d只" % (TODAY, len(top)), md, token)
@@ -777,6 +911,9 @@ def main():
         "dd90_basis": DD90_BASIS, "dd90_min": DD90_MIN,
         "include_bj": INCLUDE_BJ, "bj_excluded": meta.get("bj_excluded", 0),
         "score_version": SCORE_VERSION,
+        "vr_basis": VR_BASIS,
+        "fib_track": fib_tracks,
+        "fib_broken_blocked": [b["code"] for b in blocked],
         "top": [{"name": t["name"], "code": t["code"], "board": t["board"],
                  "status": t["status"], "startup_day": t["startup_day"],
                  "score": t["score"], "close": t["close"], "chg_pct": t["chg_pct"],
