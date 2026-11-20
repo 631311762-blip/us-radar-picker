@@ -206,6 +206,8 @@ jobs:
           git add common/state/lingpei*_lixin* 2>/dev/null || true
           git add common/state/lixin_exclude.json 2>/dev/null || true
           git add common/state/recommendations 2>/dev/null || true
+          # 按天推送去重标记：跨 runner 持久化，防主流水线/兜底/补跑/重试同日重复推送
+          git add common/state/push_dedup 2>/dev/null || true
           git add common/state/reviews 2>/dev/null || true
           git add common/state/params 2>/dev/null || true
           git add common/state/run_summary.json 2>/dev/null || true

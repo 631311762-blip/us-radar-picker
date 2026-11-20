@@ -58,6 +58,12 @@ except ImportError:  # 无 requests 时推送降级为不可用，不影响选�
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
+# 通用按天推送去重（防独立cron/主流水线/兜底/补跑同日重复推送）
+sys.path.insert(0, os.path.join(ROOT, "common"))
+try:
+    import push_guard
+except Exception:  # pragma: no cover - guard 缺失时降级为不去重，不影响选股
+    push_guard = None
 CFG = json.load(open(os.path.join(BASE_DIR, "config.json"), encoding="utf-8"))
 SH, POS, VOL, SC = CFG["shape"], CFG["position"], CFG["volume"], CFG["score"]
 FLT = CFG.get("filter", {})   # 第二条件（可选过滤层）；旧版 config 缺该段时为空 dict，向后兼容
@@ -344,9 +350,17 @@ def push_report(date_s, picks, stats=None, replay=False, force=False, top=20):
     if not picks and not PSH.get("empty_notice", True):
         print("[push] 空仓且 empty_notice=false，跳过")
         return False, "empty_skipped"
-    return push_wechat(build_title(date_s, len(picks)),
-                       build_markdown(date_s, picks, stats=stats, replay=replay, top=top),
-                       force=force)
+    # 按天去重：今日若已成功推送过高位上影，直接跳过（防重复）。
+    # date_s 是数据日（如 2026-11-17），按它去重可让独立cron与主流水线共享标记。
+    if push_guard and not force and not push_guard.should_push("high_shadow", date_s):
+        print("[推送去重] 高位上影 %s 已推送，跳过重复推送" % date_s)
+        return False, "dedup_skipped"
+    ok, ch = push_wechat(build_title(date_s, len(picks)),
+                         build_markdown(date_s, picks, stats=stats, replay=replay, top=top),
+                         force=force)
+    if ok and push_guard and not force:
+        push_guard.mark_pushed("high_shadow", date_s, note="候选%d只" % len(picks))
+    return ok, ch
 
 
 def pass_filter(row):

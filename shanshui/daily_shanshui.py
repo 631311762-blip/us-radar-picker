@@ -36,6 +36,14 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 
+# 通用按天推送去重（防主流水线/兜底/补跑/重试同日重复推送）
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.abspath(os.path.join(_SCRIPT_DIR, "..", "common")))
+try:
+    import push_guard
+except Exception:  # pragma: no cover - guard 缺失时降级为不去重，不影响选股
+    push_guard = None
+
 import requests
 
 # ------------------------------------------------------------------ 基础配置
@@ -389,6 +397,10 @@ def backfill_t10(bars_map):
 
 # ------------------------------------------------------------------ 推送
 def push(title, content):
+    # 按天去重：今日若已成功推送过善水，直接跳过（防重复）。
+    if push_guard and not push_guard.should_push("shanshui"):
+        print("[推送去重] 善水今日已推送，跳过重复推送")
+        return False
     if not PUSHPLUS_TOKEN:
         print("[推送] 未配置 PUSHPLUS_TOKEN，仅打印")
         return False
@@ -398,8 +410,11 @@ def push(title, content):
             "content": content, "template": "markdown",
         }, timeout=15)
         j = r.json()
+        ok = j.get("code") == 200
         print("[PushPlus] code=%s msg=%s" % (j.get("code"), j.get("msg")))
-        return j.get("code") == 200
+        if ok and push_guard:
+            push_guard.mark_pushed("shanshui", note=title)
+        return ok
     except Exception as e:
         print("[PushPlus] 异常: %s" % e)
         return False
