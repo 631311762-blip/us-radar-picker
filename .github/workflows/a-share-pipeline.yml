@@ -184,7 +184,9 @@ jobs:
           # 累加），单模型超时 300s + 重试1次。此前串行 + 600s 超时导致 11-19
           # 善水等模型连续超时把 180min 总预算耗尽、只推送 2/9 个模型。
           MODEL_WORKERS: ${{ vars.MODEL_WORKERS || '9' }}
-          MODEL_TIMEOUT: ${{ vars.MODEL_TIMEOUT || '300' }}
+          # 单模型默认超时 1500s；奥雅/易点在 registry.json 里用 timeout 字段放宽到 1800s。
+          # 2026-11-20 曾设 300s 误杀慢模型 + subprocess.run 只杀 shell 导致管道挂死 2h19m，已修。
+          MODEL_TIMEOUT: ${{ vars.MODEL_TIMEOUT || '1500' }}
           MODEL_RETRIES: '1'
         run: |
           ONLY="${{ github.event.inputs.only_model }}"

@@ -21,6 +21,7 @@ run_all.py —— 模型编排器（合并流水线的第二步）
 import os
 import sys
 import json
+import signal
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -39,12 +40,14 @@ def load_registry():
         return json.load(fh)
 
 
-# 单模型超时：模型已通过共同前置层离线读缓存，正常几秒~几十秒完成。
-# 历史上 3600s 超时会导致偶发的进程启动阻塞卡满 1 小时，把一个模型的问题
-# 放大成整条流水线超时（2026-11-19 善水卡 3600s + 低位 3581s 拖垮全局）。
-# 超时即杀掉并自动重试一次（偶发阻塞重试即恢复）；并行后单模型超时不再
-# 累加到全局，设为 300s 足以覆盖任何正常离线扫描 + 一次重试的最坏情形。
-MODEL_TIMEOUT = int(os.environ.get("MODEL_TIMEOUT", "300"))
+# 单模型超时：默认 1500s（25 分钟）。
+# 教训（2026-11-20）：曾把默认降到 300s，但奥雅/主升浪历史耗时约 20 分钟、
+# 易点约 16 分钟，300s 会把正常慢模型误杀 → 超时重试 → 反复拉长全局，
+# 且 subprocess.run(shell=True, timeout) 只杀 shell 不杀孙进程，管道不关闭
+# 导致 communicate 永久挂死（当晚 run 卡 2h19m 的元凶）。
+# 现在：① 进程组 kill 保证超时真能杀干净；② 默认 1500s 覆盖最慢模型；
+# ③ 个别模型可在 registry 里用 "timeout" 字段覆盖（快模型可设小以便快速失败）。
+MODEL_TIMEOUT = int(os.environ.get("MODEL_TIMEOUT", "1500"))
 MODEL_RETRIES = int(os.environ.get("MODEL_RETRIES", "1"))
 
 # 并行度：9 个模型彼此独立（各自读同一份共享 K 线缓存、写各自 state 子目录），
@@ -54,20 +57,53 @@ MODEL_WORKERS = max(1, int(os.environ.get("MODEL_WORKERS", "9")))
 
 
 def _run_once(cmd, env, timeout):
-    """执行一次模型命令，返回 (returncode, 是否超时)。"""
+    """执行一次模型命令，返回 (returncode, 是否超时)。
+
+    用 start_new_session=True 让模型独占一个进程组，超时时 os.killpg 杀掉
+    整个进程组（shell + 模型 python + 它 fork 出的所有子进程）。绝不能用
+    subprocess.run(shell=True, timeout=)：那套只发信号给 shell，模型 fork 的
+    孙进程仍持有 stdout 管道，communicate 会永久等待 → 整条流水线挂死。
+    """
+    proc = subprocess.Popen(
+        cmd, shell=True, cwd=REPO_ROOT, env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
     try:
-        r = subprocess.run(cmd, shell=True, cwd=REPO_ROOT, env=env, timeout=timeout)
-        return r.returncode, False
+        out, _ = proc.communicate(timeout=timeout)
+        if out:
+            # 保留模型 stdout 到编排器日志，便于云端排障
+            sys.stdout.write(out.decode("utf-8", "replace"))
+            sys.stdout.flush()
+        return proc.returncode, False
     except subprocess.TimeoutExpired:
+        # 杀整组：SIGKILL 先墓碑化，SIGCONT 唤醒可能的 stopped 进程确保死亡
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        try:
+            out, _ = proc.communicate(timeout=10)
+            if out:
+                sys.stdout.write(out.decode("utf-8", "replace"))
+                sys.stdout.flush()
+        except Exception:
+            pass
         return 124, True
     except Exception as e:
         print("[run_all] 模型启动异常: %s" % e, flush=True)
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
         return 1, False
 
 
 def run_model(m):
     name, cmd = m["name"], m["cmd"]
     label = m.get("label", name)
+    timeout = int(m.get("timeout", MODEL_TIMEOUT))   # 模型级超时覆盖
+    retries = int(m.get("retries", MODEL_RETRIES))   # 模型级重试覆盖
     print("\n" + "=" * 64)
     print("[run_all] 启动模型：%s (%s)" % (label, name))
     print("[run_all] cmd: %s" % cmd)
@@ -81,14 +117,14 @@ def run_model(m):
     env["TZ"] = "Asia/Shanghai"
     t0 = datetime.now()
     code = 1
-    for attempt in range(MODEL_RETRIES + 1):
-        code, timed_out = _run_once(cmd, env, MODEL_TIMEOUT)
+    for attempt in range(retries + 1):
+        code, timed_out = _run_once(cmd, env, timeout)
         if code == 0 or not timed_out:
             break
         # 仅超时才重试：启动偶发阻塞重试通常秒过；真失败不重试避免浪费时间。
-        if attempt < MODEL_RETRIES:
+        if attempt < retries:
             print("[run_all] 模型 %s 超时(%ss)，第 %d 次自动重试…"
-                  % (name, MODEL_TIMEOUT, attempt + 1), flush=True)
+                  % (name, timeout, attempt + 1), flush=True)
     dt = (datetime.now() - t0).total_seconds()
     print("[run_all] 模型 %s 结束，退出码=%s，耗时 %.1fs" % (name, code, dt), flush=True)
     return {"name": name, "label": label, "exit": code, "seconds": round(dt, 1)}
