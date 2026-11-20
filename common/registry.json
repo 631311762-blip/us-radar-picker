@@ -38,7 +38,9 @@
       "name": "yidian",
       "label": "易点模型",
       "cmd": "python3 yidian/run.py",
-      "enabled": true
+      "enabled": true,
+      "timeout": 1800,
+      "_note": "历史耗时约 16 分钟，显式放宽单模型超时到 1800s，避免被全局默认误杀。"
     },
     {
       "name": "powei",
@@ -53,7 +55,8 @@
       "cmd": "python3 stock-v3/daily_v3.py",
       "enabled": true,
       "settle": false,
-      "_note": "2026-11-18 起主榜切换为奥雅式模型(oya_model.py)：横盘→放量试盘→破位洗盘→盘中放量突破首日推；旧v3.1降为参照。自带 回溯/进化/选股/推送/云端备份 独立子系统；settle=false 跳过公共回溯（自有 feedback 闭环）。"
+      "timeout": 1800,
+      "_note": "2026-11-18 起主榜切换为奥雅式模型(oya_model.py)：横盘→放量试盘→破位洗盘→盘中放量突破首日推；旧v3.1降为参照。自带 回溯/进化/选股/推送/云端备份 独立子系统；settle=false 跳过公共回溯（自有 feedback 闭环）。历史耗时约 20 分钟，显式放宽超时到 1800s。"
     },
     {
    "name": "high_shadow",
