@@ -53,6 +53,46 @@ def volma20(b):
     return ma
 
 
+# ── 易点『阳线启动买点』共振标识（2026-11-21 用户要求）──────────────────
+# 用途：仅作软标注 + 排序优先 + 推文重点标识，绝不作为奥雅准入闸门。
+# 回测(2026全市场)证明：把易点前置做成硬闸门会误杀 11~23% 高收益票，且留下组更差。
+# 因共享缓存缺换手率(exchange 全为0)，这里只取 yidian.hard_filter 可K线化的核心条件作近似。
+YD_PRIOR_BACK = 10   # 突破日前回溯窗口(交易日)；回测显示 ≤10 日共振质量最高
+
+
+def yd_start(b, j, ma):
+    """b[j] 是否为易点阳线启动日（近似 hard_filter，缺换手率）→ bool"""
+    if j < 60:
+        return False
+    o = b[j]["open"]; c = b[j]["last"]
+    if c <= o:                                   # 必须阳线
+        return False
+    prev = b[j - 1]["last"]
+    chg = (c / prev - 1) * 100 if prev else 0
+    if not (0.5 <= chg <= 22.0):                 # 当日涨幅
+        return False
+    vr = b[j]["volume"] / ma[j] if ma[j] else 0
+    if vr < 1.4:                                 # 量比
+        return False
+    m20 = sum(x["last"] for x in b[j - 19:j + 1]) / 20.0   # 收盘价MA20
+    if c < 0.95 * m20 or abs(c / m20 - 1) > 0.12:          # 站上MA20 + 不远离
+        return False
+    r5 = c / b[j - 5]["last"] - 1 if j >= 5 else 0
+    if r5 > 0.45:                                # 近5日不追高
+        return False
+    return True
+
+
+def yd_prior(b, idx, back=YD_PRIOR_BACK):
+    """突破日前 back 个交易日内最近一次易点阳线启动 → (date, gap) 或 (None, None)"""
+    ma = volma20(b)
+    lo = max(60, idx - back)
+    for j in range(idx - 1, lo - 1, -1):
+        if yd_start(b, j, ma):
+            return b[j]["date"], idx - j
+    return None, None
+
+
 def find_probe(b, i, ma, p):
     """在 i 之前 [5,45] 交易日找最近的放量冲高回落试盘日 → (idx, high, vol, vr)"""
     start = max(p["probe_look_back"], i - p["probe_look_fwd"])
@@ -258,9 +298,15 @@ def build():
             ev = None
         if ev:
             r.update(ev)
+            # 易点共振软标注：突破日前 YD_PRIOR_BACK 日内是否有易点阳线启动（近→远）
+            yd_date, yd_gap = yd_prior(b, idx)
+            r["oya_yd_prior"] = 1 if yd_date else 0
+            r["oya_yd_date"] = yd_date
+            r["oya_yd_gap"] = yd_gap
             r["_b"] = b; r["_idx"] = idx
             hits.append(r)
-    print(f"奥雅形态命中 {len(hits)} 只（基准日 {base_date}）")
+    print(f"奥雅形态命中 {len(hits)} 只（基准日 {base_date}），"
+          f"其中易点共振 {sum(x['oya_yd_prior'] for x in hits)} 只")
 
     # 首推去重：同一只票 30 交易日内已推过则不再推（转为跟踪）
     hist = _load_oya_history()
@@ -287,7 +333,9 @@ def build():
         lx = []
 
     # 评分只用于排序；全量输出合格信号，不再限制 Top N 或板块配额
-    fresh_hits.sort(key=lambda x: -x["score"])
+    # 2026-11-21 用户要求：易点共振票（先易点启动、后奥雅突破）重点推荐→排序置顶，
+    # 组内仍按分数排。仅影响展示顺序，不改变准入（准入仍只看奥雅形态）。
+    fresh_hits.sort(key=lambda x: (-x.get("oya_yd_prior", 0), -x["score"]))
     final = fresh_hits
 
     # 审计一票否决（在最终名单上）
@@ -354,7 +402,10 @@ def record(r):
                        oya_mid_vr=x.get("oya_mid_vr"),
                        oya_mid_vs_probe=x.get("oya_mid_vs_probe"),
                        oya_low_ratio=x.get("oya_low_ratio"),
-                       oya_stop=x.get("oya_stop")))
+                       oya_stop=x.get("oya_stop"),
+                       oya_yd_prior=x.get("oya_yd_prior"),
+                       oya_yd_date=x.get("oya_yd_date"),
+                       oya_yd_gap=x.get("oya_yd_gap")))
     json.dump(db, open(f, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     out = dict(base_date=r["base_date"], universe=r["universe"],
                generated=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -404,6 +455,8 @@ def render_oya_md(r):
     md.append("### 🎯 今日主推（奥雅式放量突破·首日推）")
     if not fp:
         md.append("　今日无符合奥雅形态的新提示日（宁缺勿滥，不硬凑）。")
+    # 易点共振票置于最前并重点标识（build 已排序，这里 Doubly 保证）
+    fp = sorted(fp, key=lambda x: -x.get("oya_yd_prior", 0))
     for i, x in enumerate(fp, 1):
         bd = {"创业板": "创", "科创板": "科"}.get(x.get("board", ""), "主")
         probe = x.get("oya_probe_date") or "—"
@@ -411,12 +464,16 @@ def render_oya_md(r):
         # 洗盘缩量软标注（S2 口径：中间均量/试盘量<0.45），仅供参考不筛票
         mv = x.get("oya_mid_vs_probe")
         shrink = " 缩量✓" if mv is not None and mv < 0.45 else ""
+        # 易点共振重点标识（2026-11-21）：先易点启动、后奥雅突破，重点推荐
+        yd = ""
+        if x.get("oya_yd_prior"):
+            yd = f" ⭐**易点共振**(易点{x['oya_yd_date']}启动·{x['oya_yd_gap']}日后突破)"
         md.append(
             f"{i}. **{x['name']}**[{bd}] `{x['code']}` 分{x['score']:.0f}｜"
             f"收{x['close']} 当日{x['day_chg']:+.1f}%｜"
             f"试盘{probe} 压力线{x.get('oya_pressure')}(破{x.get('oya_break'):+.0f}%) "
             f"量{x.get('oya_vol_x')}× {'洗盘✓' if x.get('oya_breakdown') else ''}"
-            f"{shrink}{lu}")
+            f"{shrink}{lu}{yd}")
     md.append("")
     return md
 
