@@ -105,18 +105,6 @@ def get_stocklist():
 # ---------------- 行情抓取（带缓存）----------------
 import requests
 def fetch_kline(code, use_cache=True):
-    # 回测/缓存读取优先使用统一历史库；use_cache=True 时严格离线。
-    if use_cache:
-        try:
-            sys.path.insert(0, os.path.abspath(os.path.join(HERE, '..', 'common')))
-            import common_lib as cm
-            bars = cm.load_kline(_bare(code), count=330, offline=True)
-            if bars:
-                return [{'day': b['date'], 'open': b['open'], 'high': b['high'],
-                         'low': b['low'], 'close': b['close'],
-                         'volume': b['volume'] * 100.0} for b in bars]
-        except Exception:
-            pass
     os.makedirs(CACHE_DIR, exist_ok=True)
     cache=os.path.join(CACHE_DIR, code+'.json')
     if use_cache and os.path.exists(cache):
@@ -124,8 +112,6 @@ def fetch_kline(code, use_cache=True):
             d=json.load(open(cache)); 
             if d and len(d) >= 130: return d
         except: pass
-    if use_cache:
-        return None  # 回测缺数据时明确跳过，禁止回退外网
     try:
         r=requests.get(KLINE_URL.format(code=code), timeout=8)
         d=json.loads(r.text)
@@ -187,6 +173,29 @@ def detect(d):
             t = break_idx + 1; continue   # 破位前不是干净横盘 → 跳过该破位
         if not (d[break_idx]['close'] < S*BREAK_PCT):
             t = break_idx + 1; continue   # 破位相对新支撑不成立 → 跳过
+        # ── 破位动作校验 ──
+        # 破位日必须真有「向下刺破支撑」的动作：阴线跌破 或 下影刺破，二者居一即可（非单一形态）。
+        #   阴线跌破: close<open 且 close<S*0.98
+        #   下影刺破: low<S*0.98 且 下影/实体>=2%（盘中砸穿支撑后拉回）
+        # 若扫描起点落在破位区间内部的一根反弹阳线上（如长虹美菱11-02：阳线+2.6%、下影仅0.5%，
+        # 全天在支撑下方横盘），它并无破位动作 → 向前回溯到最近一根真正有破位动作的日，
+        # 用真实破位日重算间隔，杜绝「阳线混入把间隔缩短、卡 MAX_GAP 上限过关」。
+        # 注意：只改 real_break（用于间隔/形态），保留 break_idx 用于外层 t 推进，避免 t 回退死循环。
+        def _break_action(idx):
+            bar=d[idx]; body=min(bar['open'],bar['close'])
+            lsh=(body-bar['low'])/body if body>0 else 0.0
+            yin = bar['close']<bar['open'] and bar['close']<S*BREAK_PCT
+            shadow = bar['low']<S*BREAK_PCT and lsh>=0.02
+            return yin or shadow
+        real_break=break_idx
+        if not _break_action(break_idx):
+            back=None
+            for j in range(break_idx-1, max(-1,break_idx-15), -1):
+                if d[j]['close']<S*BREAK_PCT and _break_action(j):
+                    back=j; break
+            if back is None:
+                t=break_idx+1; continue   # 回溯 15 日内无有效破位动作 → 跳过
+            real_break=back
         # 收复（可到末根，以支持"刚收复"的当日信号）
         reclaim_idx=None
         for i in range(break_idx+1, min(break_idx+RECLAIM_WIN+1, N)):
@@ -195,7 +204,8 @@ def detect(d):
         if reclaim_idx is None:
             t = break_idx + 1; continue
         # 破位→收复间隔硬上限：不得大于 MAX_GAP 个交易日（≈两周内必须回来）
-        gap = reclaim_idx - break_idx
+        # 用 real_break（真实破位日）算间隔，杜绝阳线误标把间隔缩短卡上限
+        gap = reclaim_idx - real_break
         if gap > MAX_GAP:
             t = break_idx + 1; continue
         sig=reclaim_idx; sig_close=d[sig]['close']
@@ -213,7 +223,7 @@ def detect(d):
         # 以「破位低点→收复日最高点」为一波拉升，取 0.618 回撤位作防线：
         #   floor = H - 0.618*(H-L)，L=破位日前后最低、H=收复日最高
         # 收复日后任一交易日收盘跌破该防线 → 有效跌破黄金支撑 → 收复失败，剔除。
-        wave_lo = min(x['low'] for x in d[max(0,break_idx-1):sig+1])
+        wave_lo = min(x['low'] for x in d[max(0,real_break-1):sig+1])
         wave_hi = d[sig]['high']
         fib_floor = wave_hi - RECLAIM_FAIL_FIB * (wave_hi - wave_lo) if wave_hi > wave_lo else sig_close*(1-RECLAIM_FAIL_DROP)
         fail = any(d[j]['close'] < fib_floor for j in range(sig+1, N))
@@ -240,7 +250,7 @@ def detect(d):
                 break
         op = op_plan(d, sig)   # 操作策略（管三天）
         events.append({
-            'support':round(S,2),'break_day':d[break_idx]['day'],'sig_day':d[sig]['day'],
+            'support':round(S,2),'break_day':d[real_break]['day'],'sig_day':d[sig]['day'],
             'age':age,'break_to_sig':gap,'vol_ratio':round(d[sig]['volume']/avgvol,2),
             'r5':ret(5),'r10':ret(10),'r20':ret(20),
             'peak10':peak(10),'peak20':peak(20),'dd20':dd(20),

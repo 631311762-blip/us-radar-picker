@@ -198,6 +198,29 @@ def detect(bars, const=None):
             t = break_idx + 1; continue
         if not (bars[break_idx]["close"] < S * BREAK_PCT):
             t = break_idx + 1; continue
+        # ── 破位动作校验 ──
+        # 破位日必须真有「向下刺破支撑」的动作：阴线跌破 或 下影刺破，二者居一即可（非单一形态）。
+        #   阴线跌破: close<open 且 close<S*0.98
+        #   下影刺破: low<S*0.98 且 下影/实体>=2%（盘中砸穿支撑后拉回）
+        # 若扫描起点落在破位区间内部的一根反弹阳线上（如长虹美菱11-02：阳线+2.6%、下影仅0.5%，
+        # 全天在支撑下方横盘），它并无破位动作 → 向前回溯到最近一根真正有破位动作的日，
+        # 用真实破位日重算间隔，杜绝「阳线混入把间隔缩短、卡 MAX_GAP 上限过关」。
+        # 注意：只改 real_break（用于间隔/形态），保留 break_idx 用于外层 t 推进，避免 t 回退死循环。
+        def _break_action(idx):
+            bar = bars[idx]; body = min(bar["open"], bar["close"])
+            lsh = (body - bar["low"]) / body if body > 0 else 0.0
+            yin = bar["close"] < bar["open"] and bar["close"] < S * BREAK_PCT
+            shadow = bar["low"] < S * BREAK_PCT and lsh >= 0.02
+            return yin or shadow
+        real_break = break_idx
+        if not _break_action(break_idx):
+            back = None
+            for j in range(break_idx - 1, max(-1, break_idx - 15), -1):
+                if bars[j]["close"] < S * BREAK_PCT and _break_action(j):
+                    back = j; break
+            if back is None:
+                t = break_idx + 1; continue
+            real_break = back
         # 收复（可到末根，以支持「刚收复」的当日信号）
         reclaim_idx = None
         for i in range(break_idx + 1, min(break_idx + RECLAIM_WIN + 1, N)):
@@ -206,7 +229,8 @@ def detect(bars, const=None):
         if reclaim_idx is None:
             t = break_idx + 1; continue
         # 破位→收复间隔硬上限：不得大于 MAX_GAP 个交易日（≈两周内必须回来）
-        gap = reclaim_idx - break_idx
+        # 破位→收复间隔硬上限：用 real_break（真实破位日）算，杜绝阳线误标缩短间隔卡上限
+        gap = reclaim_idx - real_break
         if gap > MAX_GAP:
             t = break_idx + 1; continue
         sig = reclaim_idx; sig_close = bars[sig]["close"]
@@ -227,7 +251,7 @@ def detect(bars, const=None):
         #   floor = H - 0.618*(H-L)，L=破位日前后最低、H=收复日最高
         # 收复日后任一交易日收盘跌破该防线 → 有效跌破黄金支撑 → 收复失败，剔除。
         # 相对旧「跌超5%」：用随波动自适应的黄金分割位，避免绝对值一刀切误杀（如超越科技）。
-        wave_lo = min(x["low"] for x in bars[max(0, break_idx - 1):sig + 1])
+        wave_lo = min(x["low"] for x in bars[max(0, real_break - 1):sig + 1])
         wave_hi = bars[sig]["high"]
         fib_floor = wave_hi - RECLAIM_FAIL_FIB * (wave_hi - wave_lo) if wave_hi > wave_lo else sig_close * (1 - RECLAIM_FAIL_DROP)
         fail = any(bars[j]["close"] < fib_floor for j in range(sig + 1, N))
@@ -263,7 +287,7 @@ def detect(bars, const=None):
                 break
         op = op_plan(bars, sig)   # 操作策略（管三天）
         events.append({
-            "support": round(S, 2), "break_day": bars[break_idx]["day"],
+            "support": round(S, 2), "break_day": bars[real_break]["day"],
             "sig_day": bars[sig]["day"], "sig_close": round(sig_close, 2), "age": age,
             "break_to_sig": gap,
             "vol_ratio": round(bars[sig]["volume"] / avgvol, 2) if avgvol else None,
