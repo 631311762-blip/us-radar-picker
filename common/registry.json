@@ -32,7 +32,7 @@
       "label": "反包阳线前期入选模型 RY（2026-11-21 替换缩量二次突破V3作主提示）",
       "cmd": "python3 kaizhong/daily_ry.py",
       "enabled": true,
-      "_note": "同口径回测：缩量二次突破10日胜率63.2%/收益+4.51%，凯众v4放量突破仅41.7%/+0.29%，用户决定替换。选股内核 shrink_breakout.scan_one 对齐原 stance_hint 接口，运维框架(台账/复盘/推送/合规)不变；独立台账 shrink_history.json，v4_history.json 保留供回退。 | 2026-11-21 用户改口径：提示日提前到破位后反包阳线当日作前期入选，跟踪5日，收盘破0.5黄金分割线(入选日K线H-(H-L)*0.5)出局；期中现V3缩量二次上攻重点标识(买点升级)。内核rebound.py，入口daily_ry.py，台账rebound_history.json；daily_v4.py/shrink_breakout.py原样保留供回退。"
+      "_note": "同口径回测：缩量二次突破10日胜率63.2%/收益+4.51%，凯众v4放量突破仅41.7%/+0.29%，用户决定替换。选股内核 shrink_breakout.scan_one 对齐原 stance_hint 接口，运维框架(台账/复盘/推送/合规)不变；独立台账 shrink_history.json，v4_history.json 保留供回退。 | 2026-11-21 用户改口径：提示日提前到破位后反包阳线当日作前期入选，跟踪5日，收盘破0.5黄金分割线(反包阳线实体(开+收)/2,2026-11-21修正,不用含影线高低点)出局；期中现V3缩量二次上攻重点标识(买点升级)。内核rebound.py，入口daily_ry.py，台账rebound_history.json；daily_v4.py/shrink_breakout.py原样保留供回退。 | 2026-11-21再修正:0.5线改基于反包阳线实体C-(C-O)*0.5=(开+收)/2(凯众10-16=9.89,10-19收10.00不破,符合用户口径),不用H-(H-L)/2(旧10.04会误判破线);可在rebound.STANCE[gold_basis]切换body/range"
     },
     {
       "name": "yidian",

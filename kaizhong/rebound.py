@@ -12,9 +12,12 @@
   4) ★反包阳线（新提示日 T）：破位后 1~5 日内第一根「阳线 + 收盘站回支撑线
      + 收盘吞没破位日实体(≥破位日开盘)」——作为前期入选样本
 
-黄金分割线（基于提示日 T 当日 K 线最高/最低）：
-  0.5 中位线 = H - (H-L)×0.5   ← 主出局线（收盘跌破即结束跟踪）
-  另给 0.382 / 0.618 供研究参考。
+黄金分割线（基于提示日 T 的「反包阳线实体」，2026-11-21 修正）：
+  基准高 = 收盘 C（阳线实体上沿），基准低 = 开盘 O（阳线实体下沿）
+  0.5 中位线 = C - (C-O)×0.5 = (O+C)/2   ← 主出局线（收盘跌破即结束跟踪）
+  另给 0.382（浅回撤）/ 0.618（深回撤）供研究参考。
+  ★不用 H/L（含影线）：上影线会把线抬高，导致像凯众10-19(收10.00)被误判破线。
+  可通过 STANCE["gold_basis"] 切换："body"=实体(默认) / "range"=含影线全K线(旧口径)。
 
 升级信号（重点标识，不在本内核判定，由 daily_v4 跟踪层完成）：
   跟踪期内若出现 shrink_breakout.scan_one 命中（V3 缩量二次上攻提示日），
@@ -38,7 +41,11 @@ import shrink_breakout as sh
 STANCE = dict(sh.STANCE)
 STANCE.update({
     "rebound_max_gap": 5,     # 破位后几日内出现反包阳线算入选
-    "gold_main": 0.5,         # ★主出局黄金分割位（提示日单根K线）
+    "gold_main": 0.5,         # ★主出局黄金分割位
+    # ★2026-11-21 修正：0.5线基于"反包阳线实体"(开~收)，不用含影线的全K线(高~低)
+    #   body  = C-(C-O)*lv：凯众10-16=(9.65+10.13)/2=9.89 → 10-19收10.00不破 ✓（用户口径）
+    #   range = H-(H-L)*lv：凯众10-16=(10.43+9.64)/2=10.04 → 10-19收10.00误判破 ✗（旧口径）
+    "gold_basis": "body",     # "body"=实体(默认) / "range"=含影线全K线
 })
 # 出局线档位（供报告/跟踪展示）
 GOLD_LEVELS = (0.382, 0.5, 0.618)
@@ -49,10 +56,18 @@ def _find_plateau(c, v, b1):
     return sh._find_plateau(c, v, b1)
 
 
-def _gold_lines(h, lo):
-    """基于单根 K 线高/低算黄金分割线（回撤位：H - (H-L)*level）。"""
-    H, L = float(h), float(lo)
-    return {f"gold_{int(lv*1000)}": round(H - (H - L) * lv, 2) for lv in GOLD_LEVELS}
+def _gold_lines(o, c, h, lo):
+    """黄金分割回撤线。默认基于反包阳线【实体】(O~C)；gold_basis='range' 时用全K线(H~L)。
+
+    阳线 C>=O：实体回撤 C-(C-O)*lv，0.5=(O+C)/2 —— 不被上影线抬高。
+    """
+    o, c, h, lo = float(o), float(c), float(h), float(lo)
+    if STANCE["gold_basis"] == "range":
+        top, bot = h, lo           # 旧口径：含影线全K线（会把线抬高）
+    else:
+        top, bot = max(c, o), min(c, o)   # 用户口径：阳线实体
+    return {f"gold_{int(lv*1000)}": round(top - (top - bot) * lv, 2)
+            for lv in GOLD_LEVELS}
 
 
 def _signal_at_last_bar(df, as_of=None):
@@ -116,7 +131,7 @@ def _signal_at_last_bar(df, as_of=None):
         # （破位后到 t 之前不能已有反包入选，避免同一波重复；由 update_ledger 去重兜底）
 
         # ---- 命中 ----
-        gl = _gold_lines(h[t], lo[t])
+        gl = _gold_lines(o[t], c[t], h[t], lo[t])
         plat_win = f"{d[ps]}~{d[pe - 1]}"
         sw_range = round(ph / max(pl, 1e-9), 3)
         sw_std = round(float(c[ps:pe].std() / max(c[ps:pe].mean(), 1e-9)), 4)
