@@ -1,0 +1,83 @@
+name: 影子一号 · 协同共振观察（纯观察·不推送）
+
+# =========================================================================
+# 影子一号（SHADOW-1）—— 三模型协同共振 · 阶段1 影子运行
+# -------------------------------------------------------------------------
+# 2026-11-21 用户确认启动「影子运行」，命名「影子一号」。
+#
+# 定位：纯观察任务，与主流水线完全解耦：
+#   - 不进 registry.json，不被 run_all 当模型执行/结算/进结论表；
+#   - 不推送微信、不改任何选股模型的代码/参数/台账；
+#   - 只读三套模型台账（主升浪/凯众/破位）+ 行情库，
+#     写自己的 scripts/shadow_one_state/（ledger + snapshot + report）。
+#
+# 逻辑：每日 record(记新共振) → settle(更新后续收益) → evaluate(闸门)
+#       → report。cohort 区分 hist(历史,结果已知) / live(启动后,前瞻验证)。
+# 达标闸门：live 的 S/A 累计≥30 条且 r5 胜率≥45%、均值≥0，
+#           才提请用户决定是否引入正式优先级——workflow 本身绝不自动上线。
+#
+# 定时：UTC 10:30 = 北京 18:30（晚于主流水线 16:05 + 回写，确保台账/行情最新）。
+# =========================================================================
+
+on:
+  schedule:
+    - cron: "30 10 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: shadow-one
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: python3 -m pip install --quiet requests numpy pandas
+
+      - name: 影子一号观察器（record→settle→evaluate→report）
+        run: python3 scripts/shadow_one.py
+
+      - name: 回写影子台账（ledger/snapshot/report）
+        if: always()
+        run: |
+          git config user.name "shadow-one-bot"
+          git config user.email "shadow-one-bot@users.noreply.github.com"
+          git add scripts/shadow_one_state 2>/dev/null || true
+          if git commit -m "shadow1 observe: $(date -u +%F) [skip ci]"; then
+            echo "已提交影子台账"
+          else
+            echo "无台账变更"
+            exit 0
+          fi
+          git pull --rebase origin main || true
+          PUSH_OK=0
+          for i in 1 2 3; do
+            if git push; then PUSH_OK=1; break; fi
+            echo "推送失败，第 ${i} 次重试..."
+            sleep 5
+            git pull --rebase origin main || true
+          done
+          [ "$PUSH_OK" -eq 1 ] && echo "影子台账已推送" || echo "推送失败，请手动重试"
+
+      - name: 观察摘要
+        if: always()
+        run: |
+          echo "### 影子一号 · 协同共振观察" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f scripts/shadow_one_state/report.md ]; then
+            cat scripts/shadow_one_state/report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "本次未生成报告（非交易日或观察器异常）" >> "$GITHUB_STEP_SUMMARY"
+          fi
