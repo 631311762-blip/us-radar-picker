@@ -29,10 +29,10 @@
     },
     {
       "name": "kaizhong",
-      "label": "缩量二次突破模型 SVDB（2026-11-18 替换凯众v4）",
-      "cmd": "python3 kaizhong/daily_v4.py",
+      "label": "反包阳线前期入选模型 RY（2026-11-21 替换缩量二次突破V3作主提示）",
+      "cmd": "python3 kaizhong/daily_ry.py",
       "enabled": true,
-      "_note": "同口径回测：缩量二次突破10日胜率63.2%/收益+4.51%，凯众v4放量突破仅41.7%/+0.29%，用户决定替换。选股内核 shrink_breakout.scan_one 对齐原 stance_hint 接口，运维框架(台账/复盘/推送/合规)不变；独立台账 shrink_history.json，v4_history.json 保留供回退。"
+      "_note": "同口径回测：缩量二次突破10日胜率63.2%/收益+4.51%，凯众v4放量突破仅41.7%/+0.29%，用户决定替换。选股内核 shrink_breakout.scan_one 对齐原 stance_hint 接口，运维框架(台账/复盘/推送/合规)不变；独立台账 shrink_history.json，v4_history.json 保留供回退。 | 2026-11-21 用户改口径：提示日提前到破位后反包阳线当日作前期入选，跟踪5日，收盘破0.5黄金分割线(入选日K线H-(H-L)*0.5)出局；期中现V3缩量二次上攻重点标识(买点升级)。内核rebound.py，入口daily_ry.py，台账rebound_history.json；daily_v4.py/shrink_breakout.py原样保留供回退。"
     },
     {
       "name": "yidian",
@@ -59,11 +59,11 @@
       "_note": "2026-11-18 起主榜切换为奥雅式模型(oya_model.py)：横盘→放量试盘→破位洗盘→盘中放量突破首日推；旧v3.1降为参照。自带 回溯/进化/选股/推送/云端备份 独立子系统；settle=false 跳过公共回溯（自有 feedback 闭环）。历史耗时约 20 分钟，显式放宽超时到 1800s。"
     },
     {
-   "name": "high_shadow",
-   "label": "高位上影线模型（洗盘再起观察名单·看涨）",
-   "enabled": true,
-   "_note": "2026-11-13 用户确认「迁移代码进仓库再纳入」；2026-11-16 用户确认正式启用每日调度 + 微信推送。原为云盘自动化独立定时，消费合并流水线 common/state/universe.json 样本池（ST+立信剔除）。代码已入 GitHub main：high_shadow/high_shadow_screener.py + config.json。v4.0（2026-11-17 方向对齐重构）看涨口径：强形态+高位（比率≥0.88∩当日分位≥0.45）+ 量比[0.85,2.7]，第二条件 F 已废除（看跌基因，与看涨方向相悖；配置块保留可回滚），四只标杆（光线/华策/金逸/通合）全部自然入选。入口 --mode review 已接入 PushPlus 微信推送（读 PUSHPLUS_TOKEN）。enabled=true 纳入每日统一流水线；【重要】需确认云盘原独立定时已停掉，避免重复运行/重复推送。",
-   "cmd": "python3 high_shadow/high_shadow_screener.py --mode review"
+      "name": "high_shadow",
+      "label": "高位上影线模型（洗盘再起观察名单·看涨）",
+      "enabled": true,
+      "_note": "2026-11-13 用户确认「迁移代码进仓库再纳入」；2026-11-16 用户确认正式启用每日调度 + 微信推送。原为云盘自动化独立定时，消费合并流水线 common/state/universe.json 样本池（ST+立信剔除）。代码已入 GitHub main：high_shadow/high_shadow_screener.py + config.json。v4.0（2026-11-17 方向对齐重构）看涨口径：强形态+高位（比率≥0.88∩当日分位≥0.45）+ 量比[0.85,2.7]，第二条件 F 已废除（看跌基因，与看涨方向相悖；配置块保留可回滚），四只标杆（光线/华策/金逸/通合）全部自然入选。入口 --mode review 已接入 PushPlus 微信推送（读 PUSHPLUS_TOKEN）。enabled=true 纳入每日统一流水线；【重要】需确认云盘原独立定时已停掉，避免重复运行/重复推送。",
+      "cmd": "python3 high_shadow/high_shadow_screener.py --mode review"
     }
   ]
 }
