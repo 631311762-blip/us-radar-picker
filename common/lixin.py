@@ -413,7 +413,8 @@ def main():
     print("=" * 64)
     # 立信判定覆盖「全市场」：取仅 ST/次新剔除后的全量代码（不应用立信剔除，
     # 否则生成排除集时又引用排除集本身，形成循环依赖）。
-    u = cm.get_universe(verbose=False, apply_lixin=False)
+    u = cm.get_universe(verbose=False, apply_lixin=False,
+                        apply_regulatory=False)
     codes = [x["code"] for x in u]
     baseline = "--ann-baseline" in args
     build(codes, do_ann=do_ann,

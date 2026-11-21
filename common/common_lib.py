@@ -38,7 +38,39 @@ MARKET_STORE = ms.MarketStore()
 UNIVERSE_JSON = os.path.join(STATE_DIR, "universe.json")
 META_JSON = os.path.join(STATE_DIR, "meta.json")
 LIXIN_JSON = os.path.join(STATE_DIR, "lixin_exclude.json")
+REGULATORY_JSON = os.path.join(STATE_DIR, "regulatory_exclude.json")
 os.makedirs(KLINE_DIR, exist_ok=True)
+
+
+def load_regulatory_exclude(today=None):
+    """读取近一年被监管立案/涉嫌违法的排除集（滚动窗口，由 regulatory.py 生成）。
+
+    读取时按当日重新计算 365 天窗口，文件即使多日未更新，超期记录也不会
+    继续误剔除。
+    """
+    if not os.path.exists(REGULATORY_JSON):
+        return set()
+    try:
+        import datetime as _dt
+        with open(REGULATORY_JSON, "r", encoding="utf-8") as fh:
+            d = json.load(fh)
+        records = d.get("records") or {}
+        if not records:
+            return set(d.get("codes") or [])
+        day = today or _dt.datetime.now(BJT).date()
+        cutoff = (day - _dt.timedelta(days=365)).isoformat()
+        noise = re.compile(r"非本公司事项|非公司事项|与公司无关")
+        out = set()
+        for c, r in records.items():
+            dt = r.get("date") or ""
+            if dt and dt < cutoff:
+                continue
+            if noise.search(str(r.get("title") or "")):
+                continue
+            out.add(c)
+        return out
+    except Exception:
+        return set()
 
 
 def load_lixin_exclude():
@@ -407,12 +439,12 @@ def check_base_universe_health(rows=None):
     return True, "ok（%d 只，价格健全率 %.1f%%）" % (n, ratio * 100), rows
 
 
-def get_universe(verbose=True, apply_lixin=True, force_snapshot=False,
-                 prefer_snapshot=False):
+def get_universe(verbose=True, apply_lixin=True, apply_regulatory=True,
+                 force_snapshot=False, prefer_snapshot=False):
     """东方财富全市场列表，应用硬共识剔除，返回统一结构的样本池。
 
-    apply_lixin=False 时只做 ST/次新/无行情 剔除，用于「立信排除集生成」阶段
-    拿到全市场基准代码（避免生成排除集时又引用排除集本身）。
+    apply_lixin=False 时跳过立信剔除；apply_regulatory=False 时跳过「近一年
+    监管立案/涉嫌违法」剔除。两者仅用于生成对应排除集时避免循环引用。
 
     返回字段：code, name, board, price, pct(涨跌幅%), turnover(换手%),
              mktcap(总市值), float_mktcap(流通市值), vr(量比)。
@@ -432,7 +464,8 @@ def get_universe(verbose=True, apply_lixin=True, force_snapshot=False,
     不发告警，且快照不健康时自动回退常规实时路径。准入剔除逻辑完全一致。
     """
     lixin = load_lixin_exclude() if apply_lixin else set()
-    st_drop = lixin_drop = 0
+    regulatory = load_regulatory_exclude() if apply_regulatory else set()
+    st_drop = lixin_drop = regulatory_drop = 0
 
     # 快照优先快路径：仅当调用方要求且快照通过健康校验时启用。
     if prefer_snapshot and not force_snapshot:
@@ -514,7 +547,7 @@ def get_universe(verbose=True, apply_lixin=True, force_snapshot=False,
         else:
             print("[common] 实时列表异常且无快照，样本池为空。")
             if verbose:
-                print("[common] 全市场样本池：0 只（ST/次新剔除 0，立信剔除 0）")
+                print("[common] 全市场样本池：0 只（ST/次新剔除 0，立信剔除 0，监管立案剔除 0）")
             LAST_UNIVERSE_STATUS.clear()
             LAST_UNIVERSE_STATUS.update({
                 "source": "none", "rows": 0,
@@ -534,6 +567,9 @@ def get_universe(verbose=True, apply_lixin=True, force_snapshot=False,
             continue
         if code in lixin:            # 条件②：立信审计排除集 物理剔除
             lixin_drop += 1
+            continue
+        if code in regulatory:       # 条件⑤：近一年监管立案/涉嫌违法 物理剔除
+            regulatory_drop += 1
             continue
         rows.append({
             "code": code, "name": nm, "board": r.get("board") or board_of(code),
@@ -571,14 +607,16 @@ def get_universe(verbose=True, apply_lixin=True, force_snapshot=False,
             print("[common] 样本池价格异常（仅 %d/%d 有价），用基础快照补齐 %d 只"
                   % (priced, len(rows), filled))
     if verbose:
-        print("[common] 全市场样本池：%d 只（ST/次新剔除 %d，立信剔除 %d）"
-              % (len(rows), st_drop, lixin_drop))
+        print("[common] 全市场样本池：%d 只（ST/次新剔除 %d，立信剔除 %d，"
+              "监管立案剔除 %d）"
+              % (len(rows), st_drop, lixin_drop, regulatory_drop))
     LAST_UNIVERSE_STATUS.clear()
     LAST_UNIVERSE_STATUS.update({
         "source": "snapshot" if used_fallback else "realtime",
         "rows": len(rows),
         "st_drop": st_drop,
         "lixin_drop": lixin_drop,
+        "regulatory_drop": regulatory_drop,
     })
     return rows
 

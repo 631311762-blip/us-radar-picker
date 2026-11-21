@@ -3,6 +3,7 @@
 import csv
 import datetime
 import importlib.util
+import json
 import os
 import sys
 import tempfile
@@ -257,6 +258,74 @@ class StockV3OfflineTest(unittest.TestCase):
             pool = df.universe()
         self.assertEqual(pool, [{"code": "sz000001", "name": "平安银行"}])
         em.assert_not_called()
+
+
+class RegulatoryExcludeTest(unittest.TestCase):
+    """条件⑤：近一年监管立案/涉嫌违法排除集。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = os.path.join(self.tmp.name, "regulatory_exclude.json")
+        self.today = datetime.datetime.now(cm.BJT).date()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _write(self, records):
+        with open(self.path, "w", encoding="utf-8") as fh:
+            json.dump({"records": records, "codes": sorted(records)}, fh)
+
+    def _days_ago(self, n):
+        return (self.today - datetime.timedelta(days=n)).isoformat()
+
+    def test_loader_drops_records_outside_one_year_window(self):
+        self._write({"600001": {"date": self._days_ago(400)},
+                     "600002": {"date": self._days_ago(30)}})
+        with mock.patch.object(cm, "REGULATORY_JSON", self.path):
+            self.assertEqual(cm.load_regulatory_exclude(), {"600002"})
+
+    def test_title_filter_ignores_clarification_notices(self):
+        import regulatory as rg
+        self.assertTrue(rg.is_regulatory_title("关于收到中国证监会立案告知书的公告"))
+        self.assertTrue(rg.is_regulatory_title("关于公司涉嫌信息披露违法违规的公告"))
+        self.assertFalse(rg.is_regulatory_title("关于媒体报道的澄清公告"))
+        self.assertFalse(rg.is_regulatory_title(
+            "关于公司实际控制人因非本公司事项收到立案告知书的公告"))
+        self.assertFalse(rg.is_regulatory_title("关于聘任高级管理人员的公告"))
+
+    def test_build_merges_new_hits_and_prunes_expired(self):
+        import regulatory as rg
+        self._write({"600001": {"date": self._days_ago(400), "title": "立案调查"},
+                     "600002": {"date": self._days_ago(20), "title": "立案调查"}})
+        hits = {"600003": {"date": self.today.isoformat(), "title": "立案调查"}}
+        with mock.patch.object(rg, "REG_JSON", self.path), \
+                mock.patch.object(rg, "scan_incremental",
+                                  return_value=(hits, {"notices": 5})):
+            codes, stats = rg.build(["600001", "600002", "600003"])
+        self.assertEqual(codes, {"600002", "600003"})
+        self.assertEqual(stats["total_excluded"], 2)
+        with open(self.path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        self.assertNotIn("600001", data["records"])
+        self.assertEqual(data["records"]["600003"]["title"], "立案调查")
+
+    def test_universe_physically_drops_regulatory_codes(self):
+        rows = [
+            {"code": "600001", "name": "甲公司", "f2": "10", "f3": "1",
+             "f5": "1", "f6": "1", "f8": "1", "f10": "1", "f18": "9",
+             "f20": "1e9", "f21": "1e9"},
+            {"code": "600002", "name": "乙公司", "f2": "10", "f3": "1",
+             "f5": "1", "f6": "1", "f8": "1", "f10": "1", "f18": "9",
+             "f20": "1e9", "f21": "1e9"},
+        ]
+        self._write({"600001": {"date": self._days_ago(10)}})
+        with mock.patch.object(cm, "_fetch_raw_universe", return_value=rows), \
+                mock.patch.object(cm, "load_base_universe", return_value=[]), \
+                mock.patch.object(cm, "LIXIN_JSON", "/nonexistent/lixin.json"), \
+                mock.patch.object(cm, "REGULATORY_JSON", self.path):
+            universe = cm.get_universe(verbose=False)
+        self.assertEqual([x["code"] for x in universe], ["600002"])
+        self.assertEqual(cm.universe_status().get("regulatory_drop"), 1)
 
 
 if __name__ == "__main__":

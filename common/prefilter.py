@@ -3,21 +3,24 @@
 """
 prefilter.py —— 共同前置层入口（合并流水线第一步，全局强制，仅跑一次）
 ========================================================================
-四个共同条件的落地顺序（在单 runner 内只跑一次，供所有模型复用）：
+五个共同条件的落地顺序（在单 runner 内只跑一次，供所有模型复用）：
 
   ① 全市场行情记录   : 批量缓存全市场 K 线 → common/state/klines/<code>.csv
   ② 立信审计剔除     : 生成 lixin_exclude.json（25年报审计=立信 OR 26续聘改聘公告改立信）
   ③ ST 全剔除        : 生成 universe.json 样本池时按名称硬剔除 ST/*ST/退市/次新
   ④ 回溯推荐+修正模型 : 由 run_all.py 的 settle_all() 对注册表所有模型统一结算/调参
                         （本步产出 universe 后即具备条件，实际结算在模型跑完后）
+  ⑤ 监管立案剔除     : 生成 regulatory_exclude.json（近一年被立案调查/涉嫌违法，
+                        即使未被 ST 也物理剔除，滚动 365 天自动失效）
 
-  ② ③ 属于「准入剔除」，在样本池生成阶段物理生效 —— 样本池里根本不含这些
+  ② ③ ⑤ 属于「准入剔除」，在样本池生成阶段物理生效 —— 样本池里根本不含这些
   代码，任何下游模型（哪怕自身没写立信/ST 判断）都不可能选到，实现
   「即使模型条件里没有，也是遗漏补上」的强制约束。
 
 产物（common/state/）：
   lixin_exclude.json  立信排除集（含命中依据）
-  universe.json       已剔除 ST + 立信 的全市场样本池
+  regulatory_exclude.json  近一年监管立案/涉嫌违法排除集（滚动窗口）
+  universe.json       已剔除 ST + 立信 + 监管立案 的全市场样本池
   market_daily/       2024 年起全市场日 K 分片（跨 runner 持久化，回测离线读取）
   klines/*.csv        当日模型使用的物化 K 线缓存（可重建，不入库）
   meta.json           本次运行元信息（trading_day / 各条件统计 / 降级状态 / 告警）
@@ -78,6 +81,8 @@ def main():
     ap.add_argument("--no-fast-universe", action="store_true", help="禁用样本池快照优先（回退东财列表退避重试，调试用）")
     ap.add_argument("--no-kz", action="store_true", help="跳过凯众不复权 K 线预填（调试）")
     ap.add_argument("--no-lixin", action="store_true", help="跳过立信排除集更新，复用已有")
+    ap.add_argument("--no-regulatory", action="store_true", help="跳过监管立案排除集更新，复用已有")
+    ap.add_argument("--reg-full", action="store_true", help="监管立案扫描滚动一年基线（首次建库）")
     args = ap.parse_args()
 
     today = datetime.datetime.now(BJT).strftime("%Y-%m-%d")
@@ -128,6 +133,7 @@ def main():
     else:
         import lixin as lx
         base_u = cm.get_universe(verbose=False, apply_lixin=False,
+                                 apply_regulatory=False,
                                  prefer_snapshot=fast_universe)
         codes = [x["code"] for x in base_u]
         # 【提速】F10 通道逐股扫描约 4 分钟，且命中结果与历史并集合并、永不自动
@@ -145,8 +151,30 @@ def main():
         meta["lixin_stats"] = stats
         meta["lixin_f10_skipped"] = bool(skip_f10)
 
-    # ---- 条件③ + 生成样本池（ST 名称硬剔除 + 立信物理剔除） ----
-    universe = cm.get_universe(prefer_snapshot=fast_universe)  # 内部已应用 ST + 立信 剔除
+    # ---- 条件⑤：近一年监管立案/涉嫌违法排除集（滚动 365 天自动失效） ----
+    if args.no_regulatory:
+        reg = cm.load_regulatory_exclude()
+        print("[prefilter] --no-regulatory：复用已有排除集 %d 只" % len(reg))
+        meta["regulatory_count"] = len(reg)
+    else:
+        import regulatory as rg
+        base_u = cm.get_universe(verbose=False, apply_lixin=False,
+                                 apply_regulatory=False,
+                                 prefer_snapshot=fast_universe)
+        # 首次部署没有排除集文件，自动跑滚动一年基线，避免只扫最近 10 天漏掉
+        # 一年内已发生的立案；之后每日只做增量。
+        first_run = not os.path.exists(cm.REGULATORY_JSON)
+        rmode = "full" if (args.reg_full or first_run) else "incremental"
+        _, rstats = rg.build([x["code"] for x in base_u], mode=rmode)
+        meta["regulatory_count"] = rstats.get("total_excluded", 0)
+        meta["regulatory_stats"] = rstats
+        if rstats.get("scan_empty"):
+            _alert("监管立案扫描为空",
+                   "本次公告接口扫描 0 条（可能被限流），已保留历史排除记录、"
+                   "未释放任何标的；请检查东财公告接口连通性。")
+
+    # ---- 条件③ + 生成样本池（ST 名称硬剔除 + 立信/监管立案物理剔除） ----
+    universe = cm.get_universe(prefer_snapshot=fast_universe)  # 内部已应用 ST + 立信 + 监管立案 剔除
     if not universe:
         # fail-degraded：常规路径（已含 get_universe 内部的快照回退）都拿不到样本池，
         # 再用「已通过健康校验」的快照强制重建一次，而不是直接 exit 1 让整条流水线红。
@@ -238,9 +266,10 @@ def main():
     meta["data_source_status"] = cm.universe_status()
     meta["kline_source_status"] = cm.kline_source_status()
     cm.save_meta(meta)
-    print("[prefilter] 完成：样本池 %d 只，立信排除 %d 只，trading_day=%s，"
-          "来源=%s，降级=%s，告警=%d 条"
-          % (len(universe), meta.get("lixin_count", 0), is_td,
+    print("[prefilter] 完成：样本池 %d 只，立信排除 %d 只，监管立案排除 %d 只，"
+          "trading_day=%s，来源=%s，降级=%s，告警=%d 条"
+          % (len(universe), meta.get("lixin_count", 0),
+             meta.get("regulatory_count", 0), is_td,
              meta["universe_source"], meta["degraded"], len(ALERTS)))
     return 0
 
