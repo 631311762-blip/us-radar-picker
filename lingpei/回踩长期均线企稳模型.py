@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""回踩长期均线企稳模型 B_V3.3 核心检测 detect_coil_v2（函数名保持不变，兼容下游）。
+"""回踩长期均线企稳模型 B_V3.4 核心检测 detect_coil_v2（函数名保持不变，兼容下游）。
 
 校准基准（三个样本须同时满足）：
   1) 领湃科技 300530 @ 2026-08-21（原始基准）：试盘日 07-27 放量大阳
@@ -75,6 +75,19 @@ V3.3 提示日 K 线企稳过滤（2026-11-16，用户要求补充第二个筛�
     K1+K2+K3+K5 → 1264 信号（-77%），3/5/10日胜率 45.5/44.2/39.7% → 54.4/54.0/49.7%，
     平均 -0.00/-0.20/-1.05% → +0.76/+0.97/+0.73%；六样本 6/6、坏形态 0/10；
     各评分区间保留率均匀 22~24%，>=80 分段 5日胜率 57.4%/+2.07%。
+
+V3.4 前置试探日过滤（2026-11-22，用户要求补充「一次提示后再跌一次才是真提示日」）：
+  用领湃科技 8-18→8-21 校准：8-18 长下影0.35/缩量后，8-19~20 再杀，
+  8-21 低点 17.70 跌破 8-18 的 19.01——二次探底创新低才是真提示。
+  研究 1264 个 V3.3 信号：有前置试探者 1150 只（85.6%），
+  T+5 胜率 54.5% vs 无前置 48.2%（+6.3pp）、T+10 50.3% vs 43.0%（+7.3pp）；
+  因子拆解证明起作用的是「下探后二次探底」而非下影本身
+  （仅有下影未创新低组 T+5 仅 35.4%）。
+  六校准样本覆盖修正：取消 V3.3 误杀易点/昆船的缩量门槛，窗口扩到前8日，
+    易点 8-21(下影0.61)、昆船 9-16(0.48)+9-17(0.68) 双下探均纳入 → 6/6 覆盖。
+  落地一条（PREPROBE_ON 总开关，False 可退回 V3.3）：
+    P1 提示日前 PREPROBE_LOOKBACK 日内存在下影>=PREPROBE_LOWER_MIN 的试探日，
+       且提示日最低价 < 该试探日最低价（二次探底创新低）。
 """
 from 埋伏点_回踩均线模型 import add_indicators
 
@@ -112,6 +125,12 @@ LOWER_SHADOW_MIN = 0.30       # K2 下影占全幅下限；样本0.35~0.68，坏
 C_FROM_LOW_MIN, C_FROM_LOW_MAX = 0.01, 0.03  # K3 收盘距当日最低甜区；样本1.14~2.30%
 LOW_VS_PREV_MAX = 0.005       # K5 最低价须破/贴近前日低点；样本-1.9%~+0.4%，坏形态均值+2.9%
 
+# ---- V3.4 前置试探日过滤（2026-11-22）----
+# 「一次提示 → 再跌一次 → 真提示」的二次探底结构；六样本 6/6 覆盖、有前置组 T+5 +6.3pp。
+PREPROBE_ON = True            # 总开关，False 可整体关闭退回 V3.3
+PREPROBE_LOOKBACK = 8         # 向前找试探日的交易日窗口（不含提示日）
+PREPROBE_LOWER_MIN = 0.35     # 试探日下影占全幅下限（六样本试探日 0.35~0.68）
+
 # ---- V2 旧阈值（legacy 保留，便于回退/对照）----
 V2_NEAR_MA_DEV = 0.05
 V2_MA60_MAX_BREAK = 0.015
@@ -141,12 +160,29 @@ def _trajectory(bars, n):
     return devs
 
 
+def _preprobe_index(bars, n):
+    """V3.4：提示日前 LOOKBACK 日内，最近一个「长下影试探日」的下标；
+    要求提示日最低价 < 试探日最低价（二次探底创新低）。返回 (idx, lower) 或 None。"""
+    lo = max(40, n - 1 - PREPROBE_LOOKBACK)
+    cur_low = bars[n - 1]["l"]
+    for j in range(n - 2, lo - 1, -1):
+        b = bars[j]
+        rng = b["h"] - b["l"]
+        if rng <= 0:
+            continue
+        lower = (min(b["o"], b["c"]) - b["l"]) / rng
+        if lower >= PREPROBE_LOWER_MIN and cur_low < b["l"]:
+            return j, round(lower, 3)
+    return None
+
+
 def detect_coil_v2(bars):
-    """B_V3 主检测。返回信号 dict 或 None。
+    """B_V3.4 主检测。返回信号 dict 或 None。
     字段与 V2 完全兼容（score/gap_days/drop_from_peak/dev60/near_ma/trial_date），
     另新增 dev_signed（带符号偏离）、fall_pp（轨迹落差，百分点）、
     V3.2 量价字段（sig_vr40/shrink_prev3/trial_vr）、
-    V3.3 K线字段（k_amp/k_lower/k_c_from_low/k_low_vs_prev）。
+    V3.3 K线字段（k_amp/k_lower/k_c_from_low/k_low_vs_prev）、
+    V3.4 前置试探字段（preprobe_date/preprobe_lower）。
     """
     n = len(bars)
     if n < 65:
@@ -227,6 +263,15 @@ def detect_coil_v2(bars):
         if k_low_prev > LOW_VS_PREV_MAX:                     # K5 盘中须破/贴近前低
             return None
 
+    # 8) 前置试探日（V3.4）：一次提示 → 再跌一次 → 真提示（二次探底创新低）
+    pre_date = pre_lower = None
+    if PREPROBE_ON:
+        pr = _preprobe_index(bars, n)
+        if pr is None:                                       # P1 无前置二次探底
+            return None
+        pre_date = bars[pr[0]]["d"]
+        pre_lower = pr[1]
+
     score = 100 - abs(dev) * 1000 - abs(gap - 24) * 1.5 - abs(drop - 0.20) * 120
     return {
         "signal": True,
@@ -243,6 +288,8 @@ def detect_coil_v2(bars):
         "k_lower": round(k_lower, 3) if k_lower is not None else None,
         "k_c_from_low": round(k_c_low, 4) if k_c_low is not None else None,
         "k_low_vs_prev": round(k_low_prev, 4) if k_low_prev is not None else None,
+        "preprobe_date": pre_date,
+        "preprobe_lower": pre_lower,
         "near_ma": "MA60",
         "trial_date": bars[trial_idx]["d"],
     }

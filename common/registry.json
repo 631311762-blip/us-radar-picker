@@ -23,7 +23,7 @@
     },
     {
       "name": "lingpei",
-      "label": "领湃模型 B_V3.3（K线企稳·长下影探底回升）",
+      "label": "领湃模型 B_V3.4（前置试探·二次探底）",
       "cmd": "bash -lc 'cd lingpei && python3 _lixin_update.py && python3 领湃模型_每日.py && python3 领湃跟踪修正.py'",
       "enabled": true
     },
