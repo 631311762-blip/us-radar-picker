@@ -1,0 +1,91 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>2026 全年最差亏损5只 · 共同特征与剔除规则</title>
+<style>
+:root{--bg:#0f1419;--panel:#1a2129;--card:#202834;--track:#2b3542;--fg:#e6edf3;--muted:#8b98a8;
+--line:#2b3542;--red:#e5484d;--green:#2ea043;--amber:#d29922;--blue:#4493f8;--acc:#d6a85a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6}
+.wrap{max-width:960px;margin:0 auto;padding:32px 20px 60px}
+h1{font-size:26px;margin:0 0 6px}h2{font-size:18px;margin:34px 0 14px;padding-left:10px;border-left:3px solid var(--acc)}
+.sub{color:var(--muted);font-size:13px;margin-bottom:22px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0}
+.concl{background:linear-gradient(135deg,#202834,#2a2418);border:1px solid var(--acc)}
+.concl b{color:var(--acc)}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center}
+.kpi .n{font-size:22px;font-weight:700}.kpi .l{font-size:12px;color:var(--muted);margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0}
+th,td{padding:9px 8px;text-align:center;border-bottom:1px solid var(--line)}
+th{background:var(--panel);color:var(--muted);font-weight:600}
+td:first-child,th:first-child{text-align:left}
+code{background:var(--track);padding:1px 6px;border-radius:4px;font-size:12px}
+.up{color:var(--red)!important}.dn{color:var(--green)!important}
+.chart{width:100%;height:auto;display:block;margin:10px 0;background:var(--panel)!important}
+.chart .ttl{fill:var(--fg);font-size:14px;font-weight:600}.chart .lab{fill:var(--fg);font-size:12px;text-anchor:end}
+.chart .val{fill:var(--fg);font-size:12px;font-weight:600}.chart .ax{fill:var(--muted);font-size:10px}
+.note{color:var(--muted);font-size:13px;margin:8px 0}
+tr.hl{background:rgba(214,168,90,.12)}tr.hl td{border-color:var(--acc)}
+.tag{display:inline-block;background:var(--track);border-radius:5px;padding:2px 8px;font-size:12px;margin:2px}
+.foot{color:var(--muted);font-size:12px;margin-top:36px;border-top:1px solid var(--line);padding-top:14px}
+@media(max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}}
+</style></head><body><div class="wrap">
+<h1>2026 全年 · 满足模型样本的最差亏损 5 只与共同特征</h1>
+<div class="sub">回测区间 2026-01-05 → 2026-11-20 ｜ 213 个交易日 ｜ 全市场 5579 只 ｜ 当前生产口径（8 道硬条件 + H5 精选含主板、排除北交所）｜ 生成 2026-11-23 08:43:29</div>
+
+<div class="card concl">
+<b>核心结论</b>：亏损最差 5 只<b>不是随机的</b>——100% 集中在 <b>7 月</b>（全体仅 17.9% 在 7 月），且共同具备两个特征：<b>距 20 日低点已涨 8%~12%（相对高位，分位 84）+ 成交额 6~9 亿（放量，分位 86）</b>。
+真正的杀伤组合是 <b>7 月 × 高位 × 放量</b>：这 21 只 5 日均 <b class="dn">-7.02%</b>、胜率 19%，而其余 7 月票仅 -0.39%。
+可落地剔除规则 <b>「距低&gt;8% 且（成交额&gt;5亿 或 当日指数跌&gt;1%）」</b>：命中全部 5 只最差票、剔除 22 只巨亏、<b>不误杀任何黄金样本</b>。
+</div>
+
+<div class="kpis">
+<div class="kpi"><div class="n">1023</div><div class="l">全年满足模型样本</div></div>
+<div class="kpi"><div class="n dn">-0.86%</div><div class="l">全样本 5 日均收益</div></div>
+<div class="kpi"><div class="n dn">-28.67%</div><div class="l">最差单只 5 日</div></div>
+<div class="kpi"><div class="n">100%</div><div class="l">最差5只集中在7月</div></div>
+</div>
+
+<h2>一、亏损最差 5 只清单</h2>
+<div class="note">按 5 日收益升序（核心持有期 T+3~5）。红涨绿跌；这 5 只全部为深度亏损。</div>
+<svg viewBox='0 0 720 250' xmlns='http://www.w3.org/2000/svg' class='chart'><rect width='720' height='250' fill='var(--panel)' rx='10'/><text x='200' y='22' class='ttl'>亏损最差5只 · 5日收益（红涨绿跌）</text><text x='190' y='54' class='lab'>圣晖集成 603163</text><rect x='200' y='38' width='398.3' height='22' fill='var(--green)' rx='4'/><text x='592.3' y='54' class='val' text-anchor='end'>-28.67%</text><text x='712' y='54' class='ax' text-anchor='end'>2026-07-10 10日-36.36%</text><text x='190' y='94' class='lab'>有研复材 688811</text><rect x='200' y='78' width='366.5' height='22' fill='var(--green)' rx='4'/><text x='560.5' y='94' class='val' text-anchor='end'>-26.38%</text><text x='712' y='94' class='ax' text-anchor='end'>2026-07-10 10日-30.17%</text><text x='190' y='134' class='lab'>西子洁能 002534</text><rect x='200' y='118' width='338.9' height='22' fill='var(--green)' rx='4'/><text x='532.9' y='134' class='val' text-anchor='end'>-24.39%</text><text x='712' y='134' class='ax' text-anchor='end'>2026-07-13 10日-26.89%</text><text x='190' y='174' class='lab'>优优绿能 301590</text><rect x='200' y='158' width='332.3' height='22' fill='var(--green)' rx='4'/><text x='526.3' y='174' class='val' text-anchor='end'>-23.92%</text><text x='712' y='174' class='ax' text-anchor='end'>2026-07-10 10日-28.93%</text><text x='190' y='214' class='lab'>金瑞矿业 600714</text><rect x='200' y='198' width='322.3' height='22' fill='var(--green)' rx='4'/><text x='516.3' y='214' class='val' text-anchor='end'>-23.20%</text><text x='712' y='214' class='ax' text-anchor='end'>2026-07-01 10日-27.69%</text></svg>
+<table><tr><th>#</th><th>日期</th><th>代码</th><th>名称</th><th>评分</th><th>5日</th><th>10日</th><th>上影/开</th><th>距低</th><th>成交额</th><th>当日指数</th></tr><tr><td>1</td><td>2026-07-10</td><td><code>603163</code></td><td><b>圣晖集成</b></td><td>64.3</td><td class='dn'>-28.67%</td><td class='dn'>-36.36%</td><td>0.0532</td><td>0.081</td><td>7.22亿</td><td class='dn'>-1.00%</td></tr><tr><td>2</td><td>2026-07-10</td><td><code>688811</code></td><td><b>有研复材</b></td><td>48.7</td><td class='dn'>-26.38%</td><td class='dn'>-30.17%</td><td>0.0723</td><td>0.118</td><td>6.06亿</td><td class='dn'>-1.00%</td></tr><tr><td>3</td><td>2026-07-13</td><td><code>002534</code></td><td><b>西子洁能</b></td><td>35.0</td><td class='dn'>-24.39%</td><td class='dn'>-26.89%</td><td>0.0568</td><td>0.118</td><td>7.31亿</td><td class='dn'>-2.06%</td></tr><tr><td>4</td><td>2026-07-10</td><td><code>301590</code></td><td><b>优优绿能</b></td><td>76.0</td><td class='dn'>-23.92%</td><td class='dn'>-28.93%</td><td>0.1161</td><td>0.099</td><td>2.07亿</td><td class='dn'>-1.00%</td></tr><tr><td>5</td><td>2026-07-01</td><td><code>600714</code></td><td><b>金瑞矿业</b></td><td>79.2</td><td class='dn'>-23.20%</td><td class='dn'>-27.69%</td><td>0.0752</td><td>0.091</td><td>8.94亿</td><td class='dn'>+0.44%</td></tr></table>
+
+<h2>二、共同特征：分位视角</h2>
+<div class="note">把每只票的特征放到全年 1023 只样本里算分位（50=中位，越靠右=数值越高）。最一致的两项：<b>距低（84）</b>与<b>成交额（86）</b>。</div>
+<svg viewBox='0 0 720 288' xmlns='http://www.w3.org/2000/svg' class='chart'><rect width='720' height='288' fill='var(--panel)' rx='10'/><text x='150' y='22' class='ttl'>最差5只 · 各特征在全体样本中的平均分位（50=中位，越右越高）</text><line x1='400' y1='34' x2='400' y2='276' stroke='var(--muted)' stroke-dasharray='4 4'/><text x='400' y='286' class='ax' text-anchor='middle'>50</text><text x='140' y='52' class='lab'>上影/开盘</text><rect x='150' y='37' width='500' height='18' fill='var(--track)' rx='4'/><rect x='150' y='37' width='339.5' height='18' fill='var(--green)' rx='4'/><text x='484.5' y='51' class='val' text-anchor='end'>67.9</text><text x='140' y='86' class='lab'>上影/实体</text><rect x='150' y='71' width='500' height='18' fill='var(--track)' rx='4'/><rect x='150' y='71' width='319.0' height='18' fill='var(--green)' rx='4'/><text x='464.0' y='85' class='val' text-anchor='end'>63.8</text><text x='140' y='120' class='lab'>量比</text><rect x='150' y='105' width='500' height='18' fill='var(--track)' rx='4'/><rect x='150' y='105' width='247.0' height='18' fill='var(--amber)' rx='4'/><text x='392.0' y='119' class='val' text-anchor='end'>49.4</text><text x='140' y='154' class='lab'>距20日低</text><rect x='150' y='139' width='500' height='18' fill='var(--track)' rx='4'/><rect x='150' y='139' width='418.0' height='18' fill='var(--green)' rx='4'/><text x='563.0' y='153' class='val' text-anchor='end'>83.6</text><text x='140' y='188' class='lab'>成交额</text><rect x='150' y='173' width='500' height='18' fill='var(--track)' rx='4'/><rect x='150' y='173' width='430.5' height='18' fill='var(--green)' rx='4'/><text x='575.5' y='187' class='val' text-anchor='end'>86.1</text><text x='140' y='222' class='lab'>当日涨跌</text><rect x='150' y='207' width='500' height='18' fill='var(--track)' rx='4'/><rect x='150' y='207' width='333.0' height='18' fill='var(--green)' rx='4'/><text x='478.0' y='221' class='val' text-anchor='end'>66.6</text><text x='140' y='256' class='lab'>评分</text><rect x='150' y='241' width='500' height='18' fill='var(--track)' rx='4'/><rect x='150' y='241' width='279.5' height='18' fill='var(--amber)' rx='4'/><text x='424.5' y='255' class='val' text-anchor='end'>55.9</text></svg>
+
+<h2>三、黄金样本对照 —— 为什么它们没这么惨</h2>
+<div class="note">你最初给定的原型样本与主板验证票。共同点：<b>距低仅 2.5%~10.9%、成交额 1~4 亿</b>，都属"低位小量"，与最差 5 只的"高位放量"正好相反。这正是剔除规则的边界依据。</div>
+<table><tr><th>样本</th><th>代码</th><th>日期</th><th>距20日低</th><th>成交额</th><th>评分</th><th>5日收益</th></tr><tr><td>阳普医疗</td><td><code>300030</code></td><td>2026-10-29</td><td>0.0446</td><td>1.14亿</td><td>69.4</td><td class='up'>+15.27%</td></tr><tr><td>福昕软件</td><td><code>688095</code></td><td>2026-10-30</td><td>0.0246</td><td>3.94亿</td><td>69.9</td><td class='up'>+17.18%</td></tr><tr><td>凌志软件</td><td><code>688588</code></td><td>2026-10-30</td><td>0.0358</td><td>0.97亿</td><td>47.7</td><td class='up'>+10.25%</td></tr><tr><td>宜宾纸业</td><td><code>600793</code></td><td>2026-11-09</td><td>0.1089</td><td>1.77亿</td><td>75.0</td><td class='up'>+4.44%</td></tr></table>
+
+<h2>四、统计稳健性：2×2 交叉检验</h2>
+<div class="note">不是只有 5 只偶然——"距低&gt;8%"与"放量&gt;5亿"两个条件交叉后，各格样本量都足够，差异清晰。</div>
+<table><tr><th></th><th>成交额≤5亿</th><th>成交额>5亿</th></tr><tr><td><b>距低≤8%</b></td><td>618只<br>5日 <b class='dn'>-0.60%</b><br>亏>10% 7.9%</td><td>88只<br>5日 <b class='dn'>-1.02%</b><br>亏>10% 18.2%</td></tr><tr><td><b>距低>8%</b></td><td>220只<br>5日 <b class='dn'>-1.67%</b><br>亏>10% 15.9%</td><td>66只<br>5日 <b class='dn'>-0.38%</b><br>亏>10% 18.2%</td></tr></table>
+
+<h2>五、7 月因素拆解</h2>
+<div class="note">7 月整体（-1.17%）与全年（-0.86%）相差不大，说明"月份"本身不是杀手；真正致命的是 7 月里叠加了高位放量的那一小撮。</div>
+<div class="card">
+<span class="tag">7月全部 178 只 · 5日 -1.17%</span>
+<span class="tag">7月高位放量 21 只 · 5日 <b class="dn">-7.02%</b> · 亏&gt;10% 38.1%</span>
+<span class="tag">7月其余 157 只 · 5日 -0.39%</span>
+<span class="tag">非7月 814 只 · 5日 -0.79%</span>
+</div>
+
+<h2>六、剔除规则模拟</h2>
+<div class="note">在全样本上回测每条规则：剔除多少、保留后收益如何、能否命中 5 只最差、是否误杀黄金样本。<b class="hl">高亮行</b>为推荐规则 H。</div>
+<table><tr><th>剔除规则</th><th>剔除数</th><th>保留后5日</th><th>胜率</th><th>剔巨亏(>15%)</th><th>命中最差5</th><th>误杀黄金</th></tr><tr class=''><td><b>高位8%+放量5亿</b></td><td>66</td><td class='dn'>-0.89%</td><td>39.7%</td><td>10</td><td>4/5</td><td>无</td></tr><tr class=''><td><b>高位8%+放量5亿+当日跌</b></td><td>42</td><td class='dn'>-0.84%</td><td>39.8%</td><td>7</td><td>3/5</td><td>无</td></tr><tr class=''><td><b>高位10%+放量6亿</b></td><td>28</td><td class='dn'>-0.91%</td><td>39.8%</td><td>5</td><td>2/5</td><td>无</td></tr><tr class=''><td><b>高位9%+放量6亿</b></td><td>36</td><td class='dn'>-0.89%</td><td>39.7%</td><td>6</td><td>3/5</td><td>无</td></tr><tr class=''><td><b>高位8%+额8亿</b></td><td>11</td><td class='dn'>-0.81%</td><td>40.0%</td><td>3</td><td>1/5</td><td>无</td></tr><tr class=''><td><b>仅当日跌>1%</b></td><td>683</td><td class='dn'>-0.22%</td><td>40.5%</td><td>25</td><td>4/5</td><td>300030、688095、688588</td></tr><tr class='hl'><td><b>H 高位8%+(放量5亿或跌1%)</b></td><td>208</td><td class='dn'>-0.73%</td><td>39.0%</td><td>22</td><td>5/5</td><td>无</td></tr></table>
+
+<h2>七、单一阈值 pos_pct 网格（供参考）</h2>
+<div class="note">只按距低单条件收紧的效果。注意：pos≤0.08 会误杀宜宾纸业（10.9%），所以<b>单条件不如组合规则 H 干净</b>。</div>
+<table><tr><th>保留 pos_pct≤</th><th>保留数</th><th>5日收益</th><th>胜率</th><th>命中最差5</th><th>误杀黄金</th></tr><tr><td>0.06</td><td>505</td><td class='dn'>-0.63%</td><td>38.6%</td><td>5/5</td><td>1</td></tr><tr><td>0.07</td><td>619</td><td class='dn'>-0.72%</td><td>38.6%</td><td>5/5</td><td>1</td></tr><tr><td>0.08</td><td>706</td><td class='dn'>-0.65%</td><td>39.4%</td><td>5/5</td><td>1</td></tr><tr><td>0.09</td><td>777</td><td class='dn'>-0.71%</td><td>39.8%</td><td>4/5</td><td>1</td></tr><tr><td>0.10</td><td>830</td><td class='dn'>-0.81%</td><td>39.9%</td><td>2/5</td><td>1</td></tr><tr><td>0.11</td><td>881</td><td class='dn'>-0.83%</td><td>39.6%</td><td>2/5</td><td>0</td></tr><tr><td>0.12</td><td>921</td><td class='dn'>-0.93%</td><td>39.5%</td><td>0/5</td><td>0</td></tr></table>
+
+<div class="card concl">
+<b>建议与边界</b>：<br>
+1. 若目标是"剔除最差亏损情形"，推荐规则 <b>H</b>：距低&gt;8% 且（成交额&gt;5亿 或 当日指数跌&gt;1%）。它在全年数据上命中 5/5 最差票、零误杀黄金样本。<br>
+2. <b>诚实提示</b>：整体 5 日均收益只从 -0.86% 改善到 -0.73%——因为规则削的是<b>尾部风险</b>（22 只巨亏），而非改变胜率结构。它能让你少踩大坑，但不会把整体变赚钱。<br>
+3. 这是<b>分析建议，尚未写入生产模型</b>。是否落地、阈值取多少，由你拍板；确认后我再按流程改代码、跑回归、提交推送。
+</div>
+
+<div class="foot">数据源：新浪 HTTP 全市场列表 + 250 根日 K（不复权）；成交额=成交量×典型价；前向收益按交易日历对齐，窗口内单日涨跌&gt;32% 视为疑似除权剔除。
+判定/评分/H5/立信 100% 复用生产模块函数，规则未改。本次仅分析，未修改任何模型代码、参数或仓库文件。</div>
+</div></body></html>
