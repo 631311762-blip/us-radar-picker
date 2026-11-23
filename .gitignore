@@ -50,3 +50,4 @@ powei/scan_results_*.csv
 lingpei/lingpei/state/领湃_业绩预告缓存.json
 lingpei/lingpei/state/领湃_财报披露缓存.json
 low_shadow/state/kl_cache_2026.json
+low_shadow/state/ohlcv_cache_2026.json
