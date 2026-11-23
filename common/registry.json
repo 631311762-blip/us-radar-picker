@@ -4,9 +4,10 @@
   "models": [
     {
       "name": "shanshui",
-      "label": "善水模型 v10",
+      "label": "善水模型 v10（已停用）",
       "cmd": "python3 shanshui/daily_shanshui.py --model v10 --top 10",
-      "enabled": true
+      "enabled": false,
+      "_note": "2026-11-23 用户决定停止推送更新：2026 年回溯整体胜率仅14.3%、T+1平均-1.21%、T+5胜率0%平均-7.78%（7样本中6只T+5为负），收益过低。enabled 设 false 后统一流水线不再调度。代码与状态完整保留，设回 true 即可恢复。"
     },
     {
       "name": "low_shadow",
