@@ -3,9 +3,21 @@ name: A股流水线保底监控
 #       （实测 11-10 延迟49分钟、11-11 延迟47分钟才点火）。
 # 作用：本 watchdog 在主流水线 cron(北京16:05) 之后约75分钟检查当日状态：
 #       - 已成功运行        -> 跳过（无论延迟多久，结果已出）
-#       - 仍在运行(in_progress/queued) -> 跳过（只是延迟，等它跑完，避免双跑）
-#       - 完全没跑 / 仅失败  -> 自动 workflow_dispatch 补跑
-#         （手动事件优先级高于 schedule，不会被 GitHub 队列延迟，立即执行）
+#       - 正常在途(in_progress) -> 跳过（等它跑完，避免双跑）
+#       - 卡死(in_progress 超90min) / 锁死(pending/queued 超15min)
+#                           -> 派发各模型【独立 workflow】兜底
+#       - 完全没跑 / 仅失败  -> 派发各模型【独立 workflow】兜底
+#
+# 【2026-11-23 方案A：占锁修复】
+#   根因：统一流水线 concurrency group=a-share-pipeline / cancel-in-progress:false，
+#         僵尸 run 占住锁不释放时，任何新 run（含本 watchdog 过去的补跑）都会
+#         永远 pending 进不去。过去 watchdog 卡死时 dispatch 主流水线本身，
+#         被同一把锁挡住 = 死锁无解。
+#   修复：卡死/锁死时改派【独立模型 workflow】——它们各自用独立 concurrency
+#         group，不受主锁约束（11-23 晚即靠 6 个独立流程救场验证有效）。
+#         不改 cancel-in-progress:true，避免拦腰砍断正常 run / 重复推送。
+#   防重复：派发前查当日独立流程是否已被派发过（含 fallback-2300），有则跳过；
+#         各模型 push_guard 再兜一层同日去重。
 # 注意：watchdog 自身也是 schedule，理论上也可能被 GitHub 延迟/漏跑；但它与主流程
 #       是两个独立定时，同时漏跑的概率远低于单个，作为“保底中的保底”。
 on:
@@ -40,11 +52,13 @@ jobs:
           has_success = False
           has_running = False
           stuck_run = None
-          # 主流水线正常应在 90 分钟内跑完（单模型 600s+1 次重试 × 9 + 前置层）。
-          # 若 in_progress 已超过该时限，视为卡死（2026-11-19 曾因善水卡 3600s
-          # 拖到 180 分钟总超时被取消，而 watchdog 当时仅因 in_progress 就 skip，
-          # 错过补跑窗口）。此时应主动补跑。
+          # 主流水线正常应在 90 分钟内跑完（并行后实际仅几分钟）。
+          # 两类需派独立流程兜底的异常：
+          #   1) in_progress 超 STALE_MINUTES(90) -> 服务端卡死的僵尸 run
+          #   2) queued/pending/requested 超 PENDING_STALE_MINUTES(15)
+          #      -> 有僵尸 run 占着 group 锁，新 run 一直排队进不去（占锁死锁）
           STALE_MINUTES = 90
+          PENDING_STALE_MINUTES = 15
           now = datetime.datetime.now(datetime.timezone.utc)
           for r in data['workflow_runs']:
               if r['created_at'][:10] != today:
@@ -59,32 +73,69 @@ jobs:
                   started = datetime.datetime.fromisoformat(
                       (r.get('run_started_at') or r['created_at']).replace('Z', '+00:00'))
                   age_min = (now - started).total_seconds() / 60
-                  print(f"今日仍在运行: run {r['id']} {st}，已运行 {age_min:.0f} 分钟")
-                  if age_min > STALE_MINUTES:
+                  print(f"今日运行记录: run {r['id']} {st}，已 {age_min:.0f} 分钟")
+                  if st == 'in_progress' and age_min > STALE_MINUTES:
                       stuck_run = r['id']
-                      print(f"[WARN] 主流水线 run {r['id']} 运行超 {STALE_MINUTES} 分钟仍未完成，判定卡死")
+                      print(f"[WARN] 主流水线 run {r['id']} in_progress 超 {STALE_MINUTES} 分钟，判定卡死")
+                  elif st in ('queued', 'pending', 'requested') and age_min > PENDING_STALE_MINUTES:
+                      stuck_run = r['id']
+                      print(f"[WARN] 主流水线 run {r['id']} {st} 超 {PENDING_STALE_MINUTES} 分钟仍进不去，判定被占锁死锁")
+
+          # 幂等：查独立模型 workflow 今日是否已被派发过（watchdog 重跑 / fallback 已派），
+          # 已派则跳过，避免对 8 个无 push_guard 的模型造成重复推送。
+          indep_dispatched = False
+          try:
+              probe = "https://api.github.com/repos/%s/actions/workflows/lingpei.yml/runs?per_page=30" % repo
+              req2 = urllib.request.Request(probe, headers={
+                  'Authorization': f'Bearer {tok}', 'Accept': 'application/vnd.github+json'})
+              d2 = json.load(urllib.request.urlopen(req2, timeout=20))
+              for r2 in d2.get('workflow_runs', []):
+                  if r2['created_at'][:10] == today and str(r2.get('event','')) == 'workflow_dispatch':
+                      indep_dispatched = True
+                      print(f"今日独立流程已派发过: lingpei run {r2['id']} @ {r2['created_at']}")
+                      break
+          except Exception as e:
+              print(f"[WARN] 查询独立流程派发痕迹失败({e})，按未派发处理")
+
           if has_success:
               decision = 'skip'
+          elif indep_dispatched:
+              decision = 'skip'       # 今日兜底已启动，避免重复派发
           elif stuck_run is not None:
-              decision = 'dispatch'   # 卡死：主动补跑
+              decision = 'dispatch'   # 卡死/锁死：派独立流程兜底（绕开主锁）
           elif has_running:
               decision = 'skip'       # 正常在途，等其完成避免双跑
           else:
-              decision = 'dispatch'
+              decision = 'dispatch'   # 没跑/失败：派独立流程兜底
           print(f"DECISION={decision}")
           open('/tmp/wd_decision', 'w').write(decision)
           PY
-      - name: 补跑主流水线（如需要）
+      - name: 派发独立模型流程兜底（绕开主锁，如需要）
         if: steps.check.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           DEC=$(cat /tmp/wd_decision 2>/dev/null)
-          if [ "$DEC" = "dispatch" ]; then
-            echo "今日主流水线未成功运行，触发 workflow_dispatch 补跑..."
-            gh api -X POST repos/$REPO/actions/workflows/412216318/dispatches -f ref=main
-            echo "已补跑（手动事件，不受 schedule 延迟影响）"
-          else
-            echo "今日主流水线已运行(成功或在途)，无需补跑"
+          if [ "$DEC" != "dispatch" ]; then
+            echo "今日主流水线已成功/正常在途/独立流程已兜底，跳过派发"
+            exit 0
+          fi
+          echo "主流水线卡死/锁死/未跑：派发各模型独立流程（独立 group，不受主锁约束）"
+          # 与 fallback-2300.yml 的 WFS 保持一致（10 个模型全覆盖，含 11-23 补建的 yida.yml）。
+          WFS="shanshui.yml lingpei.yml low_shadow.yml low_shadow2.yml \
+               kaizhong.yml yidian.yml yida.yml powei.yml high_shadow.yml stock-v3-daily.yml"
+          OK=0; FAIL=0
+          for wf in $WFS; do
+            if gh api -X POST "repos/$REPO/actions/workflows/$wf/dispatches" -f ref=main; then
+              echo "OK   $wf"; OK=$((OK+1))
+            else
+              echo "FAIL $wf"; FAIL=$((FAIL+1))
+            fi
+            sleep 10
+          done
+          echo "独立流程派发完成：成功 $OK，失败 $FAIL"
+          if [ "$OK" -eq 0 ]; then
+            echo "::error::独立流程全部派发失败"
+            exit 1
           fi
