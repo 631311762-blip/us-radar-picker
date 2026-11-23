@@ -1769,10 +1769,10 @@
         "done": true
       },
       "t10": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-20",
+        "close": 9.82,
+        "ret": -0.1931,
+        "done": true
       }
     },
     {
@@ -1810,10 +1810,10 @@
         "done": true
       },
       "t10": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-20",
+        "close": 12.15,
+        "ret": -0.1539,
+        "done": true
       }
     },
     {
@@ -1851,10 +1851,10 @@
         "done": true
       },
       "t10": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-20",
+        "close": 2.98,
+        "ret": -0.057,
+        "done": true
       }
     },
     {
@@ -1892,10 +1892,10 @@
         "done": true
       },
       "t10": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-20",
+        "close": 17.1,
+        "ret": -0.1284,
+        "done": true
       }
     },
     {
@@ -1933,10 +1933,10 @@
         "done": true
       },
       "t10": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-20",
+        "close": 4.96,
+        "ret": -0.1961,
+        "done": true
       }
     },
     {
@@ -2255,10 +2255,10 @@
         "done": true
       },
       "t5": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-20",
+        "close": 24.57,
+        "ret": -0.0361,
+        "done": true
       },
       "t10": {
         "date": null,
@@ -2296,10 +2296,10 @@
         "done": true
       },
       "t5": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-20",
+        "close": 6.01,
+        "ret": -0.1583,
+        "done": true
       },
       "t10": {
         "date": null,
@@ -2331,10 +2331,10 @@
       "entry_close": 25.28,
       "position": "贴线/略破",
       "t3": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-23",
+        "close": 25.12,
+        "ret": -0.0063,
+        "done": true
       },
       "t5": {
         "date": null,
@@ -2372,10 +2372,10 @@
       "entry_close": 8.03,
       "position": "MA60上方",
       "t3": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-23",
+        "close": 7.93,
+        "ret": -0.0125,
+        "done": true
       },
       "t5": {
         "date": null,
@@ -2413,10 +2413,10 @@
       "entry_close": 30.95,
       "position": "深破MA60",
       "t3": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-23",
+        "close": 29.94,
+        "ret": -0.0326,
+        "done": true
       },
       "t5": {
         "date": null,
@@ -2454,10 +2454,10 @@
       "entry_close": 24.56,
       "position": "MA60上方",
       "t3": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-23",
+        "close": 23.82,
+        "ret": -0.0301,
+        "done": true
       },
       "t5": {
         "date": null,
@@ -2495,10 +2495,10 @@
       "entry_close": 14.08,
       "position": "深破MA60",
       "t3": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-23",
+        "close": 13.37,
+        "ret": -0.0504,
+        "done": true
       },
       "t5": {
         "date": null,
@@ -2536,10 +2536,10 @@
       "entry_close": 86.75,
       "position": "深破MA60",
       "t3": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-23",
+        "close": 85.45,
+        "ret": -0.015,
+        "done": true
       },
       "t5": {
         "date": null,
@@ -2577,10 +2577,10 @@
       "entry_close": 155.89,
       "position": "深破MA60",
       "t3": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-23",
+        "close": 158.6,
+        "ret": 0.0174,
+        "done": true
       },
       "t5": {
         "date": null,
@@ -2618,10 +2618,10 @@
       "entry_close": 9.91,
       "position": "深破MA60",
       "t3": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-23",
+        "close": 9.31,
+        "ret": -0.0605,
+        "done": true
       },
       "t5": {
         "date": null,
@@ -2659,10 +2659,10 @@
       "entry_close": 46.06,
       "position": "深破MA60",
       "t3": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-23",
+        "close": 44.41,
+        "ret": -0.0358,
+        "done": true
       },
       "t5": {
         "date": null,
@@ -2700,10 +2700,10 @@
       "entry_close": 16.76,
       "position": "深破MA60",
       "t3": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-23",
+        "close": 15.44,
+        "ret": -0.0788,
+        "done": true
       },
       "t5": {
         "date": null,
@@ -2741,10 +2741,10 @@
       "entry_close": 6.52,
       "position": "深破MA60",
       "t3": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-23",
+        "close": 6.21,
+        "ret": -0.0475,
+        "done": true
       },
       "t5": {
         "date": null,
