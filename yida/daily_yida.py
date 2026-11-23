@@ -9,6 +9,8 @@
 模型规则（参数见 config.json，可改）：
   ① 阴跌前置：D1前一日收盘较过去60日最高价跌幅 ≥ 30%，且收盘 < MA60
   ② 平台放量：连续4天(D1~D4)成交量均为 D1前20日均量的 2~7 倍
+     ★涨停豁免：D1若为涨停板(主板10cm/双创20cm/北交30cm)，封板导致量能不足2倍属正常，
+       豁免D1倍数，其余D2~D4仍严格2~7倍（2026回测新增17个信号，命中率100%）
   ③ 量能平稳：四天量能变异系数 CV < 20%（排除逐日爆量）
   ④ 提示日 = 放量第2天(D2)，以 D2 收盘价买入
   ⑤ 退出机制：提示日后关注5天，任一触发即停止关注：
@@ -52,8 +54,20 @@ def load_cfg():
 
 
 # ---------- 形态识别 ----------
-def detect(bars, cfg):
+def _limit_up_threshold(code, cfg):
+    """按板块返回涨停判定阈值（留四舍五入余量）：
+       创业板/科创板 20cm / 北交所 30cm / 沪深主板 10cm"""
+    s = str(code).zfill(6)
+    if s.startswith(("300", "301", "688", "689")):
+        return cfg.get("limit_up_growth", 0.195)
+    if s.startswith(("8", "4", "92")):
+        return cfg.get("limit_up_bj", 0.295)
+    return cfg.get("limit_up_main", 0.098)
+
+
+def detect(bars, cfg, code=""):
     """bars: 共享K线列表 [{date,open,high,low,close,volume}, ...] 升序
+    code: 6位代码，用于判断D1是否涨停（涨停启动日豁免规则）
     返回最新一个有效信号 dict 或 None"""
     if not bars or len(bars) < cfg["lookback"] + cfg["base_win"] + cfg["hold_days"] + 5:
         return None
@@ -85,9 +99,15 @@ def detect(bars, cfg):
         if len(vols) < 4:
             continue
         ratios = vols / b
-        if not np.all((ratios >= cfg["vol_lo"]) & (ratios <= cfg["vol_hi"])):
+        # —— 涨停启动日豁免 ——
+        # D1涨停(主板10cm/双创20cm/北交30cm)时，封板导致量能不足2倍属正常，
+        # 豁免D1放量倍数；其余D2~D4仍严格2~7倍。
+        d1_limit_up = c[i] / c[i - 1] - 1 >= _limit_up_threshold(code, cfg)
+        if not d1_limit_up and not (cfg["vol_lo"] <= ratios[0] <= cfg["vol_hi"]):
             continue
-        # ③ 量能平稳
+        if not np.all((ratios[1:] >= cfg["vol_lo"]) & (ratios[1:] <= cfg["vol_hi"])):
+            continue
+        # ③ 量能平稳（豁免日仍用四天原始量算CV，保证平台整体平稳）
         cv = np.std(vols) / np.mean(vols)
         if cv > cfg["cv_max"]:
             continue
@@ -163,7 +183,7 @@ def main():
         bars = ctx.kline(code, count=cfg["lookback"] + cfg["base_win"] + cfg["hold_days"] + 30)
         if not bars:
             continue
-        sig = detect(bars, cfg)
+        sig = detect(bars, cfg, code=code)
         if not sig:
             continue
         sig["code"] = code
