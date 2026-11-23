@@ -1,0 +1,57 @@
+name: 怡达模型每日流程
+
+# =========================================================================
+# 2026-11-23 新增：怡达模型（yida）独立 workflow。
+# 背景：怡达 11-23 上线并登记在 common/registry.json，由统一流水线
+#       a-share-pipeline.yml 每日自动执行。但它此前没有独立 workflow，
+#       主流水线一旦卡死/被占锁，怡达就没有兜底路径（其余 9 个模型都有）。
+#       方案A占锁修复要求 10 个模型全覆盖，故补建本文件。
+#
+# on 仅保留 workflow_dispatch（无 schedule/push），用途：
+#   1) 手动调试；
+#   2) 被 watchdog.yml（卡死/锁死）与 fallback-2300.yml（23点兜底）在
+#      主流水线当日未成功时调用，按自身代码独立产出。
+# 独立 concurrency group=yida，不受主流水线 group=a-share-pipeline 的锁约束。
+# 回写带 [skip ci] + pull --rebase，不产生循环/冲突。
+# =========================================================================
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: yida
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    # 兜底路径无共享 K 线缓存，需自行抓取全市场，放宽预算
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: python3 -m pip install --quiet requests numpy pandas
+
+      - name: 运行怡达模型（自身代码路径）
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          TZ: Asia/Shanghai
+        run: python3 yida/daily_yida.py
+
+      - name: 回写状态与台账（供次日复盘）
+        if: always()
+        run: |
+          git config user.name "yida-bot"
+          git config user.email "yida-bot@users.noreply.github.com"
+          git add yida/state common/state 2>/dev/null || true
+          git commit -m "yida state: $(date -u +%F) [skip ci]" || echo "无状态变更"
+          git pull --rebase origin main || true
+          git push || echo "推送状态失败（不影响选股）"
