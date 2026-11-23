@@ -39,6 +39,7 @@ import os
 import sys
 
 import signal
+import time as _time
 import numpy as np
 import pandas as pd
 
@@ -93,6 +94,7 @@ def kline(code, count=None):
 # ----------------------------------------------------------------------------
 SYMBOL_TIMEOUT = float(os.environ.get("LS2_SYMBOL_TIMEOUT", "20"))  # 单只取数硬超时(秒)
 UNIVERSE_TIMEOUT = float(os.environ.get("LS2_UNIVERSE_TIMEOUT", "90"))  # 样本池取数硬超时(秒)
+LOOP_BUDGET = float(os.environ.get("LS2_LOOP_BUDGET", "300"))  # 选股循环总预算(秒)，到点强制收尾并推送
 _watchdog_on = hasattr(signal, "SIGALRM") and hasattr(signal, "setitimer")
 
 class _KlineTimeout(Exception):
@@ -420,6 +422,7 @@ def main():
         return 2
     target = pd.Timestamp.now().normalize()
     picks, scanned, kmiss, filtered, timeout_skip = [], 0, 0, 0, 0
+    loop_start = _time.time()
     for x in uni:
         code = str(x.get("symbol") or x.get("code") or "").zfill(6)
         nm = x.get("name", "")
@@ -461,6 +464,10 @@ def main():
                 "filter": "v20261115_hard" if FLT.get("enabled", False) else "off",
                 "source": "low_shadow2",
             }})
+        # 总预算保护：无论卡在哪只，到点强制收尾，保证推送层一定执行
+        if scanned + kmiss + timeout_skip > 0 and _time.time() - loop_start > LOOP_BUDGET:
+            print("[WARN] 选股循环达总预算 %ss，强制收尾（已扫%d只），继续推送。" % (LOOP_BUDGET, scanned))
+            break
     picks.sort(key=lambda p: p.get("score") or 0, reverse=True)
 
     if _ad:
