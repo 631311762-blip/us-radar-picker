@@ -11,7 +11,11 @@
   ② 平台放量：连续4天(D1~D4)成交量均为 D1前20日均量的 2~7 倍
   ③ 量能平稳：四天量能变异系数 CV < 20%（排除逐日爆量）
   ④ 提示日 = 放量第2天(D2)，以 D2 收盘价买入
-  ⑤ 命中 = 买入后5日内最高收益 ≥ 3%
+  ⑤ 退出机制：提示日后关注5天，任一触发即停止关注：
+     - 破位：收盘价 < D1实体中点(开+收)/2
+     - 缩量：成交量 < 放量四天均量 × 0.5
+     触发当日按最高价结算（保留当日浮盈）
+  ⑥ 命中 = 关注期内最高收益 ≥ 3%
 
 数据流（完全遵循仓库共同前置框架）：
   · 样本池：读 common/state/universe.json（已剔除 ST/立信/监管立案/次新）
@@ -90,13 +94,40 @@ def detect(bars, cfg):
         # D1前一日不得已放量（确保D1是启动首日）
         if v[i - 1] / b > 2.5:
             continue
-        # ④ 提示日 D2
+        # ④ 提示日 D2（第2根放量日）
         j = i + sig_day - 1
         if j >= n:
             continue
         buy = c[j]
-        fwd = h[j + 1:j + 1 + hold]
-        ret5 = float(np.max(fwd) / buy - 1) if len(fwd) else None
+        # ⑤ 退出机制：第一根放量K线实体中点（破位线）
+        d1_open = float(bars[i]["open"])
+        d1_close = float(bars[i]["close"])
+        break_line = (d1_open + d1_close) / 2
+        # 缩量线：放量四天均量的一半
+        shrink_line = np.mean(vols) * cfg.get("shrink_ratio", 0.5)
+
+        # 从提示日次日起，逐日检查退出条件（最多关注 hold 天）
+        exit_reason = None
+        exit_day = None
+        max_price = h[j]                       # 提示日当日最高也计入
+        last_close = c[j]
+        checked = 0
+        for k in range(j + 1, min(j + 1 + hold, n)):
+            checked += 1
+            max_price = max(max_price, h[k])   # 触发前(含当日)最高价
+            last_close = c[k]
+            # 破位：收盘价跌破实体中点
+            if c[k] < break_line:
+                exit_reason = "破位"
+                exit_day = dates[k]
+                break
+            # 缩量：成交量低于放量四天均量的一半
+            if v[k] < shrink_line:
+                exit_reason = "缩量"
+                exit_day = dates[k]
+                break
+        # 结算：按触发当日最高价（保留当日浮盈）；未触发则按关注期内最高价
+        ret5 = float(max_price / buy - 1) if checked > 0 else None
         return dict(
             code=str(bars[j]).zfill(6) if False else "",  # 占位，主程序填 code
             d1=dates[i], signal=dates[j],
@@ -104,6 +135,11 @@ def detect(bars, cfg):
             decline=round(float(prev / peak[i] - 1) * 100, 1),
             vol_mult=round(float(np.mean(ratios)), 2),
             cv=round(float(cv) * 100, 1),
+            break_line=round(float(break_line), 2),
+            shrink_line=round(float(shrink_line)),
+            exit_reason=exit_reason,
+            exit_day=exit_day,
+            held_days=checked,
             ret5=round(ret5 * 100, 1) if ret5 is not None else None,
             hit=bool(ret5 is not None and ret5 >= cfg["target"]),
         )
