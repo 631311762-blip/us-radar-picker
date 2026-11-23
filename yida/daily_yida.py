@@ -19,6 +19,12 @@
      触发当日按最高价结算（保留当日浮盈）
   ⑥ 命中 = 关注期内最高收益 ≥ 3%
 
+推送（三段式，2026-11-23 定版）：
+  · 第一段 = 最新提示日的票（当天新 D2 信号）
+  · 第二段 = 历史入选、未破位、仍在5日观察期内的票（跟踪表现）
+  · 第三段 = 退出告知：5日内触发破位/缩量、且退出日恰为当日 → 推一条告知后永久拉黑；
+    退出日早于当日的票视为已告知过，静默不再推（无需额外状态文件，破位日是K线客观事实）
+
 数据流（完全遵循仓库共同前置框架）：
   · 样本池：读 common/state/universe.json（已剔除 ST/立信/监管立案/次新）
   · K线：读 common/state/klines 共享缓存（ctx.kline，严格离线）
@@ -175,91 +181,155 @@ def _has_history(ctx):
         return False
 
 
-def _push_two_section(ctx, picks, universe, cfg):
-    """两段式推送：
-    第一段 = 本次提示日新票（picks）
-    第二段 = 台账中历史入选票，用共享K线跟踪到今日（收益/退出状态）
-    """
+def _load_reco_signals(ctx):
+    """从台账加载历史入选信号，按 (code, 提示日signal) 去重，保留最早一次记录。
+    返回 {(code,signal): sig_dict}。raw 里保存了 detect 的全部字段。"""
     import glob, os
+    sigs = {}
+    for f in sorted(glob.glob(os.path.join(ctx.reco_dir, "*.json"))):
+        d = kit._read_json(f)
+        if not d:
+            continue
+        rec_date = d.get("date", "")
+        for p in d.get("picks", []):
+            code = str(p.get("code", "")).zfill(6)
+            raw = p.get("raw", {}) or {}
+            signal = raw.get("signal", "")
+            if not code or not signal:
+                continue
+            key = (code, signal)
+            if key in sigs:
+                continue  # 同一轮形态只保留最早记录
+            sigs[key] = dict(
+                code=code, name=p.get("name", ""), signal=signal,
+                buy=raw.get("buy") or p.get("close"),
+                break_line=raw.get("break_line"),
+                shrink_line=raw.get("shrink_line"),
+                vol_mult=raw.get("vol_mult"), decline=raw.get("decline"),
+                cv=raw.get("cv"), d1_limit_up=raw.get("d1_limit_up"),
+            )
+    return sigs
+
+
+def _track_signal(sig, bars, cfg, latest_date):
+    """把单条信号跟踪到最新交易日：算退出日/退出原因/关注期最高收益/已观察交易日数。
+    退出日 = 提示日(D2)次日起，5个交易日内首个触发破位或缩量的日期。"""
+    dates = [str(b["date"]) for b in bars]
+    h = [float(b["high"]) for b in bars]
+    c = [float(b["close"]) for b in bars]
+    v = [float(b["volume"]) for b in bars]
+    sig_date = sig.get("signal", "")
+    if sig_date not in dates:
+        return None
+    j = dates.index(sig_date)
+    buy = float(sig["buy"])
+    bl = sig.get("break_line")
+    sl = sig.get("shrink_line")
+    exit_day, exit_reason = None, None
+    maxp = h[j]
+    # 提示日次日起，最多跟踪 hold 个交易日
+    for k in range(j + 1, min(j + 1 + cfg["hold_days"], len(c))):
+        maxp = max(maxp, h[k])
+        if bl is not None and c[k] < float(bl):
+            exit_day, exit_reason = dates[k], "破位"
+            break
+        if sl is not None and v[k] < float(sl):
+            exit_day, exit_reason = dates[k], "缩量"
+            break
+    ret = (maxp / buy - 1) * 100 if buy > 0 else 0.0
+    held = sum(1 for d in dates if sig_date < d <= latest_date)
+    return dict(exit_day=exit_day, exit_reason=exit_reason,
+                ret=round(ret, 1), held=held)
+
+
+def _push_two_section(ctx, picks, universe, cfg):
+    """两段式推送（带退出告知+永久拉黑）：
+    第一段 = 最新提示日的票（picks 中 signal 取全局最新）
+    第二段 = 历史入选、未破位、仍在5日观察期内的票（跟踪表现）
+    退出告知 = 5日内触发破位/缩量、且退出日恰为最新交易日的票 → 推一条告知
+              退出日早于最新交易日的票视为已告知过 → 永久拉黑，不再推送
+    观察期满(≥5交易日)未破位的票 → 观察结束，不再推送
+    """
+    import datetime
     today = datetime.datetime.now(kit.cm.BJT).strftime("%m-%d")
-    sig_date = picks[0].get("signal", today) if picks else today
-    sig_mmdd = sig_date[5:] if len(sig_date) >= 10 else today
 
-    lines = [f"**怡达 {sig_mmdd}** ｜ 样本{len(universe)} 新提示{len(picks)}只", ""]
+    # 1) 汇总所有信号：台账历史 + 本次 picks（picks 参数最全，覆盖同 key）
+    allsig = _load_reco_signals(ctx)
+    for p in picks:
+        code = str(p.get("code", "")).zfill(6)
+        signal = p.get("signal", "")
+        if not code or not signal:
+            continue
+        allsig[(code, signal)] = dict(
+            code=code, name=p.get("name", ""), signal=signal,
+            buy=p.get("buy"), break_line=p.get("break_line"),
+            shrink_line=p.get("shrink_line"), vol_mult=p.get("vol_mult"),
+            decline=p.get("decline"), cv=p.get("cv"),
+            d1_limit_up=p.get("d1_limit_up"),
+        )
+    if not allsig:
+        return common_notify.send_alert(f"怡达 {today} · 无信号", "今日无信号，观察中。")
 
-    # ---- 第一段：本次提示日新票 ----
-    lines.append(f"【今日提示 {sig_mmdd}·{len(picks)}只】")
-    if not picks:
-        lines.append("今日无新信号")
-    for p in sorted(picks, key=lambda x: -float(x.get("vol_mult") or 0)):
-        ret = f"{p['ret5']:+.1f}%" if p.get("ret5") is not None else "待验证"
-        hit = "✓" if p.get("hit") else ""
-        lu = "涨停" if p.get("d1_limit_up") else ""
-        lines.append(f"`{p['code']}` {p['name']} 买{p['buy']} {ret}{hit} {lu}".rstrip())
+    # 2) 最新提示日 L 与最新交易日
+    latest_signal = max(v["signal"] for v in allsig.values())
+    latest_date = latest_signal
+    for (code, _), sig in allsig.items():
+        b = kit.cm.load_kline(code, offline=True)
+        if b:
+            latest_date = str(b[-1]["date"])
+            break
 
-    # ---- 第二段：历史入选跟踪到今日 ----
-    lines.append("")
-    lines.append("【历史入选·跟踪到今日】")
-    hist = []
-    try:
-        files = sorted(glob.glob(os.path.join(ctx.reco_dir, "*.json")))
-        # 排除本日，取最近8个批次
-        files = [f for f in files if os.path.basename(f)[:10] < ctx.today][-8:]
-        for f in files:
-            d = kit._read_json(f)
-            if not d:
-                continue
-            rec_date = d.get("date", "")
-            for p in d.get("picks", []):
-                code = str(p.get("code", "")).zfill(6)
-                base = p.get("close")
-                name = p.get("name", "")
-                raw = p.get("raw", {})
-                if not code or base is None:
-                    continue
-                bars = kit.cm.load_kline(code, offline=True)
-                if not bars:
-                    continue
-                dates = [str(b["date"]) for b in bars]
-                # 推荐日之后的K线
-                fwd_idx = [k for k, dt in enumerate(dates) if dt > rec_date]
-                if not fwd_idx:
-                    continue
-                k0 = fwd_idx[0]
-                # 跟踪最多5日：最高价收益 + 退出状态
-                hold = min(cfg["hold_days"], len(bars) - k0)
-                seg = bars[k0:k0 + hold]
-                maxp = max(float(b["high"]) for b in seg)
-                ret = (maxp / float(base) - 1) * 100
-                # 退出判定：用 raw 里的 break_line/shrink_line
-                exit_tag = "持有"
-                bl = raw.get("break_line")
-                sl = raw.get("shrink_line")
-                if bl is not None and any(float(b["close"]) < float(bl) for b in seg):
-                    exit_tag = "破位"
-                elif sl is not None and any(float(b["volume"]) < float(sl) for b in seg):
-                    exit_tag = "缩量"
-                hist.append((rec_date, code, name, ret, exit_tag))
-    except Exception as e:
-        print(f"[yida] 历史跟踪读取跳过：{e}", flush=True)
+    # 3) 逐信号跟踪并分流
+    seg1, seg2, exits = [], [], []
+    for (code, sig_date), sig in allsig.items():
+        if sig.get("buy") is None:
+            continue
+        bars = kit.cm.load_kline(code, offline=True)
+        if not bars:
+            continue
+        st = _track_signal(sig, bars, cfg, latest_date)
+        if not st:
+            continue
+        item = dict(sig)
+        item.update(st)
+        # 触发退出
+        if st["exit_day"]:
+            if st["exit_day"] == latest_date:
+                exits.append(item)      # 今日刚退出 → 告知一次
+            # 退出日早于今日 → 已告知过，永久拉黑（静默跳过）
+            continue
+        # 未退出：观察期满则结束
+        if st["held"] >= cfg["hold_days"]:
+            continue
+        # 仍在观察期：最新提示日 → 第一段；否则 → 第二段
+        (seg1 if sig_date == latest_signal else seg2).append(item)
 
-    if not hist:
-        lines.append("暂无历史台账（投产后累积）")
-    else:
-        # 按日期倒序，每个批次最多列3只，控制篇幅
-        hist.sort(key=lambda x: x[0], reverse=True)
-        last_date, per_date = None, 0
-        for rec_date, code, name, ret, exit_tag in hist:
-            if rec_date != last_date:
-                last_date, per_date = rec_date, 0
-            if per_date >= 3:
-                continue
-            per_date += 1
-            flag = "✓" if ret >= cfg["target"] * 100 else ""
-            lines.append(f"{rec_date[5:]} `{code}` {name} {ret:+.1f}%{flag} {exit_tag}")
+    # 4) 组装推送
+    sig_mmdd = latest_signal[5:] if len(latest_signal) >= 10 else today
+    lines = [f"**怡达 · {today}** ｜ 样本{len(universe)}", ""]
 
-    lines += ["", "阴跌≥30% 平台放量2~7倍 D2提示", "⚠️非投资建议"]
-    title = f"怡达 {sig_mmdd} · 提示{len(picks)}只"
+    lines.append(f"【一、提示日的票 {sig_mmdd}·{len(seg1)}只】")
+    if not seg1:
+        lines.append("今日无新提示")
+    for x in sorted(seg1, key=lambda z: -float(z.get("vol_mult") or 0)):
+        ret = f"{x['ret']:+.1f}%" if x.get("ret") is not None else "—"
+        lines.append(f"`{x['code']}` {x['name']} 买{x['buy']} 观察{x['held']}日 {ret}")
+
+    lines += ["", f"【二、观察中·未破位 {len(seg2)}只（5日内）】"]
+    if not seg2:
+        lines.append("无")
+    for x in sorted(seg2, key=lambda z: z["signal"], reverse=True):
+        flag = "✓" if x["ret"] >= cfg["target"] * 100 else ""
+        lines.append(f"`{x['code']}` {x['name']} 买{x['buy']} 观察{x['held']}日 {x['ret']:+.1f}%{flag}")
+
+    if exits:
+        lines += ["", f"【三、⚠️ 退出告知 {len(exits)}只（停止关注）】"]
+        for x in exits:
+            lines.append(f"`{x['code']}` {x['name']} {x['exit_reason']}退出 "
+                         f"买{x['buy']} 结算{x['ret']:+.1f}%")
+
+    lines += ["", "阴跌≥30% 平台放量2~7倍 D2提示 观察5天", "⚠️非投资建议"]
+    title = f"怡达 {today} · 提示{len(seg1)} 退出{len(exits)}"
     return common_notify.send_alert(title, "\n".join(lines))
 
 
