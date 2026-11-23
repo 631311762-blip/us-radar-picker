@@ -109,8 +109,11 @@ jobs:
                       print('近18h已成功: run %s @ %s' % (r['id'], r['created_at']))
                       break
 
-              # 幂等：若今日独立流程已被派发过（watchdog 卡死兜底 / 手动补跑），
-              # 则本兜底跳过，避免对 8 个无 push_guard 的模型重复推送。
+              # 幂等（2026-11-24 修复）：不能只看「独立流程是否派发过」，必须确认那次
+              # 派发是否真的推送成功。11-23 lingpei 被派发且 workflow success，但因
+              # em_hist 取数失败早退、当天零推送，本兜底却被 indep_dispatched 误判为
+              # 已产出而 skip，最终无人补发。改为读取推送去重文件（仅真正推送时写入
+              # 并回写 GitHub），含今日日期才认定已产出。
               # force=true 时忽略该检查（调试强制派发）。
               indep_dispatched = False
               try:
@@ -123,20 +126,33 @@ jobs:
                   })
                   with urllib.request.urlopen(req2, timeout=20) as resp2:
                       d2 = json.load(resp2)
-                  today_utc = now.strftime('%Y-%m-%d')
-                  for r2 in d2.get('workflow_runs', []):
-                      if r2['created_at'][:10] == today_utc and str(r2.get('event','')) == 'workflow_dispatch':
-                          indep_dispatched = True
-                          print('今日独立流程已派发: lingpei run %s @ %s'
-                                % (r2['id'], r2['created_at']))
-                          break
+                  today_bjt = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime('%Y-%m-%d')
+                  dispatched = [r2 for r2 in d2.get('workflow_runs', [])
+                                if r2['created_at'][:10] == now.strftime('%Y-%m-%d')
+                                and str(r2.get('event','')) == 'workflow_dispatch']
+                  if dispatched:
+                      print('今日独立流程已派发 %d 次: %s' % (len(dispatched), [r['id'] for r in dispatched]))
+                      # 核验是否真的推送成功：读推送去重标记（含今日日期=当天确实推过）
+                      pushed_today = False
+                      try:
+                          raw = ('https://raw.githubusercontent.com/%s/main/'
+                                 'lingpei/lingpei/state/领湃_推送去重.json' % repo)
+                          req3 = urllib.request.Request(raw, headers={
+                              'Authorization': 'Bearer ' + tok, 'User-Agent': 'fallback-2300'})
+                          with urllib.request.urlopen(req3, timeout=20) as resp3:
+                              marks = json.load(resp3)
+                          pushed_today = any(str(k).startswith(today_bjt) for k in marks.keys())
+                          print('推送去重标记今日(%s)=%s，标记内容=%s' % (today_bjt, pushed_today, list(marks.keys())[-3:]))
+                      except Exception as e3:
+                          print('WARN 读推送标记失败(%s)，按未推送处理，启动兜底' % e3)
+                      indep_dispatched = pushed_today
               except Exception as e2:
                   print('WARN 查询独立流程派发痕迹失败(%s)，按未派发处理' % e2)
 
               if force:
                   decision, reason = 'dispatch', '手动 force=true 强制兜底'
               elif indep_dispatched:
-                  decision, reason = 'skip', '今日独立流程已派发（watchdog/手动），跳过避免重复推送'
+                  decision, reason = 'skip', '今日独立流程已派发且推送成功，跳过避免重复推送'
               elif has_success:
                   decision, reason = 'skip', '主流水线近18h已成功，跳过兜底'
               elif stuck_run is not None:

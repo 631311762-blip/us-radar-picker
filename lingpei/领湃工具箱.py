@@ -668,3 +668,76 @@ def event_risk(code, signal_date, fc_by_code=None, rp_by_code=None, ahead=3):
     if fc["level"] != "none":
         return {"level": fc["level"], "text": fc["text"], "src": "forecast"}
     return {"level": "none", "text": "", "src": ""}
+
+
+# ------------------------------------------------------------------ K线兜底（2026-11-24 修复 11-23 停摆）
+# 事故复盘：11-23 东方财富 K 线接口在 GitHub runner 上整体 Connection aborted，
+#   em_hist 只走东财 → 基准探测返回 None → 每日脚本早退、当天零推送；而统一流水线同日多次触发互相取消，
+#   23 点兜底又只认「独立流程已派发」不认「实际推送成功」，最终无人补跑。
+#   修复：统一入口 hist_with_fallback = 东财 → 新浪 → 腾讯，任何一层成功即返回。
+def sina_hist(code, count=220):
+    """新浪日线兜底，返回 [{d,o,c,h,l,v}]（成交量股数转手，与东财「手」口径一致）。"""
+    import re
+    secid = ("sh" + str(code)) if str(code).startswith("6") else (
+        ("bj" + str(code)) if str(code).startswith(("4", "8", "9")) else ("sz" + str(code)))
+    url = ("https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_=/CN_MarketDataService.getKLineData"
+           "?symbol=" + secid + "&scale=240&ma=no&datalen=" + str(count))
+    try:
+        r = SESSION.get(url, timeout=15, headers={
+            "User-Agent": "Mozilla/5.0", "Referer": "https://finance.sina.com.cn"})
+        m = re.search(r"\((\[.*\])\)", r.text, re.S)
+        if m:
+            bars = [{"d": str(d["day"]), "o": float(d["open"]), "c": float(d["close"]),
+                     "h": float(d["high"]), "l": float(d["low"]),
+                     "v": float(d["volume"]) / 100.0} for d in json.loads(m.group(1))]
+            return bars or None
+    except Exception:
+        pass
+    return None
+
+
+def tx_hist(code, count=220):
+    """腾讯日线兜底，返回 [{d,o,c,h,l,v}]（成交量手）。"""
+    sym = (("sh" if str(code).startswith("6") else
+            ("bj" if str(code).startswith(("4", "8", "9")) else "sz")) + str(code))
+    url = ("https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+           "?param=%s,day,,,%d,qfq" % (sym, count))
+    try:
+        j = http_json(url, retry=1, timeout=12)
+        data = ((j or {}).get("data") or {}).get(sym) or {}
+        rows = data.get("qfqday") or data.get("day") or []
+        bars = []
+        for p in rows:
+            if len(p) < 6:
+                continue
+            try:
+                bars.append({"d": str(p[0]), "o": float(p[1]), "c": float(p[2]),
+                             "h": float(p[3]), "l": float(p[4]), "v": float(p[5])})
+            except (ValueError, TypeError):
+                continue
+        return bars or None
+    except Exception:
+        return None
+
+
+_EM_BROKEN = {"v": False}   # 东财熔断：一旦探测失败，本次进程内后续扫描直接走新浪，避免每只重试3host超时
+
+
+def mark_em_broken():
+    _EM_BROKEN["v"] = True
+
+
+def hist_with_fallback(code, count=180):
+    """K线统一入口：东财 → 新浪 → 腾讯，任一成功即返回 bars，全失败返回 None。
+    东财熔断后置位（mark_em_broken）时跳过东财，直接新浪→腾讯，防止全市场扫描每只卡 36s。"""
+    if not _EM_BROKEN["v"]:
+        bars = em_hist(code, count)
+        if bars:
+            return bars
+    bars = sina_hist(code, max(count, 180))
+    if bars:
+        return bars
+    bars = tx_hist(code, max(count, 180))
+    if bars:
+        return bars
+    return None

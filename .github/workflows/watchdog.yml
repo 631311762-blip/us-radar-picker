@@ -81,26 +81,39 @@ jobs:
                       stuck_run = r['id']
                       print(f"[WARN] 主流水线 run {r['id']} {st} 超 {PENDING_STALE_MINUTES} 分钟仍进不去，判定被占锁死锁")
 
-          # 幂等：查独立模型 workflow 今日是否已被派发过（watchdog 重跑 / fallback 已派），
-          # 已派则跳过，避免对 8 个无 push_guard 的模型造成重复推送。
+          # 幂等（2026-11-24 修复）：不能只看「派发过」，必须确认那次派发真的推送成功。
+          # 11-23 lingpei 被派发且 success，但 em_hist 失败早退、当天零推送，旧逻辑据此 skip
+          # 导致无人补发。改为核验推送去重标记（仅真正推送时写入并回写）是否含今日日期。
           indep_dispatched = False
           try:
               probe = "https://api.github.com/repos/%s/actions/workflows/lingpei.yml/runs?per_page=30" % repo
               req2 = urllib.request.Request(probe, headers={
                   'Authorization': f'Bearer {tok}', 'Accept': 'application/vnd.github+json'})
               d2 = json.load(urllib.request.urlopen(req2, timeout=20))
-              for r2 in d2.get('workflow_runs', []):
-                  if r2['created_at'][:10] == today and str(r2.get('event','')) == 'workflow_dispatch':
-                      indep_dispatched = True
-                      print(f"今日独立流程已派发过: lingpei run {r2['id']} @ {r2['created_at']}")
-                      break
+              dispatched = [r2 for r2 in d2.get('workflow_runs', [])
+                            if r2['created_at'][:10] == today and str(r2.get('event','')) == 'workflow_dispatch']
+              if dispatched:
+                  print(f"今日独立流程已派发 {len(dispatched)} 次: {[r['id'] for r in dispatched]}")
+                  today_bjt = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime('%Y-%m-%d')
+                  pushed_today = False
+                  try:
+                      raw = ("https://raw.githubusercontent.com/%s/main/"
+                             "lingpei/lingpei/state/领湃_推送去重.json" % repo)
+                      req3 = urllib.request.Request(raw, headers={
+                          'Authorization': f'Bearer {tok}', 'User-Agent': 'watchdog'})
+                      marks = json.load(urllib.request.urlopen(req3, timeout=20))
+                      pushed_today = any(str(k).startswith(today_bjt) for k in marks.keys())
+                      print(f"推送去重标记今日({today_bjt})={pushed_today}, 标记={list(marks.keys())[-3:]}")
+                  except Exception as e3:
+                      print(f"[WARN] 读推送标记失败({e3})，按未推送处理")
+                  indep_dispatched = pushed_today
           except Exception as e:
               print(f"[WARN] 查询独立流程派发痕迹失败({e})，按未派发处理")
 
           if has_success:
               decision = 'skip'
           elif indep_dispatched:
-              decision = 'skip'       # 今日兜底已启动，避免重复派发
+              decision = 'skip'       # 今日独立流程已派发且确实推送成功，避免重复
           elif stuck_run is not None:
               decision = 'dispatch'   # 卡死/锁死：派独立流程兜底（绕开主锁）
           elif has_running:

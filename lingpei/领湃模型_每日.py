@@ -64,9 +64,16 @@ def main():
     print("领湃模型 B_V3.3（重建版）  %s" % today)
     print("=" * 64)
 
-    # 基准交易日：以东财最新 K 线日期为准
-    sample = tb.em_hist("600519", 8) or tb.em_hist("000001", 8)
-    base_date = sample[-1]["d"] if sample else None
+    # 基准交易日：三源兜底（东财→新浪→腾讯）。2026-11-24 修复：原仅用 em_hist，
+    # 11-23 东财在 runner 整体 Connection aborted 导致基准=None、当天零推送。
+    # 先用东财探测基准，若失败则置熔断位——后续全市场扫描直接走新浪，避免每只重试东财 3 host。
+    sample = tb.em_hist("600519", 8)
+    if sample:
+        base_date = sample[-1]["d"]
+    else:
+        tb.mark_em_broken()
+        sample = tb.sina_hist("600519", 8) or tb.tx_hist("600519", 8)
+        base_date = sample[-1]["d"] if sample else None
     print("[基准] 最新行情日 = %s" % base_date)
     if not base_date or base_date < today:
         print("[退出] 行情日期异常（%s < %s），疑似盘前或数据未更新" % (base_date, today))
@@ -113,7 +120,7 @@ def main():
         if is_st(u):
             st_skip += 1
             continue
-        bars = tb.em_hist(code, 180)
+        bars = tb.hist_with_fallback(code, 180)
         if not bars or len(bars) < 65:
             continue
         sig = detect_coil_v2(bars)
