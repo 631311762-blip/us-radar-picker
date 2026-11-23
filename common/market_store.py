@@ -106,6 +106,12 @@ class MarketStore:
     def __init__(self, root=STORE_DIR):
         self.root = os.path.abspath(root)
         self.manifest_path = os.path.join(self.root, "manifest.json")
+        # 进程内全量索引缓存（2026-11-23）：单只 kline 查询从 O(分片数) 降到 O(1)。
+        # 根因：旧 load_many([code]) 每次都遍历全部 ~400 个分片并 gzip 解压，
+        # 4570 只模型扫描 = 180 万次解压，直接拖死流水线（11-20/11-23 卡死主因）。
+        # save_bars 写入后自动失效重建，保证数据新鲜。
+        self._index_cache = None
+        self._index_sig = None
 
     def shard_path(self, date):
         date = _date(date)
@@ -209,6 +215,8 @@ class MarketStore:
             "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         })
         self._write_manifest(manifest)
+        self._index_cache = None  # 数据已变，索引缓存失效
+        self._index_sig = None
         return {"inserted": inserted, "shards_written": shards, "invalid": invalid,
                 "backfilled": len(complete)}
 
@@ -233,30 +241,49 @@ class MarketStore:
             "updated_at": data.get("updated_at"),
         }
 
-    def load_many(self, codes=None, start=None, end=None, count=None):
-        """一次顺序扫描分片，返回 {code: [bars]}；全市场回测应避免逐票扫描。
+    def _build_index(self, start=None, end=None):
+        """一次性顺序扫描全部分片，建立 {code: [(date, bar), ...]} 索引（按日期升序）。
 
-        count 可让每只股票只保留最近 N 根，避免长历史全市场回测占用过多内存。
+        结果按 (start,end) 签名缓存；同一进程内所有 load_many 调用复用，
+        把模型逐只扫描从 O(股票数 × 分片数) 降为 O(分片数 + 股票数)。
+        """
+        sig = (start or "", end or "")
+        if self._index_cache is not None and self._index_sig == sig:
+            return self._index_cache
+        s_date = _date(start) if start else None
+        e_date = _date(end) if end else None
+        idx = {}
+        for date in self._dates():
+            if s_date and date < s_date:
+                continue
+            if e_date and date > e_date:
+                continue
+            for code, stored in self._read_shard(date).items():
+                idx.setdefault(code, []).append((date, {k: stored[k] for k in BAR_FIELDS}))
+        self._index_cache = idx
+        self._index_sig = sig
+        return idx
+
+    def load_many(self, codes=None, start=None, end=None, count=None):
+        """返回 {code: [bars]}；用进程内全量索引缓存，单只查询不再重复解压全部分片。
+
+        count 让每只股票只保留最近 N 根。
         """
         selected = None if codes is None else {_code(c) for c in codes}
         if selected is not None and not selected:
             return {}
         n = max(0, int(count)) if count is not None else None
-
-        def container():
-            return deque(maxlen=n) if n is not None else []
-
-        out = {code: container() for code in selected} if selected is not None else {}
-        for date in self._dates(start=start, end=end):
-            for code, stored in self._read_shard(date).items():
-                if selected is not None and code not in selected:
-                    continue
-                bar = {k: stored[k] for k in BAR_FIELDS}
-                if code not in out:
-                    out[code] = container()
-                out[code].append(bar)
-        if n is not None:
-            out = {code: list(bars) for code, bars in out.items()}
+        idx = self._build_index(start=start, end=end)
+        out = {}
+        if selected is None:
+            keys = idx.keys()
+        else:
+            keys = [c for c in selected if c in idx]
+        for code in keys:
+            seq = idx[code]
+            if n is not None:
+                seq = seq[-n:]
+            out[code] = [bar for _, bar in seq]
         return out
 
     def load_bars(self, code, start=None, end=None, count=None, required=False):
