@@ -9,10 +9,10 @@
   回调 10-30%、同股 20 日去重
 - 一票否决：ST/*ST/退市；2025 年度审计涉立信（含改聘）、审计查询缺失
 - 排序：与善水科技(301190) 2026-09-23 原型形态贴合度
-- 输出：/workspace/善水模型_推荐跟踪.csv（自动回填 T+10 收益）+ PushPlus 推送
-说明：原 daily_shanshui.py 随沙箱重置丢失，本脚本按任务口径重建；
-PushPlus token 未随脚本恢复，可写入 /workspace/.pushplus_token 或环境变量
-PUSHPLUS_TOKEN，缺失时改为落盘推送内容文件。
+- 输出：/workspace/善水模型_推荐跟踪.csv（自动回填 T+10 收益）+ 推送内容落盘
+说明：原 daily_shanshui.py 随沙箱重置丢失，本脚本按任务口径重建。
+微信推送默认关闭（2026-11-23 起）：回测显示 T+3/T+5 收益为负，用户要求停止推送。
+如需恢复推送，设置环境变量 SHANSHUI_PUSH=on 并提供 PUSHPLUS_TOKEN 或 .pushplus_token。
 """
 import argparse, csv, datetime as dt, json, os, re, shutil, subprocess, sys, time
 import urllib.parse
@@ -532,11 +532,16 @@ def main():
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(content)
 
+    # 推送开关（2026-11-23）：回测显示 T+3/T+5 收益为负，用户要求暂停微信推送。
+    # 关闭时仍落盘推送内容与更新 CSV，只是不发 PushPlus。
+    push_enabled = os.environ.get("SHANSHUI_PUSH", "off").lower() in ("1", "on", "true", "yes")
     token = os.environ.get("PUSHPLUS_TOKEN") or ""
     tk_file = os.path.join(WS, ".pushplus_token")
     if not token and os.path.exists(tk_file):
         token = open(tk_file).read().strip()
-    if token:
+    if not push_enabled:
+        log("微信推送已关闭(SHANSHUI_PUSH=off)，仅落盘: " + md_path)
+    elif token:
         try:
             pr = requests.post("http://www.pushplus.plus/send", json={
                 "token": token, "title": f"善水模型v10 {today}", "template": "markdown",
@@ -545,7 +550,7 @@ def main():
         except Exception as e:
             log(f"推送失败: {e}")
     else:
-        log("未配置 PushPlus token（原脚本内置token未随沙箱恢复），推送内容已落盘: " + md_path)
+        log("未配置 PushPlus token，推送内容已落盘: " + md_path)
     log(f"CSV已更新(回填T+10 {backfilled} 条): {CSV_PATH}")
     sync_push([CSV_PATH, md_path])
     print("RESULT_JSON=" + json.dumps({
