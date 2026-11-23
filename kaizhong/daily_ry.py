@@ -54,7 +54,7 @@ TODAY = datetime.now().strftime("%Y-%m-%d")
 HORIZONS = (1, 3, 5)
 RY_HIST = os.path.join(lib.DATA, "rebound_history.json")
 RY_STATE = os.path.join(lib.DATA, "push_ry_state.json")
-MODEL_DESC = ("反包阳线前期入选：横盘(1-3月,集中度≥85%)→试盘(横盘最大量,放量≥3倍)→破位(跌破支撑线)"
+MODEL_DESC = ("横盘(1-3月,集中度≥85%)→试盘(横盘最大量,放量≥3倍)→破位(跌破支撑线)"
               "→反包阳线当日入选；入选后跟踪5日，收盘破0.5黄金分割线出局，期中现V3缩量二次上攻则重点标识")
 
 
@@ -298,10 +298,10 @@ def build_tracking(hist, last_date, cal, state):
 
 
 def build_push(hits, last_date, tracked_n, v3_today, track_lines):
-    L = [f"# 反包阳线·前期入选 · {last_date}", ""]
-    L.append(f"> 模型：{MODEL_DESC}。")
+    L = [f"# 凯众模型 · {last_date}", ""]
+    L.append(f"> 凯众模型：{MODEL_DESC}。")
     L.append("")
-    L.append(f"## 一、今日反包阳线入选（全市场 {len(hits)} 只，取评分前 {min(TOP,len(hits))} 只）")
+    L.append(f"## 一、今日入选（全市场 {len(hits)} 只，取评分前 {min(TOP,len(hits))} 只）")
     L.append("")
     if hits:
         L.append("| 标的 | 入选日 | 当日涨幅 | 破位日 | 0.5线 | 题材 | 质量 |")
@@ -316,9 +316,9 @@ def build_push(hits, last_date, tracked_n, v3_today, track_lines):
         L.append("> 反包入选=**前期观察**，非直接买点；跟踪5日，收盘破0.5黄金分割线出局，"
                  "期中现V3缩量二次上攻则重点标识（买点升级）。")
     else:
-        L.append("- 今日无反包阳线入选。")
+        L.append("- 今日无入选。")
     L.append("")
-    L.append("## 二、前期入选样本跟踪（5日 / V3标识 / 破线出局）")
+    L.append("## 二、入选样本跟踪（5日 / V3标识 / 破线出局）")
     L.append("")
     L += track_lines
     L.append("")
@@ -329,8 +329,8 @@ def build_push(hits, last_date, tracked_n, v3_today, track_lines):
 
 
 def build_report(hits, last_date, tracked_n, dates, px):
-    L = [f"# 反包阳线·前期入选模型（RY）· {last_date}", ""]
-    L.append(f"> 模型：{MODEL_DESC}")
+    L = [f"# 凯众模型 · {last_date}", ""]
+    L.append(f"> 凯众模型：{MODEL_DESC}")
     L.append("> 形态：横盘(40-60日,集中度≥85%) → 试盘(横盘最大量,放量≥3倍) → 破位(跌破支撑线) "
              "→ 反包阳线当日入选；入选后跟踪5日，破0.5线出局，现V3重点标识。")
     L.append(f"> 覆盖本地日线 {len(px.columns)} 只，当日反包入选 **{len(hits)}** 只。")
@@ -349,9 +349,9 @@ def build_report(hits, last_date, tracked_n, dates, px):
 
 
 def build_ledger(hist, last_date, cal):
-    L = [f"# 反包阳线·前期入选模型 · 台账 · {last_date}", ""]
+    L = [f"# 凯众模型 · 台账 · {last_date}", ""]
     L.append(f"- 基准日：{last_date}")
-    L.append(f"- 模型：{MODEL_DESC}")
+    L.append(f"- 凯众模型：{MODEL_DESC}")
     L.append(f"- 台账笔数：{len(hist)}")
     L.append("")
     L.append("| 名称 | 代码 | 入选日 | 入选价 | 破位日 | 0.5线 | 0.382线 | 0.618线 | 状态 | V3确认日 | 出局日 | 收益 |")
@@ -434,7 +434,7 @@ def main():
         parts = [f"入选{len(hits)}只"]
         if v3_today: parts.append(f"V3确认{len(v3_today)}只")
         if broken_n: parts.append(f"破线出局{broken_n}只")
-        lib.push_ftqq(f"反包阳线前期入选 {last_date}（{'、'.join(parts)}）", push_md)
+        lib.push_ftqq(f"凯众模型 {last_date}（{'、'.join(parts)}）", push_md)
         if broken_n:
             save_state(state)
             print(f"      [track] 本期 {broken_n} 只破线出局，名单已落盘")
