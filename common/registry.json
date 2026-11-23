@@ -36,11 +36,11 @@
     },
     {
       "name": "yidian",
-      "label": "易点模型",
+      "label": "易点模型（已停用）",
       "cmd": "python3 yidian/run.py",
-      "enabled": true,
+      "enabled": false,
       "timeout": 1800,
-      "_note": "历史耗时约 16 分钟，显式放宽单模型超时到 1800s，避免被全局默认误杀。"
+      "_note": "2026-11-23 用户决定停止推送更新：2026 年回溯 T+3/T+5 胜率仅 46.6%/44.8%、收益 -0.18%/-0.30%，且已被怡达模型替换。enabled 设 false 后统一流水线不再调度。代码与自有权重完整保留，设回 true 即可恢复。"
     },
     {
       "name": "yida",
