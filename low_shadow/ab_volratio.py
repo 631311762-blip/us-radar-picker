@@ -213,7 +213,8 @@ for q, months in (("Q1", ("2026-01", "2026-02", "2026-03")),
     qsummary[q] = {}
     for label, lst in (("v15", sel15), ("v13", sel13), ("added", added)):
         sub = [x for x in lst if x["date"][:7] in months]
-        qsummary[q][label] = {"n": len(sub), "r3": stat(sub, 3), "r5": stat(sub, 5)}
+        qsummary[q][label] = {"n": len(sub), "r1": stat(sub, 1),
+                              "r3": stat(sub, 3), "r5": stat(sub, 5)}
 
 # 旭升集团在1.3下
 xs = [x for x in sel13 if x["symbol"] == "603305" and x["date"] == "2026-11-20"]
