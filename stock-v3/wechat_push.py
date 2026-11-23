@@ -24,6 +24,13 @@ def load_sendkey():
 
 def push(title, markdown, key=None):
     key = (key or load_sendkey()).strip()
+    try:                       # 临近财报/预告：微信推送加醒目标识（离线读本地日历）
+        import sys as _sys
+        _sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
+        import report_risk as _rr
+        title, markdown = _rr.decorate(title, markdown, "markdown")
+    except Exception:
+        pass
     if not key:
         return False, "未配置 SendKey（sckey.txt 或环境变量 SERVERCHAN_SENDKEY）"
     data = urllib.parse.urlencode({"title": title[:100], "desp": markdown}).encode("utf-8")

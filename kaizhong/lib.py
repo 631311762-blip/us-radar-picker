@@ -499,6 +499,13 @@ def detect_today_triggers(hist, last_date):
 
 # ---------------- 方糖（Server酱）推送 ----------------
 def push_ftqq(title, md):
+    try:                       # 临近财报/预告：微信推送加醒目标识（离线读本地日历）
+        import sys as _sys
+        _sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
+        import report_risk as _rr
+        title, md = _rr.decorate(title, md, "markdown")
+    except Exception:
+        pass
     # 兼容多种环境变量命名：仓库 Actions secret 实际叫 SERVERCHAN_SENDKEY，
     # 早期版本只认 SERVERCHAN_KEY，导致云端「静默不推送」（日志显示未配置 SENDKEY）。
     key = (os.environ.get("FTQQ_KEY") or os.environ.get("SENDKEY")

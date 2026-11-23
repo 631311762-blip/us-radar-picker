@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-11-23T08:48:10+08:00",
+  "as_of": "2026-11-23",
+  "horizon_days": 60,
+  "warn_days": 15,
+  "source": "eastmoney:RPT_PUBLIC_BS_APPOIN",
+  "entries": {
+    "688613": {
+      "name": "奥精医疗",
+      "report": "2026年 三季报",
+      "date": "2026-12-31"
+    }
+  },
+  "stats": {
+    "fetched": 1,
+    "codes": 1,
+    "in_window": 0,
+    "scan_empty": false,
+    "window": "2026-11-23~2027-01-22"
+  }
+}

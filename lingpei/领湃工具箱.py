@@ -222,6 +222,13 @@ def f10_batch(codes):
 
 # ------------------------------------------------------------------ 推送
 def push(title, content, template="markdown"):
+    try:                       # 临近财报/预告：微信推送加醒目标识（离线读本地日历）
+        import sys as _sys
+        _sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
+        import report_risk as _rr
+        title, content = _rr.decorate(title, content, template)
+    except Exception:
+        pass
     if not PUSHPLUS_TOKEN:
         print("[推送] 未配置 PUSHPLUS_TOKEN，仅打印")
         print(content)

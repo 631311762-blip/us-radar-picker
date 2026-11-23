@@ -673,6 +673,13 @@ def archive(all_q, top, meta, audit_removed, watch_pool, review_res, state, fib_
 
 
 def pushplus(title, content, token):
+    try:                       # 临近财报/预告：微信推送加醒目标识（离线读本地日历）
+        import sys as _sys
+        _sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
+        import report_risk as _rr
+        title, content = _rr.decorate(title, content, "markdown")
+    except Exception:
+        pass
     if not token:
         return False, "未配置 PushPlus token（PUSHPLUS_TOKEN 或 pushplus_token.txt）"
     data = urllib.parse.urlencode({"token": token, "title": title,

@@ -308,6 +308,13 @@ def push_wechat(title, content, force=False):
     token = (os.environ.get("PUSHPLUS_TOKEN") or "").strip()
     sckey = (os.environ.get("SERVERCHAN_SENDKEY") or os.environ.get("FTQQ_KEY") or "").strip()
     template = PSH.get("template", "markdown")
+    try:                       # 临近财报/预告：微信推送加醒目标识（离线读本地日历）
+        import sys as _sys
+        _sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
+        import report_risk as _rr
+        title, content = _rr.decorate(title, content, template)
+    except Exception:
+        pass
     channel = (PSH.get("channel") or "pushplus").lower()
     fallback = bool(PSH.get("fallback_on_failure", True))
     order = ["pushplus", "serverchan"] if channel == "pushplus" else ["serverchan", "pushplus"]

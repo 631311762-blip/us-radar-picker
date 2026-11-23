@@ -12,6 +12,8 @@ prefilter.py —— 共同前置层入口（合并流水线第一步，全局强
                         （本步产出 universe 后即具备条件，实际结算在模型跑完后）
   ⑤ 监管立案剔除     : 生成 regulatory_exclude.json（近一年被立案调查/涉嫌违法，
                         即使未被 ST 也物理剔除，滚动 365 天自动失效）
+  ⑥ 财报窗口标注     : 刷新 report_calendar.json（定期报告预约披露日），仅用于
+                        微信推送时给「临近披露」的入选股票加醒目标识，不影响选股。
 
   ② ③ ⑤ 属于「准入剔除」，在样本池生成阶段物理生效 —— 样本池里根本不含这些
   代码，任何下游模型（哪怕自身没写立信/ST 判断）都不可能选到，实现
@@ -83,6 +85,7 @@ def main():
     ap.add_argument("--no-lixin", action="store_true", help="跳过立信排除集更新，复用已有")
     ap.add_argument("--no-regulatory", action="store_true", help="跳过监管立案排除集更新，复用已有")
     ap.add_argument("--reg-full", action="store_true", help="监管立案扫描滚动一年基线（首次建库）")
+    ap.add_argument("--no-report-risk", action="store_true", help="跳过定期报告预约披露日历刷新，复用已有")
     args = ap.parse_args()
 
     today = datetime.datetime.now(BJT).strftime("%Y-%m-%d")
@@ -262,14 +265,36 @@ def main():
             print("[prefilter] 凯众不复权 K 线预填失败（凯众将离线跳过缺失标的）：%s" % e)
             meta["kz_kline_error"] = str(e)
 
+    # ---- 条件⑥：定期报告/业绩预告临近标注（仅推送提示，不影响选股）----
+    if args.no_report_risk:
+        print("[prefilter] --no-report-risk：复用既有预约披露日历。")
+        meta["report_risk"] = {"skipped": True}
+    else:
+        try:
+            import report_risk as rr
+            rp = rr.refresh(verbose=True)
+            meta["report_risk"] = rp.get("stats")
+            if rp.get("stats", {}).get("scan_empty"):
+                _alert("预约披露日历为空",
+                       "东财预约披露接口返回 0 条（可能被限流或尚未开放下一报告期），"
+                       "已保留既有日历；本次推送的财报临近标识可能不完整。")
+        except Exception as e:
+            # 日历刷新失败不影响选股与推送，只是缺少「临近财报」标注。
+            print("[prefilter] 预约披露日历刷新失败（不影响选股）：%s" % e)
+            meta["report_risk"] = {"error": str(e)}
+            _alert("预约披露日历刷新失败",
+                   "定期报告/业绩预告临近标注本次不可用：%s。\n"
+                   "选股与推送不受影响，但入选股票的财报窗口提示可能缺失。" % e)
+
     # ---- 可观测性汇总：写入 meta.json 供 workflow Step Summary / 排障使用 ----
     meta["data_source_status"] = cm.universe_status()
     meta["kline_source_status"] = cm.kline_source_status()
     cm.save_meta(meta)
     print("[prefilter] 完成：样本池 %d 只，立信排除 %d 只，监管立案排除 %d 只，"
-          "trading_day=%s，来源=%s，降级=%s，告警=%d 条"
+          "财报窗口 %s 只，trading_day=%s，来源=%s，降级=%s，告警=%d 条"
           % (len(universe), meta.get("lixin_count", 0),
-             meta.get("regulatory_count", 0), is_td,
+             meta.get("regulatory_count", 0),
+             (meta.get("report_risk") or {}).get("in_window", "-"), is_td,
              meta["universe_source"], meta["degraded"], len(ALERTS)))
     return 0
 

@@ -397,6 +397,13 @@ def backfill_t10(bars_map):
 
 # ------------------------------------------------------------------ 推送
 def push(title, content):
+    try:                       # 临近财报/预告：微信推送加醒目标识（离线读本地日历）
+        import sys as _sys
+        _sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
+        import report_risk as _rr
+        title, content = _rr.decorate(title, content, "markdown")
+    except Exception:
+        pass
     # 按天去重：今日若已成功推送过善水，直接跳过（防重复）。
     if push_guard and not push_guard.should_push("shanshui"):
         print("[推送去重] 善水今日已推送，跳过重复推送")
