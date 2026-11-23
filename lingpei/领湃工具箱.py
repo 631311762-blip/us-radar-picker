@@ -428,3 +428,119 @@ def sw_b_breadth_ok(window=20):
     recent = vals[-window:]
     ma = sum(recent) / len(recent)
     return (b > ma), b, ma
+
+
+# ------------------------------------------------------------------ 业绩预告风险备注（2026-11-23 用户要求）
+# 背景：用户观察到「提示日若次日公告业绩预告、业绩不佳则暴跌」，要求在每日清单对临近业绩预告的股票
+# 特别备注、便于谨慎对待。数据源：东方财富业绩预告报表 RPT_PUBLIC_OP_PREDICT。
+# 注意：历史回放显示大亏样本多由突发利空驱动、未必有预告；本功能作为「风险提示」而非「过滤条件」，
+#       不改变选股与评分，仅在推送清单加备注列。
+FORECAST_FILE = "领湃_业绩预告缓存.json"
+_FORECAST_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
+# 负面预告类型关键词：出现这些即视为业绩利空、需要谨慎
+_BAD_FORECAST_KW = ("预亏", "首亏", "续亏", "预减", "略减", "减亏", "不确定")
+
+
+def refresh_forecast(year=None, force=False):
+    """全量拉取当年业绩预告并缓存到 state。返回 (记录数, 是否刷新成功)。
+    当日已刷新则跳过（除非 force）；网络失败时保留旧缓存不影响主流程。"""
+    ensure_state()
+    year = year or datetime.datetime.now(BJT).year
+    cache = state_path(FORECAST_FILE)
+    today = today_str()
+    if not force and os.path.exists(cache):
+        try:
+            old = json.load(open(cache, encoding="utf-8"))
+            if old.get("refreshed") == today and old.get("year") == year:
+                return len(old.get("rows", [])), False
+        except Exception:
+            pass
+    import urllib.parse
+    rows, page, pages, size = [], 1, 1, 500
+    flt = "(NOTICE_DATE>='%d-01-01')(NOTICE_DATE<='%d-12-31')" % (year, year)
+    while page <= pages:
+        q = urllib.parse.urlencode({
+            "sortColumns": "NOTICE_DATE", "sortTypes": -1,
+            "pageSize": size, "pageNumber": page,
+            "reportName": "RPT_PUBLIC_OP_PREDICT", "columns": "ALL",
+            "source": "WEB", "client": "WEB", "filter": flt,
+        })
+        d = http_json(_FORECAST_URL + "?" + q, retry=2, timeout=20)
+        if not d or not d.get("result"):
+            if page == 1:
+                return 0, False
+            break
+        data = d["result"].get("data") or []
+        for r in data:
+            rows.append({
+                "code": r.get("SECURITY_CODE"),
+                "notice": (r.get("NOTICE_DATE") or "")[:10],
+                "report": (r.get("REPORTDATE") or "")[:10],
+                "type": r.get("FORECASTTYPE"),
+                "increase": r.get("INCREASEJZ"),
+                "content": r.get("FORECASTCONTENT"),
+            })
+        pages = d["result"].get("pages", 1)
+        page += 1
+        time.sleep(0.1)
+    json.dump({"refreshed": today, "year": year, "rows": rows},
+              open(cache, "w", encoding="utf-8"), ensure_ascii=False)
+    return len(rows), True
+
+
+def load_forecast():
+    """读取业绩预告缓存，返回按 code 分组的 dict；无缓存返回空 dict。"""
+    cache = state_path(FORECAST_FILE)
+    if not os.path.exists(cache):
+        return {}
+    try:
+        d = json.load(open(cache, encoding="utf-8"))
+    except Exception:
+        return {}
+    by_code = {}
+    for r in d.get("rows", []):
+        c = r.get("code")
+        if c:
+            by_code.setdefault(c, []).append(r)
+    return by_code
+
+
+def _day_diff(d1, d2):
+    """d1 - d2 的自然日差；d 格式 YYYY-MM-DD。解析失败返回 999。"""
+    try:
+        a = datetime.datetime.strptime(d1, "%Y-%m-%d").date()
+        b = datetime.datetime.strptime(d2, "%Y-%m-%d").date()
+        return (a - b).days
+    except Exception:
+        return 999
+
+
+def forecast_risk(code, signal_date, by_code=None, ahead=3):
+    """判断某股在提示日 [T, T+ahead] 窗口是否有业绩预告，给出风险备注。
+    返回 dict: {level, text, notice, type, increase}。
+      level='bad'   负面预告（预亏/预减/首亏…）→ 红色谨慎
+      level='good'  正面预告（预增/略增…）    → 绿色
+      level='none'  窗口内无预告 → 空文本
+    说明：预告公告日多为盘后公布，此处按「公告日在提示日当天至其后 ahead 日」匹配，
+    便于在提示日即提示「近日将披露业绩预告」的风险。"""
+    by_code = by_code if by_code is not None else load_forecast()
+    items = by_code.get(str(code).zfill(6), [])
+    hit = None
+    for r in items:
+        dd = _day_diff(r.get("notice", ""), signal_date)
+        if 0 <= dd <= ahead:
+            if hit is None or r["notice"] < hit["notice"]:
+                hit = r
+    if hit is None:
+        return {"level": "none", "text": "", "notice": "", "type": "", "increase": None}
+    typ = hit.get("type") or ""
+    inc = hit.get("increase")
+    is_bad = any(k in typ for k in _BAD_FORECAST_KW)
+    level = "bad" if is_bad else "good"
+    inc_s = ("%+d%%" % round(inc)) if isinstance(inc, (int, float)) else "--"
+    if is_bad:
+        text = '业绩预告[%s] 净利%s (公告日%s) 谨慎' % (typ, inc_s, hit["notice"][5:])
+    else:
+        text = '业绩预告[%s] 净利%s (公告日%s)' % (typ, inc_s, hit["notice"][5:])
+    return {"level": level, "text": text, "notice": hit["notice"],
+            "type": typ, "increase": inc}

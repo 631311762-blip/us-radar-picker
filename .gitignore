@@ -45,3 +45,6 @@ powei/.scan_cache/
 powei/stocklist.json
 powei/扫描结果_*.md
 powei/scan_results_*.csv
+
+# 业绩预告缓存（每日联网刷新，可重建，不入库）
+lingpei/lingpei/state/领湃_业绩预告缓存.json
