@@ -208,20 +208,16 @@ def main():
     except Exception as e:
         print(f"[yida] 回溯结算跳过：{e}", flush=True)
 
-    # 推送（复用统一通道，含 PushPlus→Server酱 兜底）
+    # 推送（精简版：标题带数量，正文每票一行，只留核心字段）
     if not args.no_push and picks:
-        title = f"怡达模型 · {datetime.datetime.now(kit.cm.BJT).strftime('%m-%d')} 选股提示"
-        lines = [f"## 📈 怡达模型 · 每日选股提示", "",
-                 f"> 样本池 {len(universe)} 只 / 信号 **{len(picks)}** 个", "",
-                 "| 代码 | 名称 | 提示日 | 买入价 | 阴跌 | 放量 | CV | 5日收益 |",
-                 "| --- | --- | --- | --- | --- | --- | --- | --- |"]
+        today = datetime.datetime.now(kit.cm.BJT).strftime("%m-%d")
+        title = f"怡达 {today} · {len(picks)}只"
+        lines = [f"**怡达 {today}** ｜ 存量{len(universe)} 扫出{len(picks)}只", ""]
         for p in picks:
-            ret = f"{p['ret5']}%" if p["ret5"] is not None else "待验证"
-            hit = " ✅" if p["hit"] else ""
-            lines.append(f"| {p['code']} | {p['name']} | {p['signal']} | {p['buy']} | "
-                         f"{p['decline']}% | {p['vol_mult']}x | {p['cv']}% | {ret}{hit} |")
-        lines += ["", "---", "**模型**：阴跌≥30% + 平台放量2~7倍 + CV<20% + 放量第2天提示",
-                  "", "⚠️ 历史统计不构成投资建议，市场有风险。"]
+            ret = f"{p['ret5']:+.1f}%" if p.get("ret5") is not None else "待验证"
+            hit = "✓" if p["hit"] else ""
+            lines.append(f"`{p['code']}` {p['name']} · 买{p['buy']} · 收益{ret}{hit}")
+        lines += ["", "阴跌≥30% 平台放量2~7倍 D2提示", "⚠️非投资建议"]
         ok, msg = common_notify.send_alert(title, "\n".join(lines))
         print(f"[yida] 推送：{'成功' if ok else '失败'} {msg}", flush=True)
 
