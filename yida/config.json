@@ -10,6 +10,9 @@
   "hold_days": 5,
   "target": 0.03,
   "recent_window": 15,
+  "exit_break_ratio": 0.5,
+  "shrink_ratio": 0.5,
+  "_exit_rule": "提示日后关注5天：①收盘价跌破D1实体中点(开+收)/2 或 ②成交量<放量四天均量×0.5 即停止关注；触发当日按最高价结算",
   "_backtest_2026": {
     "4x_lower": {"signals": 22, "acc5": "90.9%", "mean5": "12.4%"},
     "2x_lower": {"signals": 396, "acc5": "88.1%", "mean5": "10.7%"}
