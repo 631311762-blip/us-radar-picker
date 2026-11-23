@@ -2,14 +2,14 @@
   "ok": false,
   "error": "数据源异常，样本偏小",
   "meta": {
-    "date": "2026-11-20",
+    "date": "2026-11-23",
     "total": 257,
     "cyb_kcb": 257,
     "cyb": 257,
     "kcb": 0,
     "bj": 0,
-    "page_fails": 127,
+    "page_fails": 197,
     "bj_excluded": 0
   },
-  "date": "2026-11-20"
+  "date": "2026-11-23"
 }
