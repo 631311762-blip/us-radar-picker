@@ -122,10 +122,10 @@
     },
     {
       "date": "2026-11-23",
-      "field": "robustness.symbol_watchdog",
-      "from": "逐只 kline() 无超时(兜底 akshare/缓存卡住即拖死整条流水线)",
-      "to": "signal.SIGALRM 看门狗: 单只20s/样本池90s硬超时,超时跳过并计数",
-      "reason": "11-20 与 11-23 两次统一流水线卡死(2h+/1h20m)均因单只行情源无响应且逐只调用无超时;诊断确认选股口径与detect()/score()/pass_filter()判定逻辑零改动,仅数据获取层加超时保护。环境变量 LS2_SYMBOL_TIMEOUT / LS2_UNIVERSE_TIMEOUT 可调;非Unix主线程自动降级无超时,功能不受影响。",
+      "field": "robustness.watchdog_and_kline_index",
+      "from": "逐只kline/样本池/循环无超时;load_many逐只扫描全部分片O(n²)",
+      "to": "三层看门狗(单只20s/样本池90s/循环300s)+market_store全量索引缓存(O(1)单只查询)",
+      "reason": "11-20、11-23多次流水线卡死(2h+/20min+)。两层根因：①逐只取数无超时；②load_bars→load_many([code])每次遍历~400个gzip分片,4570只=180万次解压。修复后选股从20+分钟降到~1分钟,所有共用前置层的模型一并受益。选股口径/detect/score/pass_filter零改动。",
       "backtest": "无选股口径变更,不产生回测差异;新增日志字段取数超时跳过N与stats.timeout_skip供云端核验覆盖率。"
     }
   ]
