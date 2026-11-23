@@ -166,6 +166,103 @@ def detect(bars, cfg, code=""):
     return None
 
 
+def _has_history(ctx):
+    """台账里是否已有历史推荐批次"""
+    try:
+        import glob, os
+        return len(glob.glob(os.path.join(ctx.reco_dir, "*.json"))) > 0
+    except Exception:
+        return False
+
+
+def _push_two_section(ctx, picks, universe, cfg):
+    """两段式推送：
+    第一段 = 本次提示日新票（picks）
+    第二段 = 台账中历史入选票，用共享K线跟踪到今日（收益/退出状态）
+    """
+    import glob, os
+    today = datetime.datetime.now(kit.cm.BJT).strftime("%m-%d")
+    sig_date = picks[0].get("signal", today) if picks else today
+    sig_mmdd = sig_date[5:] if len(sig_date) >= 10 else today
+
+    lines = [f"**怡达 {sig_mmdd}** ｜ 样本{len(universe)} 新提示{len(picks)}只", ""]
+
+    # ---- 第一段：本次提示日新票 ----
+    lines.append(f"【今日提示 {sig_mmdd}·{len(picks)}只】")
+    if not picks:
+        lines.append("今日无新信号")
+    for p in sorted(picks, key=lambda x: -float(x.get("vol_mult") or 0)):
+        ret = f"{p['ret5']:+.1f}%" if p.get("ret5") is not None else "待验证"
+        hit = "✓" if p.get("hit") else ""
+        lu = "涨停" if p.get("d1_limit_up") else ""
+        lines.append(f"`{p['code']}` {p['name']} 买{p['buy']} {ret}{hit} {lu}".rstrip())
+
+    # ---- 第二段：历史入选跟踪到今日 ----
+    lines.append("")
+    lines.append("【历史入选·跟踪到今日】")
+    hist = []
+    try:
+        files = sorted(glob.glob(os.path.join(ctx.reco_dir, "*.json")))
+        # 排除本日，取最近8个批次
+        files = [f for f in files if os.path.basename(f)[:10] < ctx.today][-8:]
+        for f in files:
+            d = kit._read_json(f)
+            if not d:
+                continue
+            rec_date = d.get("date", "")
+            for p in d.get("picks", []):
+                code = str(p.get("code", "")).zfill(6)
+                base = p.get("close")
+                name = p.get("name", "")
+                raw = p.get("raw", {})
+                if not code or base is None:
+                    continue
+                bars = kit.cm.load_kline(code, offline=True)
+                if not bars:
+                    continue
+                dates = [str(b["date"]) for b in bars]
+                # 推荐日之后的K线
+                fwd_idx = [k for k, dt in enumerate(dates) if dt > rec_date]
+                if not fwd_idx:
+                    continue
+                k0 = fwd_idx[0]
+                # 跟踪最多5日：最高价收益 + 退出状态
+                hold = min(cfg["hold_days"], len(bars) - k0)
+                seg = bars[k0:k0 + hold]
+                maxp = max(float(b["high"]) for b in seg)
+                ret = (maxp / float(base) - 1) * 100
+                # 退出判定：用 raw 里的 break_line/shrink_line
+                exit_tag = "持有"
+                bl = raw.get("break_line")
+                sl = raw.get("shrink_line")
+                if bl is not None and any(float(b["close"]) < float(bl) for b in seg):
+                    exit_tag = "破位"
+                elif sl is not None and any(float(b["volume"]) < float(sl) for b in seg):
+                    exit_tag = "缩量"
+                hist.append((rec_date, code, name, ret, exit_tag))
+    except Exception as e:
+        print(f"[yida] 历史跟踪读取跳过：{e}", flush=True)
+
+    if not hist:
+        lines.append("暂无历史台账（投产后累积）")
+    else:
+        # 按日期倒序，每个批次最多列3只，控制篇幅
+        hist.sort(key=lambda x: x[0], reverse=True)
+        last_date, per_date = None, 0
+        for rec_date, code, name, ret, exit_tag in hist:
+            if rec_date != last_date:
+                last_date, per_date = rec_date, 0
+            if per_date >= 3:
+                continue
+            per_date += 1
+            flag = "✓" if ret >= cfg["target"] * 100 else ""
+            lines.append(f"{rec_date[5:]} `{code}` {name} {ret:+.1f}%{flag} {exit_tag}")
+
+    lines += ["", "阴跌≥30% 平台放量2~7倍 D2提示", "⚠️非投资建议"]
+    title = f"怡达 {sig_mmdd} · 提示{len(picks)}只"
+    return common_notify.send_alert(title, "\n".join(lines))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-push", action="store_true", help="只选股落台账，不推送")
@@ -208,17 +305,9 @@ def main():
     except Exception as e:
         print(f"[yida] 回溯结算跳过：{e}", flush=True)
 
-    # 推送（精简版：标题带数量，正文每票一行，只留核心字段）
-    if not args.no_push and picks:
-        today = datetime.datetime.now(kit.cm.BJT).strftime("%m-%d")
-        title = f"怡达 {today} · {len(picks)}只"
-        lines = [f"**怡达 {today}** ｜ 存量{len(universe)} 扫出{len(picks)}只", ""]
-        for p in picks:
-            ret = f"{p['ret5']:+.1f}%" if p.get("ret5") is not None else "待验证"
-            hit = "✓" if p["hit"] else ""
-            lines.append(f"`{p['code']}` {p['name']} · 买{p['buy']} · 收益{ret}{hit}")
-        lines += ["", "阴跌≥30% 平台放量2~7倍 D2提示", "⚠️非投资建议"]
-        ok, msg = common_notify.send_alert(title, "\n".join(lines))
+    # 推送（两段式：第一段=本次提示日新票；第二段=历史入选跟踪到今日）
+    if not args.no_push and (picks or _has_history(ctx)):
+        ok, msg = _push_two_section(ctx, picks, universe, cfg)
         print(f"[yida] 推送：{'成功' if ok else '失败'} {msg}", flush=True)
 
 
