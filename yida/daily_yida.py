@@ -13,6 +13,10 @@
        豁免D1倍数，其余D2~D4仍严格2~7倍（2026回测新增17个信号，命中率100%）
   ③ 量能平稳：四天量能变异系数 CV < 20%（排除逐日爆量）
   ④ 提示日 = 放量第2天(D2)，以 D2 收盘价买入
+     ★形态过滤(v4, 2026-11-23)：
+       - D1必须放量长阳：阳线且涨幅>5%（排除弱启动）
+       - D2量价：量不得低于D1一半；若D2放量(≥D1量)则必须收阳上涨，缩量则允许回调
+         （放量滞涨=派发否决，缩量回调=洗盘保留）
   ⑤ 退出机制：提示日后关注5天，任一触发即停止关注：
      - 破位：收盘价 < D1实体中点(开+收)/2
      - 缩量：成交量 < 放量四天均量 × 0.5
@@ -120,9 +124,20 @@ def detect(bars, cfg, code=""):
         # D1前一日不得已放量（确保D1是启动首日）
         if v[i - 1] / b > 2.5:
             continue
+        # ★新规1：D1必须是放量长阳（阳线且涨幅>5%，阴线/涨幅不足→否决）
+        d1_open_p = float(bars[i]["open"])
+        d1_chg = c[i] / prev - 1
+        if not (c[i] > d1_open_p and d1_chg > cfg.get("d1_min_chg", 0.05)):
+            continue
         # ④ 提示日 D2（第2根放量日）
         j = i + sig_day - 1
         if j >= n:
+            continue
+        # ★新规2：提示日D2量价 —— 量能不得低于D1的一半；若D2放量(≥D1量)则必须收阳上涨，
+        #   缩量则允许回调（怡达D2缩量阴线回调属洗盘保留；中贝/利和兴D2放量却跌=派发→否决）
+        if v[j] < v[i] * cfg.get("d2_min_vol_ratio", 0.5):
+            continue
+        if v[j] >= v[i] and not (c[j] > float(bars[j]["open"]) and c[j] > c[j - 1]):
             continue
         buy = c[j]
         # ⑤ 退出机制：第一根放量K线实体中点（破位线）
@@ -158,6 +173,8 @@ def detect(bars, cfg, code=""):
             code=str(bars[j]).zfill(6) if False else "",  # 占位，主程序填 code
             d1=dates[i], signal=dates[j],
             buy=round(float(buy), 2),
+            d1_chg=round(float(d1_chg) * 100, 1),
+            d2_vol_ratio=round(float(v[j] / v[i]), 2),
             decline=round(float(prev / peak[i] - 1) * 100, 1),
             vol_mult=round(float(np.mean(ratios)), 2),
             cv=round(float(cv) * 100, 1),
