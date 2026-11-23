@@ -119,6 +119,14 @@
       "to": "enabled=true (PushPlus + Server酱兜底, 空仓也通知)",
       "reason": "补齐微信推送通道：此前 low_shadow2 是仓库 8 个模型中唯一没有推送代码的，只写 common/state/recommendations/ 台账，微信永远收不到。用户 2026-11-16 反馈「今天没推送至微信么，没收到」后确认落地。",
       "backtest": "无选股口径变更；detect()/vol_score()/score()/pass_filter() 逐行未改，推送层独立附加于 main() 末尾并全吞异常。"
+    },
+    {
+      "date": "2026-11-23",
+      "field": "robustness.symbol_watchdog",
+      "from": "逐只 kline() 无超时(兜底 akshare/缓存卡住即拖死整条流水线)",
+      "to": "signal.SIGALRM 看门狗: 单只20s/样本池90s硬超时,超时跳过并计数",
+      "reason": "11-20 与 11-23 两次统一流水线卡死(2h+/1h20m)均因单只行情源无响应且逐只调用无超时;诊断确认选股口径与detect()/score()/pass_filter()判定逻辑零改动,仅数据获取层加超时保护。环境变量 LS2_SYMBOL_TIMEOUT / LS2_UNIVERSE_TIMEOUT 可调;非Unix主线程自动降级无超时,功能不受影响。",
+      "backtest": "无选股口径变更,不产生回测差异;新增日志字段取数超时跳过N与stats.timeout_skip供云端核验覆盖率。"
     }
   ]
 }
