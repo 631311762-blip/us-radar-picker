@@ -544,3 +544,120 @@ def forecast_risk(code, signal_date, by_code=None, ahead=3):
         text = '业绩预告[%s] 净利%s (公告日%s)' % (typ, inc_s, hit["notice"][5:])
     return {"level": level, "text": text, "notice": hit["notice"],
             "type": typ, "increase": inc}
+
+
+# ------------------------------------------------------------------ 正式财报披露风险（2026-11-23 用户补充）
+# 用户指出：即便没有「业绩预告」，正式财报（一季报/中报/三季报/年报）披露同样会引发暴跌。
+# 核对 TOP5 大亏：艾比森 T+1 披露一季报、金凯生科 T+1 披露年报、彩客科技 T 日披露三季报。
+# 全样本：T~T+1 有财报的大亏率 15.4% vs 无财报 1.0%（15倍）。数据源 RPT_LICO_FN_CPD。
+REPORT_FILE = "领湃_财报披露缓存.json"
+_REPORT_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
+
+
+def refresh_reports(year=None, force=False):
+    """全量拉取当年披露的正式财报(披露日+净利同比)并缓存。返回 (条数, 是否刷新成功)。"""
+    ensure_state()
+    year = year or datetime.datetime.now(BJT).year
+    cache = state_path(REPORT_FILE)
+    today = today_str()
+    if not force and os.path.exists(cache):
+        try:
+            old = json.load(open(cache, encoding="utf-8"))
+            if old.get("refreshed") == today and old.get("year") == year:
+                return len(old.get("rows", [])), False
+        except Exception:
+            pass
+    import urllib.parse
+    rows, page, pages, size = [], 1, 1, 500
+    flt = "(NOTICE_DATE>='%d-01-01')(NOTICE_DATE<='%d-12-31')" % (year, year)
+    while page <= pages:
+        q = urllib.parse.urlencode({
+            "sortColumns": "NOTICE_DATE", "sortTypes": -1,
+            "pageSize": size, "pageNumber": page,
+            "reportName": "RPT_LICO_FN_CPD", "columns": "ALL",
+            "source": "WEB", "client": "WEB", "filter": flt,
+        })
+        d = http_json(_REPORT_URL + "?" + q, retry=2, timeout=20)
+        if not d or not d.get("result"):
+            if page == 1:
+                return 0, False
+            break
+        for r in d["result"].get("data") or []:
+            rows.append({
+                "code": r.get("SECURITY_CODE"),
+                "notice": (r.get("NOTICE_DATE") or "")[:10],
+                "report": (r.get("REPORTDATE") or "")[:10],
+                "period": r.get("DATEMMDD"),
+                "sjl": r.get("SJLTZ"),   # 净利润同比%
+                "ystz": r.get("YSTZ"),   # 营收同比%
+            })
+        pages = d["result"].get("pages", 1)
+        page += 1
+        time.sleep(0.08)
+    json.dump({"refreshed": today, "year": year, "rows": rows},
+              open(cache, "w", encoding="utf-8"), ensure_ascii=False)
+    return len(rows), True
+
+
+def load_reports():
+    cache = state_path(REPORT_FILE)
+    if not os.path.exists(cache):
+        return {}
+    try:
+        d = json.load(open(cache, encoding="utf-8"))
+    except Exception:
+        return {}
+    by_code = {}
+    for r in d.get("rows", []):
+        c = r.get("code")
+        if c:
+            by_code.setdefault(c, []).append(r)
+    return by_code
+
+
+def report_risk(code, signal_date, by_code=None, ahead=3):
+    """判断某股在提示日 [T, T+ahead] 是否有正式财报披露，返回风险备注。
+    level: 'bad' 净利同比<0（尤其<-50%）红色；'good' 净利同比>=30% 绿色；'flat' 小幅/未知；'none' 无。"""
+    by_code = by_code if by_code is not None else load_reports()
+    items = by_code.get(str(code).zfill(6), [])
+    hit = None
+    for r in items:
+        dd = _day_diff(r.get("notice", ""), signal_date)
+        if 0 <= dd <= ahead:
+            if hit is None or (r["notice"] < hit["notice"]):
+                hit = r
+    if hit is None:
+        return {"level": "none", "text": "", "notice": "", "sjl": None, "period": ""}
+    sjl = hit.get("sjl")
+    period = hit.get("period") or "财报"
+    try:
+        sjlf = float(sjl)
+    except (TypeError, ValueError):
+        sjlf = None
+    tag = "T日" if hit["notice"] == signal_date else ("T+%d" % _day_diff(hit["notice"], signal_date))
+    if sjlf is not None and sjlf < -50:
+        level = "bad"
+        text = "正式财报[%s] 净利同比%+.0f%% (%s披露) 谨慎" % (period, sjlf, tag)
+    elif sjlf is not None and sjlf < 0:
+        level = "bad"
+        text = "正式财报[%s] 净利同比%+.0f%% (%s披露) 谨慎" % (period, sjlf, tag)
+    elif sjlf is not None and sjlf >= 30:
+        level = "good"
+        text = "正式财报[%s] 净利同比%+.0f%% (%s披露)" % (period, sjlf, tag)
+    else:
+        level = "flat"
+        sjs = ("%+.0f%%" % sjlf) if sjlf is not None else "--"
+        text = "正式财报[%s] 净利同比%s (%s披露)" % (period, sjs, tag)
+    return {"level": level, "text": text, "notice": hit["notice"], "sjl": sjl, "period": period}
+
+
+def event_risk(code, signal_date, fc_by_code=None, rp_by_code=None, ahead=3):
+    """统一事件风险：正式财报优先，其次业绩预告，都没有则 none。
+    返回 {'level','text','src'}；src='report'|'forecast'|''。"""
+    rp = report_risk(code, signal_date, rp_by_code, ahead=ahead)
+    if rp["level"] != "none":
+        return {"level": rp["level"], "text": rp["text"], "src": "report"}
+    fc = forecast_risk(code, signal_date, fc_by_code, ahead=ahead)
+    if fc["level"] != "none":
+        return {"level": fc["level"], "text": fc["text"], "src": "forecast"}
+    return {"level": "none", "text": "", "src": ""}

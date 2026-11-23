@@ -85,14 +85,20 @@ def main():
     lixin = tb.load_lixin_exclude()
     print("[立信排除集] %d 只" % len(lixin))
 
-    # 业绩预告风险备注（2026-11-23 用户要求）：刷新当日缓存，失败时用旧缓存不影响主流程
+    # 财报/预告事件风险备注（2026-11-23 用户要求）：刷新当日缓存，失败时用旧缓存不影响主流程
     try:
         fc_n, fc_new = tb.refresh_forecast(year=int(today[:4]))
         fc_by_code = tb.load_forecast()
-        print("[业绩预告] 缓存 %d 条%s" % (fc_n, "（已刷新）" if fc_new else "（当日已刷新/沿用）"))
     except Exception as _e:
         fc_by_code = {}
-        print("[业绩预告] 取数失败，备注列留空：%s" % _e)
+        print("[业绩预告] 取数失败：%s" % _e)
+    try:
+        rp_n, rp_new = tb.refresh_reports(year=int(today[:4]))
+        rp_by_code = tb.load_reports()
+        print("[财报/预告] 财报缓存 %d 条、预告缓存 %d 条" % (rp_n, fc_n))
+    except Exception as _e:
+        rp_by_code = {}
+        print("[财报] 取数失败：%s" % _e)
 
     universe = tb.get_universe()
     print("[股票池] 共 %d 只" % len(universe))
@@ -139,17 +145,23 @@ def main():
     added, total = tb.track_append(base_date, hits)
     print("[跟踪台账] 新增 %d 只，累计 %d 只待结算" % (added, total))
 
-    # 推送（2026-11-23：新增「业绩预告」风险备注列，负面预告红色警示）
+    # 推送（2026-11-23：新增「财报/预告」事件风险备注列，财报披露优先、负面红色警示）
     if top:
-        def _fc_cell(h):
+        _risks = {}
+        for h in top:
             try:
-                fk = tb.forecast_risk(h["code"], today, fc_by_code, ahead=3)
+                _risks[h["code"]] = tb.event_risk(h["code"], today, fc_by_code, rp_by_code, ahead=3)
             except Exception:
-                fk = {"level": "none", "text": ""}
+                _risks[h["code"]] = {"level": "none", "text": ""}
+
+        def _fc_cell(h):
+            fk = _risks.get(h["code"], {"level": "none", "text": ""})
             if fk["level"] == "bad":
                 return '<td style="background:#fdecea;color:#c0392b;font-weight:700">%s</td>' % fk["text"]
             if fk["level"] == "good":
                 return '<td style="background:#eaf7ee;color:#1e8449">%s</td>' % fk["text"]
+            if fk["level"] == "flat":
+                return '<td style="background:#fff8e1;color:#8a6d1f">%s</td>' % fk["text"]
             return "<td>--</td>"
 
         rows = "".join(
@@ -157,11 +169,16 @@ def main():
             % (i + 1, h["name"], h["code"], h["score"], h["near_ma"], h["gap_days"],
                h["drop_from_peak"] * 100, _fc_cell(h))
             for i, h in enumerate(top))
-        n_bad = sum(1 for h in top if tb.forecast_risk(h["code"], today, fc_by_code, ahead=3)["level"] == "bad")
-        warn = ('<p style="color:#c0392b;font-weight:700">⚠ 其中 %d 只近日有负面业绩预告，请谨慎对待</p>' % n_bad) if n_bad else ""
+        n_bad = sum(1 for v in _risks.values() if v["level"] == "bad")
+        n_evt = sum(1 for v in _risks.values() if v["level"] != "none")
+        warn = ""
+        if n_bad:
+            warn += '<p style="color:#c0392b;font-weight:700">⚠ 其中 %d 只近日财报/预告利空，请谨慎对待</p>' % n_bad
+        if n_evt > n_bad:
+            warn += '<p style="color:#8a6d1f">另 %d 只近日有财报/预告披露（含正面/中性），注意波动</p>' % (n_evt - n_bad)
         msg = ("<h3>领湃模型 B_V3.4.1 %s 入选 %d 只</h3>"
                "<table border='1' cellspacing='0' cellpadding='4'>"
-               "<tr><th>序号</th><th>名称</th><th>代码</th><th>评分</th><th>贴线</th><th>间距</th><th>距前高</th><th>业绩预告</th></tr>"
+               "<tr><th>序号</th><th>名称</th><th>代码</th><th>评分</th><th>贴线</th><th>间距</th><th>距前高</th><th>财报/预告</th></tr>"
                "%s</table>%s%s") % (today, len(top), rows, warn, _settle_digest())
         tb.push_once("领湃模型 %s 入选%d只" % (today, len(top)), msg,
                      template="html", kind="signal")
