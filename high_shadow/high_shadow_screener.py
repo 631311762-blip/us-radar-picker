@@ -296,6 +296,7 @@ def build_markdown(date_s, picks, stats=None, replay=False, top=20):
         L += ["今日空仓（0 只）。", ""]
     if replay:
         L.append("（补发）")
+    L.append("📌 模型原型：以上选股基于光线传媒、华策影视、金逸影视、通合科技（11-09标杆），提示日为高位长上影洗盘当日，基本特征：高位(≥0.88×60日高点)+长上影洗盘+量比0.85~2.7的看涨观察得出。")
     L.append("模型信号，非投资建议。")
     return "\n".join(L)
 
