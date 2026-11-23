@@ -99,6 +99,8 @@ jobs:
           # 2026-11-20 提速：样本池快照优先(跳过东财列表退避)、立信F10复用、
           # 当日行情批量快照写入。凯众不复权预填并发 4→16（原先 4306 只约8分钟）。
           KZ_WORKERS: ${{ vars.KZ_WORKERS || '16' }}
+          # 临近定期报告/业绩预告的推送标注窗口（自然日，默认15天）
+          REPORT_RISK_DAYS: ${{ vars.REPORT_RISK_DAYS || '15' }}
         run: |
           set -o pipefail
           ARGS=""
@@ -193,6 +195,8 @@ jobs:
           # 2026-11-20 曾设 300s 误杀慢模型 + subprocess.run 只杀 shell 导致管道挂死 2h19m，已修。
           MODEL_TIMEOUT: ${{ vars.MODEL_TIMEOUT || '1500' }}
           MODEL_RETRIES: '1'
+          # 与前置层保持一致：推送时给 15 天内临近财报/预告的标的加醒目标识
+          REPORT_RISK_DAYS: ${{ vars.REPORT_RISK_DAYS || '15' }}
         run: |
           ONLY="${{ github.event.inputs.only_model }}"
           if [ -n "$ONLY" ]; then
