@@ -301,7 +301,7 @@ DEFAULT_PARAMS = {
     "upper_amp_min": 0.045,         # 上影/开盘 >= 4.5%（放宽：让凌志软件0.0488类低位票纳入）
     "upper_to_body_min": 2.0,       # 上影/实体 >= 2 倍
     "body_abs_max_pct": 0.07,       # 当日涨跌幅绝对值 <= 7%
-    "vol_ratio_min": 1.3,           # 量比(对前5日均量) >= 1.3（2026-11-24 由1.5放宽）
+    "vol_ratio_min": 1.5,           # 量比(对前5日均量) >= 1.5
     "low_pos_max_pct": 0.15,        # 距20日低点涨幅 <= 15%
     "below_ma20": True,             # 收盘必须低于 MA20（硬性）
     "min_amount": 5e7,              # 当日成交额 >= 5000万（f57 真实元）
@@ -1114,6 +1114,7 @@ def run_review(params, top_n=None):
     else:
         L.append("- 近期胜率：暂无 ｜ 参数：维持当前参数")
     L.append("- 全量清单：%s ｜ 归档：%s" % (full_json or "写入失败", archive_path))
+    L.append("📌 模型原型：以上选股基于阳普医疗、福昕软件（低位上影严格版），提示日为形态确认当日，基本特征：收盘处中长期低位+长上影试盘+放量打分，环境过滤后选股得出。")
     brief = "\n".join(L)
 
     print("\n" + "=" * 56)
