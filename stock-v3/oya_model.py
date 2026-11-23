@@ -94,6 +94,86 @@ def yd_prior(b, idx, back=YD_PRIOR_BACK):
     return None, None
 
 
+# ── 低位上影线模型共振备注（2026-11-24 用户要求）──────────────────────
+# 用途：仅作软标注/推文备注，绝不作为奥雅准入闸门、不改排序。
+# 口径逐字对齐 low_shadow/low_shadow_screener.py 的 8 道硬条件（原型 SHADOW）。
+# 缓存字段映射：low_shadow(close/vol) ↔ oya(last/volume)；成交额按 vol(手)*100*close 近似。
+# 参数运行时从 low_shadow/params.json 读取（该模型 2026-11 调过量比 1.5→1.3），避免硬编码漂移。
+LS_DEFAULT = dict(upper_amp_min=0.045, upper_to_body_min=2.0, body_abs_max_pct=0.07,
+                  vol_ratio_min=1.3, low_pos_max_pct=0.15, below_ma20=True,
+                  min_amount=5e7, comp_shadow_min=0.06,
+                  comp_upper_to_body_min=3.5, comp_low_pos_max_pct=0.05)
+
+
+def _load_ls_params():
+    """读取低位上影模型生效参数（与生产 params.json 同步），缺文件则用默认值。"""
+    p = dict(LS_DEFAULT)
+    f = os.path.join(os.path.dirname(HERE), "low_shadow", "params.json")
+    try:
+        if os.path.exists(f):
+            disk = json.load(open(f, encoding="utf-8"))
+            for k in p:
+                if k in disk:
+                    p[k] = disk[k]
+    except Exception:
+        pass
+    return p
+
+
+LS_PARAMS = _load_ls_params()
+LS_PRIOR_BACK = 10   # 突破日前回溯窗口(交易日)，用户指定"前10日"
+
+
+def low_shadow_hit(b, j, P=LS_PARAMS):
+    """b[j] 是否为低位上影线模型信号（8 道硬条件，对齐 low_shadow 原型）→ bool"""
+    if j < 21:
+        return False
+    o = b[j]["open"]; h = b[j]["high"]; c = b[j]["last"]; v = b[j]["volume"]
+    if o <= 0 or h <= 0:
+        return False
+    body = abs(c - o)
+    upper = h - max(o, c)
+    upper_amp = upper / o
+    upper_to_body = upper / body if body > 0 else 99.0
+    win = b[j - 19:j + 1]
+    low20 = min(x["low"] for x in win)
+    ma20 = sum(x["last"] for x in win) / 20.0
+    prev5 = b[j - 5:j]
+    vma5 = sum(x["volume"] for x in prev5) / 5.0 if prev5 else v
+    vr = v / vma5 if vma5 > 0 else 0
+    pos = (c - low20) / low20 if low20 > 0 else 99.0
+    amount = b[j].get("amount") or (v * 100.0 * c)   # 手→股→元
+    chg = abs((c / b[j - 1]["last"] - 1) * 100) if j > 0 and b[j - 1]["last"] > 0 else 0
+    main = upper_amp >= P["upper_amp_min"]
+    comp = (upper_amp >= P["comp_shadow_min"]
+            and upper_to_body >= P["comp_upper_to_body_min"])
+    if not (main or comp):
+        return False
+    if upper_to_body < P["upper_to_body_min"]:
+        return False
+    if vr < P["vol_ratio_min"]:
+        return False
+    pos_limit = P["comp_low_pos_max_pct"] if (comp and not main) else P["low_pos_max_pct"]
+    if pos > pos_limit:
+        return False
+    if amount < P["min_amount"]:
+        return False
+    if chg > P["body_abs_max_pct"] * 100:
+        return False
+    if P["below_ma20"] and c >= ma20:
+        return False
+    return True
+
+
+def low_shadow_prior(b, idx, back=LS_PRIOR_BACK):
+    """突破日前 back 日内最近一次低位上影线信号 → (date, gap) 或 (None, None)"""
+    lo = max(21, idx - back)
+    for j in range(idx - 1, lo - 1, -1):
+        if low_shadow_hit(b, j):
+            return b[j]["date"], idx - j
+    return None, None
+
+
 def find_probe(b, i, ma, p):
     """在 i 之前 [5,45] 交易日找最近的放量冲高回落试盘日 → (idx, high, vol, vr)"""
     start = max(p["probe_look_back"], i - p["probe_look_fwd"])
@@ -304,6 +384,11 @@ def build():
             r["oya_yd_prior"] = 1 if yd_date else 0
             r["oya_yd_date"] = yd_date
             r["oya_yd_gap"] = yd_gap
+            # 低位上影共振备注：突破日前10日内是否出现低位上影线模型信号（仅备注）
+            ls_date, ls_gap = low_shadow_prior(b, idx)
+            r["oya_low_shadow"] = 1 if ls_date else 0
+            r["oya_ls_date"] = ls_date
+            r["oya_ls_gap"] = ls_gap
             r["_b"] = b; r["_idx"] = idx
             hits.append(r)
     print(f"奥雅形态命中 {len(hits)} 只（基准日 {base_date}），"
@@ -406,7 +491,10 @@ def record(r):
                        oya_stop=x.get("oya_stop"),
                        oya_yd_prior=x.get("oya_yd_prior"),
                        oya_yd_date=x.get("oya_yd_date"),
-                       oya_yd_gap=x.get("oya_yd_gap")))
+                       oya_yd_gap=x.get("oya_yd_gap"),
+                       oya_low_shadow=x.get("oya_low_shadow"),
+                       oya_ls_date=x.get("oya_ls_date"),
+                       oya_ls_gap=x.get("oya_ls_gap")))
     json.dump(db, open(f, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     out = dict(base_date=r["base_date"], universe=r["universe"],
                generated=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -469,12 +557,16 @@ def render_oya_md(r):
         yd = ""
         if x.get("oya_yd_prior"):
             yd = f" ⭐**易点共振**(易点{x['oya_yd_date']}启动·{x['oya_yd_gap']}日后突破)"
+        # 低位上影共振备注（2026-11-24）：提示日前10日内出现低位上影线模型信号
+        ls = ""
+        if x.get("oya_low_shadow"):
+            ls = f" 📍**低位上影共振**({x['oya_ls_date']}·{x['oya_ls_gap']}日前)"
         md.append(
             f"{i}. **{x['name']}**[{bd}] `{x['code']}` 分{x['score']:.0f}｜"
             f"收{x['close']} 当日{x['day_chg']:+.1f}%｜"
             f"试盘{probe} 压力线{x.get('oya_pressure')}(破{x.get('oya_break'):+.0f}%) "
             f"量{x.get('oya_vol_x')}× {'洗盘✓' if x.get('oya_breakdown') else ''}"
-            f"{shrink}{lu}{yd}")
+            f"{shrink}{lu}{yd}{ls}")
     md.append("")
     return md
 
