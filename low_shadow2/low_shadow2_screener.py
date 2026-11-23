@@ -38,6 +38,7 @@ import json
 import os
 import sys
 
+import signal
 import numpy as np
 import pandas as pd
 
@@ -80,6 +81,41 @@ def kline(code, count=None):
         except Exception:
             pass
     return None
+
+
+# ----------------------------------------------------------------------------
+# 逐只取数看门狗（2026-11-23）：防止单只行情源瞬时卡死拖垮整条流水线。
+# 根因：兜底 akshare / 共享缓存读取偶发无响应，旧版逐只调用无超时，
+#       任一只卡住即让整个模型挂起（11-20、11-23 两次事故的元凶）。
+# 方案：每只 kline() 调用套 SIGALRM 硬超时；超时即跳过该只并计数，
+#       保证流水线在有限时间内走完、正常推送。仅 Unix 主线程生效，
+#       非 Unix/非主线程自动降级为无超时（功能不受影响）。
+# ----------------------------------------------------------------------------
+SYMBOL_TIMEOUT = float(os.environ.get("LS2_SYMBOL_TIMEOUT", "20"))  # 单只取数硬超时(秒)
+UNIVERSE_TIMEOUT = float(os.environ.get("LS2_UNIVERSE_TIMEOUT", "90"))  # 样本池取数硬超时(秒)
+_watchdog_on = hasattr(signal, "SIGALRM") and hasattr(signal, "setitimer")
+
+class _KlineTimeout(Exception):
+    pass
+
+def _alarm_raise(signum, frame):
+    raise _KlineTimeout()
+
+def _guarded(fn, timeout, *a, **k):
+    """通用看门狗：在 timeout 秒内执行 fn(*a,**k)，超时抛 _KlineTimeout。"""
+    if not _watchdog_on:
+        return fn(*a, **k)
+    old = signal.signal(signal.SIGALRM, _alarm_raise)
+    signal.setitimer(signal.ITIMER_REAL, timeout)
+    try:
+        return fn(*a, **k)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old)
+
+def kline_guarded(code, count=None):
+    """带硬超时的单只 K 线读取；超时抛 _KlineTimeout 由主循环跳过。"""
+    return _guarded(kline, SYMBOL_TIMEOUT, code, count=count)
 
 
 def _to_df(bars, code):
@@ -374,15 +410,29 @@ def main():
         print("[WARN] 共同前置层未接入(%s)，使用兜底数据源" % e)
         _ad = None
 
-    uni = get_universe()
+    try:
+        uni = _guarded(get_universe, UNIVERSE_TIMEOUT)
+    except _KlineTimeout:
+        print("[FATAL] 样本池取数超时(>%ss)，数据源异常，终止本轮避免空仓误报。" % UNIVERSE_TIMEOUT)
+        return 2
+    except Exception as e:
+        print("[FATAL] 样本池取数失败：%s，终止本轮。" % e)
+        return 2
     target = pd.Timestamp.now().normalize()
-    picks, scanned, kmiss, filtered = [], 0, 0, 0
+    picks, scanned, kmiss, filtered, timeout_skip = [], 0, 0, 0, 0
     for x in uni:
         code = str(x.get("symbol") or x.get("code") or "").zfill(6)
         nm = x.get("name", "")
         if "ST" in nm.upper() or nm.startswith("*"):
             continue
-        bars = kline(code, count=KLINE_COUNT)
+        try:
+            bars = kline_guarded(code, count=KLINE_COUNT)
+        except _KlineTimeout:
+            timeout_skip += 1
+            continue
+        except Exception:
+            kmiss += 1
+            continue
         if not bars or len(bars) < POS["window"] + 2:
             kmiss += 1
             continue
@@ -421,10 +471,12 @@ def main():
     else:
         print("[WARN] 无共同前置层，仅打印不写台账（独立调试模式）")
 
-    print("==== 低位上影模型2 · %s · 样本池%d 有效K线%d K线缺失%d 核心信号%d 过滤剔除%d 候选%d (filter=%s) ===="
-          % (target.strftime("%Y-%m-%d"), len(uni), scanned, kmiss,
+    print("==== 低位上影模型2 · %s · 样本池%d 有效K线%d K线缺失%d 取数超时跳过%d 核心信号%d 过滤剔除%d 候选%d (filter=%s) ===="
+          % (target.strftime("%Y-%m-%d"), len(uni), scanned, kmiss, timeout_skip,
              len(picks) + filtered, filtered, len(picks),
              "on" if FLT.get("enabled", False) else "off"))
+    if timeout_skip > 0:
+        print("[WARN] 本日有 %d 只取数超时被跳过(单只上限%ss)；若占比过高通常是行情源瞬时异常，请复核样本池覆盖率。" % (timeout_skip, SYMBOL_TIMEOUT))
     for i, p in enumerate(picks[:args.top], 1):
         print("%d. %s %s 收%s 评分%s 上影/股价%.2f%% 量比(较上日)%s 60日位置%.1f%%"
               % (i, p["code"], p["name"], p["close"], p["score"],
@@ -435,7 +487,7 @@ def main():
     # ---- 微信推送层（独立附加，异常全吞，绝不影响选股/台账结果）----
     if not args.no_push:
         stats = {"universe": len(uni), "scanned": scanned, "core": len(picks) + filtered,
-                 "filtered": filtered, "picks": len(picks)}
+                 "filtered": filtered, "picks": len(picks), "timeout_skip": timeout_skip}
         try:
             ok, ch = push_report(target.strftime("%Y-%m-%d"), picks[:args.top], stats=stats)
             print("[push] %s channel=%s" % ("成功" if ok else "未送达/已跳过", ch))
