@@ -325,6 +325,8 @@ def build_push(hits, last_date, tracked_n, v3_today, track_lines):
     if v3_today:
         L.append(f"> ★ 今日新出现 V3 确认 {len(v3_today)} 只，已在上方重点标识。")
     L.append(f"> 台账累计入选 {tracked_n} 笔。风险提示：历史回测仅供研究，不构成投资建议；严格按0.5线纪律出局。")
+    L.append("")
+    L.append("📌 模型原型：以上选股基于凯众股份(603037)、仁信新材(301395)，提示日为破位后的反包阳线当日，基本特征：横盘→放量试盘→破位→反包阳线站回支撑得出。")
     return "\n".join(L)
 
 
