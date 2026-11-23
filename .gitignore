@@ -49,3 +49,4 @@ powei/scan_results_*.csv
 # 业绩预告缓存（每日联网刷新，可重建，不入库）
 lingpei/lingpei/state/领湃_业绩预告缓存.json
 lingpei/lingpei/state/领湃_财报披露缓存.json
+low_shadow/state/kl_cache_2026.json
