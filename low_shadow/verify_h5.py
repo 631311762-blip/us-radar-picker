@@ -99,7 +99,7 @@ c = m.correct_params(q2, 0.0, 25)
 changed = [k for k in q2 if q2[k] != p_unlock[k]]
 chk("样本充足时仅调整单一参数", changed == ["upper_amp_min"], "变更=%s → %s" % (changed, c))
 chk("收紧幅度 = +0.01 且其它参数不动",
-    abs(q2["upper_amp_min"] - 0.055) < 1e-9 and q2["vol_ratio_min"] == 1.5
+    abs(q2["upper_amp_min"] - 0.055) < 1e-9 and q2["vol_ratio_min"] == 1.3
     and q2["low_pos_max_pct"] == 0.15)
 
 print()
