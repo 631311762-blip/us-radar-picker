@@ -20,6 +20,12 @@ name: A股模型统一流水线（共同前置层）
 
 on:
   # 正式切换后启用定时：UTC 07:10 = 北京时间 15:10（周一~五，A 股收盘后）。
+  # 2026-11-21 提速分流：
+  #   · 周一~五（10 7 * * 1-5）只跑「日增量」——更新全市场行情 K 线 + 财报日历，
+  #     立信/监管立案/基础快照直接复用上一周六产出的缓存，前置层只留行情一条耗时链路。
+  #   · 周六（0 1 * * 6，北京 09:00）跑「周刷新」——集中全量重扫立信（F10+公告全年）、
+  #     监管立案（滚动一年基线）、重建 base_universe.json；休市无新行情故跳过 K 线，
+  #     下游模型因 trading_day=false 自动跳过。周一~五即用新刷新的信息选股。
   # 已停用 5 个被本流水线取代的独立 A 股 workflow
   #（shanshui/low_shadow/lingpei/kaizhong/yidian），避免重复运行。
   # 美股 us-radar-picker.yml 仍保持独立运行（不同市场，不共享前置层）。
@@ -28,7 +34,8 @@ on:
   # 仅用 API 构造 commit 不会激活定时（GitHub schedule 依赖 push 事件 resync）。
   # 若某日发现未自动触发，先用 `gh` 或 git push 一次本文件即可恢复。
   schedule:
-    - cron: "10 7 * * 1-5"
+    - cron: "10 7 * * 1-5"   # 周一~五 15:10（北京）：日增量（仅行情）
+    - cron: "0 1 * * 6"      # 周六 09:00（北京）：周刷新（立信/监管立案/快照全量）
   workflow_dispatch:
     inputs:
       f10_only:
@@ -49,6 +56,10 @@ on:
         default: "false"
       history_backfill:
         description: "先回填/修复 2024 年起全市场历史分片（长时间任务）"
+        required: false
+        default: "false"
+      weekly_refresh:
+        description: "强制周刷新模式（立信/监管立案/快照全量，跳过K线）；留空则按星期自动判定（周六=周刷新）"
         required: false
         default: "false"
 
@@ -107,6 +118,7 @@ jobs:
           if [ "${{ github.event.inputs.f10_only }}" = "true" ]; then ARGS="$ARGS --f10-only"; fi
           if [ "${{ github.event.inputs.ann_full }}" = "true" ]; then ARGS="$ARGS --ann-full"; fi
           if [ "${{ github.event.inputs.no_kline }}" = "true" ]; then ARGS="$ARGS --no-kline"; fi
+          if [ "${{ github.event.inputs.weekly_refresh }}" = "true" ]; then ARGS="$ARGS --weekly-refresh"; fi
           python3 common/prefilter.py $ARGS
           # 输出 trading_day 供后续步骤判断
           TD=$(python3 -c "import json;print('true' if json.load(open('common/state/meta.json')).get('trading_day') else 'false')")
@@ -137,6 +149,10 @@ jobs:
                   fh.write("degraded=%s\n" % ("true" if degraded else "false"))
           lines = [
               "### 共同前置层运行摘要", "",
+              "- 运行模式：%s（星期%s，trading_day=%s）" % (
+                  "周刷新（立信/监管立案/快照全量，跳过K线）" if m.get("weekly_refresh") else "日增量（仅行情，复用上周排除集）",
+                  "一二三四五六日"[m.get("weekday", 0)] if isinstance(m.get("weekday"), int) and 0 <= m.get("weekday", 0) <= 6 else "-",
+                  m.get("trading_day", "-")),
               "- 样本池：%s 只，来源：%s" % (m.get("universe_count", "-"), m.get("universe_source", "-")),
               "- 立信排除：%s 只；近一年监管立案/涉嫌违法排除：%s 只" % (
                   m.get("lixin_count", "-"), m.get("regulatory_count", "-")),

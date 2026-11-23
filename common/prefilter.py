@@ -36,8 +36,24 @@ prefilter.py —— 共同前置层入口（合并流水线第一步，全局强
     避免下游模型「静默使用残缺缓存」而无人知晓。
   · 告警一律 best-effort：渠道缺失/网络异常只打印日志，绝不影响退出码。
 
+2026-11-21 提速（日行情 / 周刷新分流）：
+  立信否决、监管立案、基础股票池快照（base_universe.json）的全量扫描很慢，
+  每天跑会把前置层拖到 10+ 分钟。改为按星期分流——
+    · 周一~周五（日增量模式）：只刷新全市场行情（K 线）+ 财报日历，
+      立信/监管立案直接复用上一周六产出的排除集，样本池用缓存的
+      base_universe.json 构建（ST/立信/监管剔除仍在内存生效），
+      整体只留行情增量这一条耗时链路。
+    · 周六（周刷新模式）：休市无新行情，跳过 K 线；集中跑立信
+      （--ann-full + --f10-full 全量）、监管立案（滚动一年 full 基线）、
+      并从实时列表重建 base_universe.json / universe.json。下游模型因
+      trading_day=false 自动跳过，本周一~周五即用新刷新的信息选股。
+  模式由星期几自动判定（周六=5），也可用 --weekly-refresh / --no-weekly-refresh
+  显式覆盖；周中发生的 ST/立信/监管变化要等到下周六才会反映（已确认取舍）。
+
 用法：
-  python3 common/prefilter.py                  # 正式（全量）
+  python3 common/prefilter.py                  # 自动按星期判定（周中增量 / 周六周刷新）
+  python3 common/prefilter.py --weekly-refresh  # 强制周刷新（非周六手动补跑）
+  python3 common/prefilter.py --no-weekly-refresh  # 周六也只跑日增量（复用排除集）
   python3 common/prefilter.py --f10-only      # 立信仅查 F10（快，跳过公告扫描）
   python3 common/prefilter.py --no-kline      # 跳过 K 线批量（调试）
   python3 common/prefilter.py --no-lixin     # 跳过立信更新（复用已有排除集）
@@ -86,7 +102,24 @@ def main():
     ap.add_argument("--no-regulatory", action="store_true", help="跳过监管立案排除集更新，复用已有")
     ap.add_argument("--reg-full", action="store_true", help="监管立案扫描滚动一年基线（首次建库）")
     ap.add_argument("--no-report-risk", action="store_true", help="跳过定期报告预约披露日历刷新，复用已有")
+    ap.add_argument("--weekly-refresh", action="store_true",
+                    help="强制周刷新模式：全量重扫立信/监管立案/基础快照（周六自动启用）")
+    ap.add_argument("--no-weekly-refresh", action="store_true",
+                    help="禁用周刷新模式：即使周六也只更新行情，复用上周排除集")
     args = ap.parse_args()
+
+    # ---- 运行模式判定：周六自动周刷新，其余日增量；显式 flag 可覆盖 ----
+    weekday = datetime.datetime.now(BJT).weekday()   # 周一=0 ... 周日=6
+    if args.weekly_refresh:
+        weekly_refresh = True
+    elif args.no_weekly_refresh:
+        weekly_refresh = False
+    else:
+        weekly_refresh = (weekday == 5)               # 周六=5
+    _wd_cn = "一二三四五六日"[weekday]
+    print("[prefilter] 星期%s → 运行模式：%s"
+          % (_wd_cn, "周刷新（立信/监管立案/快照全量，跳过 K 线）"
+             if weekly_refresh else "日增量（仅行情，复用上周排除集）"))
 
     today = datetime.datetime.now(BJT).strftime("%Y-%m-%d")
     print("=" * 64)
@@ -109,7 +142,11 @@ def main():
     is_td, quote_date, _ = cm.check_trading_day()
     meta["quote_date"] = quote_date
     meta["trading_day"] = bool(is_td)
-    if not is_td:
+    meta["weekly_refresh"] = bool(weekly_refresh)
+    meta["weekday"] = weekday
+    # 周刷新模式（周六）休市无新行情，但仍需跑立信/监管立案/快照全量，
+    # 因此绕开「非交易日直接返回」的硬闸门；其余非交易日（周日/节假日）照旧跳过。
+    if not is_td and not weekly_refresh:
         print("[prefilter] 非交易日 / 行情未更新（最新日 %s ≠ 当日 %s），"
               "整体跳过，仅产出 meta。" % (quote_date, today))
         cm.save_meta(meta)
@@ -128,56 +165,74 @@ def main():
                "一旦实时行情接口被阻断，流水线将失去兜底数据源，请尽快重新种入富字段快照。"
                % snap_reason)
 
+    # ---- 模式生效开关：周刷新全量 / 日增量复用（显式 flag 始终优先） ----
+    refresh_base_snapshot = weekly_refresh              # 周六从实时列表重建 base_universe.json
+    do_lixin_full = weekly_refresh and not args.no_lixin      # 周六立信全量：F10 重扫 + 公告全年
+    do_reg_full = weekly_refresh and not args.no_regulatory   # 周六监管立案：滚动一年 full 基线
+    skip_kline = args.no_kline or weekly_refresh        # 周六休市无新行情，跳过 K 线与凯众预填
+
     # ---- 条件②：立信审计排除集（25年报=立信 OR 26续聘/改聘公告改立信） ----
-    if args.no_lixin:
+    # 日增量（周一~五）直接复用上周六产出的排除集，不再扫描；周六周刷新才全量重扫。
+    if args.no_lixin or not weekly_refresh:
         lixin = cm.load_lixin_exclude()
-        print("[prefilter] --no-lixin：复用已有排除集 %d 只" % len(lixin))
+        why = "显式 --no-lixin" if args.no_lixin else "日增量模式（非周六）"
+        print("[prefilter] %s：复用已有立信排除集 %d 只" % (why, len(lixin)))
         meta["lixin_count"] = len(lixin)
+        meta["lixin_reused"] = True
     else:
         import lixin as lx
         base_u = cm.get_universe(verbose=False, apply_lixin=False,
                                  apply_regulatory=False,
-                                 prefer_snapshot=fast_universe)
+                                 prefer_snapshot=(not refresh_base_snapshot))
         codes = [x["code"] for x in base_u]
-        # 【提速】F10 通道逐股扫描约 4 分钟，且命中结果与历史并集合并、永不自动
-        # 释放（见 lixin.build）。日常复用已入库的 f10: 命中即可，语义完全等价；
-        # 仅当排除集尚未建立（首次）或手动 --f10-full 时才全量重扫。
+        # F10 通道逐股扫描约 4 分钟，命中结果与历史并集合并、永不自动释放（见 lixin.build）。
+        # 日常（非周六）本分支不会进入；周刷新强制 F10 全量重扫 + 公告全年基线，
+        # 手动 --f10-only / --f10-full / --ann-full 仍可覆盖。
         has_f10_base = bool(cm.load_lixin_exclude())
-        skip_f10 = (not args.f10_full) and has_f10_base
+        skip_f10 = (not args.f10_full) and has_f10_base and (not do_lixin_full)
         if skip_f10:
             print("[prefilter] 立信 A 通道(F10)复用已入库命中（省约4分钟）；"
                   "全量重扫请加 --f10-full")
+        else:
+            print("[prefilter] 立信 A 通道(F10)全量重扫（周刷新 / --f10-full）")
         _, stats = lx.build(codes, do_ann=not args.f10_only,
-                            ann_mode="full" if args.ann_full else "incremental",
+                            ann_mode="full" if (args.ann_full or do_lixin_full) else "incremental",
                             skip_f10=skip_f10)
         meta["lixin_count"] = stats.get("total_excluded", 0)
         meta["lixin_stats"] = stats
         meta["lixin_f10_skipped"] = bool(skip_f10)
+        meta["lixin_reused"] = False
 
     # ---- 条件⑤：近一年监管立案/涉嫌违法排除集（滚动 365 天自动失效） ----
-    if args.no_regulatory:
+    # 日增量（周一~五）复用上周六产出的排除集；周六周刷新跑滚动一年 full 基线。
+    if args.no_regulatory or not weekly_refresh:
         reg = cm.load_regulatory_exclude()
-        print("[prefilter] --no-regulatory：复用已有排除集 %d 只" % len(reg))
+        why = "显式 --no-regulatory" if args.no_regulatory else "日增量模式（非周六）"
+        print("[prefilter] %s：复用已有监管立案排除集 %d 只" % (why, len(reg)))
         meta["regulatory_count"] = len(reg)
+        meta["regulatory_reused"] = True
     else:
         import regulatory as rg
         base_u = cm.get_universe(verbose=False, apply_lixin=False,
                                  apply_regulatory=False,
-                                 prefer_snapshot=fast_universe)
-        # 首次部署没有排除集文件，自动跑滚动一年基线，避免只扫最近 10 天漏掉
-        # 一年内已发生的立案；之后每日只做增量。
+                                 prefer_snapshot=(not refresh_base_snapshot))
+        # 首次部署没有排除集文件或周刷新，跑滚动一年基线，避免只扫最近 10 天漏掉
+        # 一年内已发生的立案；其余日增量本分支不进入。
         first_run = not os.path.exists(cm.REGULATORY_JSON)
-        rmode = "full" if (args.reg_full or first_run) else "incremental"
+        rmode = "full" if (args.reg_full or first_run or do_reg_full) else "incremental"
         _, rstats = rg.build([x["code"] for x in base_u], mode=rmode)
         meta["regulatory_count"] = rstats.get("total_excluded", 0)
         meta["regulatory_stats"] = rstats
+        meta["regulatory_reused"] = False
         if rstats.get("scan_empty"):
             _alert("监管立案扫描为空",
                    "本次公告接口扫描 0 条（可能被限流），已保留历史排除记录、"
                    "未释放任何标的；请检查东财公告接口连通性。")
 
     # ---- 条件③ + 生成样本池（ST 名称硬剔除 + 立信/监管立案物理剔除） ----
-    universe = cm.get_universe(prefer_snapshot=fast_universe)  # 内部已应用 ST + 立信 + 监管立案 剔除
+    # 日增量复用缓存 base_universe.json（prefer_snapshot，仅腾讯补当日价）；
+    # 周刷新从实时列表拉取并刷新 base_universe.json。--no-fast-universe 在日增量下仍可关闭快照优先。
+    universe = cm.get_universe(prefer_snapshot=(not refresh_base_snapshot) and fast_universe)  # 内部已应用 ST + 立信 + 监管立案 剔除
     if not universe:
         # fail-degraded：常规路径（已含 get_universe 内部的快照回退）都拿不到样本池，
         # 再用「已通过健康校验」的快照强制重建一次，而不是直接 exit 1 让整条流水线红。
@@ -206,8 +261,10 @@ def main():
     meta["board_dist"] = dict(Counter(x["board"] for x in universe))
 
     # ---- 条件①：全市场行情记录（一次性 K 线缓存，供所有模型复用） ----
-    if args.no_kline:
-        print("[prefilter] --no-kline：跳过 K 线批量缓存。")
+    # 周刷新（周六）休市无新行情，跳过 K 线批量；日增量才追加当日一根。
+    if skip_kline:
+        why = "--no-kline" if args.no_kline else "周刷新/休市（无新行情）"
+        print("[prefilter] 跳过 K 线批量缓存（%s）。" % why)
         meta["kline"] = {"skipped": True}
     else:
         market_universe = cm.get_market_universe()
@@ -245,7 +302,7 @@ def main():
                       st["fail"], st["skip"]))
 
     # ---- 凯众专用：不复权 K 线预填（使凯众零网络抓取，口径与新浪逐日一致）----
-    if args.no_kline or args.no_kz:
+    if skip_kline or args.no_kz:
         print("[prefilter] 跳过凯众不复权 K 线预填。")
     else:
         try:
@@ -290,10 +347,14 @@ def main():
     meta["data_source_status"] = cm.universe_status()
     meta["kline_source_status"] = cm.kline_source_status()
     cm.save_meta(meta)
-    print("[prefilter] 完成：样本池 %d 只，立信排除 %d 只，监管立案排除 %d 只，"
-          "财报窗口 %s 只，trading_day=%s，来源=%s，降级=%s，告警=%d 条"
-          % (len(universe), meta.get("lixin_count", 0),
+    print("[prefilter] 完成：模式=%s，样本池 %d 只，立信排除 %d 只（%s），"
+          "监管立案排除 %d 只（%s），财报窗口 %s 只，trading_day=%s，"
+          "来源=%s，降级=%s，告警=%d 条"
+          % ("周刷新" if weekly_refresh else "日增量",
+             len(universe), meta.get("lixin_count", 0),
+             "复用" if meta.get("lixin_reused") else "全量重扫",
              meta.get("regulatory_count", 0),
+             "复用" if meta.get("regulatory_reused") else "全量重扫",
              (meta.get("report_risk") or {}).get("in_window", "-"), is_td,
              meta["universe_source"], meta["degraded"], len(ALERTS)))
     return 0
