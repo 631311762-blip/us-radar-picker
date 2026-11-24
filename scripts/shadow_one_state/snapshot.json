@@ -1,7 +1,7 @@
 {
   "start_date": "2026-11-21",
   "init_count": 26,
-  "last_record": "2026-11-23",
+  "last_record": "2026-11-24",
   "stats": {
     "live": {
       "S": {
@@ -11,7 +11,7 @@
         "n": 0
       },
       "B": {
-        "n": 0
+        "n": 1
       },
       "R": {
         "n": 0
@@ -26,9 +26,9 @@
         "r3_win": 38.5,
         "r3_avg": -1.21,
         "r3_n": 13,
-        "r5_win": 41.7,
-        "r5_avg": 0.2,
-        "r5_n": 12,
+        "r5_win": 38.5,
+        "r5_avg": -1.9,
+        "r5_n": 13,
         "r10_win": 40.0,
         "r10_avg": -1.88,
         "r10_n": 10,
@@ -55,13 +55,16 @@
         "r5_n": 11,
         "r10_win": 33.3,
         "r10_avg": -7.67,
-        "r10_n": 6
+        "r10_n": 6,
+        "r20_win": 0.0,
+        "r20_avg": -13.97,
+        "r20_n": 1
       }
     }
   },
   "promote_ready": false,
   "gate_reason": "live 核心样本 0/30，未达标",
-  "live_count": 0,
+  "live_count": 1,
   "hist_count": 26,
-  "last_evaluate": "2026-11-23"
+  "last_evaluate": "2026-11-24"
 }
