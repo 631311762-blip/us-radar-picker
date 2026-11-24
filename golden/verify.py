@@ -72,9 +72,12 @@ def verify_one(code, s):
         pat, c_pat, pat_hold = "none", False, CFG["hold_days"]
 
     j = i + CFG["signal_day"] - 1
-    buy = c[j]
+    # v5.3 实盘买点：D2盘后出信号买不到 → D3开盘价买入；T+1从D4起判定退出
+    entry_open = CFG.get("entry_rule", "d3_open") == "d3_open"
+    buy_idx = j + 1
+    buy = float(o[buy_idx]) if (entry_open and buy_idx < len(c)) else float(c[j])
     bl = (o[i] + c[i]) / 2; sl = np.mean(vols) * CFG["shrink_ratio"]
-    # v5.2：直接复用线上 exit_sim，保证收益口径与 detect 完全一致
+    # 复用线上 exit_sim，保证收益口径与 detect 完全一致
     try:
         sys.path.insert(0, os.path.join(REPO, "yida"))
         _kit = type(sys)("kit"); sys.modules.setdefault("kit", _kit)
@@ -84,11 +87,11 @@ def verify_one(code, s):
         ret, exit_reason, _, _, maxp = dy.exit_sim(
             o, h, c, v, [b["d"] for b in bars], j, buy,
             "accel" if pat == "accel" else "platform", pat_hold, CFG,
-            bl, sl, len(c))
-    except Exception:
-        # 回退：旧口径（最高价收益）
+            bl, sl, len(c), buy_idx=(buy_idx if entry_open and buy_idx < len(c) else None))
+    except Exception as e:
         maxp = h[j]; exit_reason = None
-        for k in range(j + 1, min(j + 1 + pat_hold, len(c))):
+        chk_from = buy_idx + 1 if (entry_open and buy_idx < len(c)) else j + 1
+        for k in range(chk_from, min(j + pat_hold, len(c))):
             maxp = max(maxp, h[k])
             if pat == "platform":
                 if c[k] < bl: exit_reason = "破位"; break
