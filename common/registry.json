@@ -11,9 +11,10 @@
     },
     {
       "name": "low_shadow",
-      "label": "低位上影线模型",
+      "label": "低位上影线模型（已停用）",
       "cmd": "python3 low_shadow/low_shadow_screener.py --mode review",
-      "enabled": true
+      "enabled": false,
+      "_note": "2026-11-24 用户决定停止每日推送：收盘价卖出口径回溯，低位上影 R+1 胜率仅26.67%、平均-1.80%（转负），样本仅15个，收益过低。enabled 设 false 后统一流水线不再调度。代码与状态完整保留，设回 true 即可恢复。此处保留低位上影2(low_shadow2)继续推送。"
     },
     {
       "name": "low_shadow2",
@@ -69,9 +70,9 @@
     },
     {
       "name": "high_shadow",
-      "label": "高位上影线模型（洗盘再起观察名单·看涨）",
-      "enabled": true,
-      "_note": "2026-11-13 用户确认「迁移代码进仓库再纳入」；2026-11-16 用户确认正式启用每日调度 + 微信推送。原为云盘自动化独立定时，消费合并流水线 common/state/universe.json 样本池（ST+立信剔除）。代码已入 GitHub main：high_shadow/high_shadow_screener.py + config.json。v4.0（2026-11-17 方向对齐重构）看涨口径：强形态+高位（比率≥0.88∩当日分位≥0.45）+ 量比[0.85,2.7]，第二条件 F 已废除（看跌基因，与看涨方向相悖；配置块保留可回滚），四只标杆（光线/华策/金逸/通合）全部自然入选。入口 --mode review 已接入 PushPlus 微信推送（读 PUSHPLUS_TOKEN）。enabled=true 纳入每日统一流水线；【重要】需确认云盘原独立定时已停掉，避免重复运行/重复推送。",
+      "label": "高位上影线模型（已停用）",
+      "enabled": false,
+      "_note": "2026-11-24 用户决定停止每日推送：收盘价卖出口径回溯，高位上影 R+1 胜率46.62%、平均仅+0.14%（接近打平），盘中冲高无法在收盘兑现。enabled 设 false 后统一流水线不再调度。代码与状态完整保留，设回 true 即可恢复。此处保留低位上影2(low_shadow2)继续推送。",
       "cmd": "python3 high_shadow/high_shadow_screener.py --mode review"
     }
   ]
