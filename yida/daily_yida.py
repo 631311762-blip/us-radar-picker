@@ -335,7 +335,9 @@ def _push_two_section(ctx, picks, universe, cfg):
 
     lines += ["", "阴跌≥30% 平台放量2~7倍 D2提示 观察5天", "⚠️非投资建议"]
     title = f"怡达 {today} · 当日提示{len(seg1)} 观察中{len(seg2)}"
-    return common_notify.send_alert(title, "\n".join(lines))
+    body = "\n".join(lines)
+    print(f"[yida] ===PUSH_BODY_START===\n{title}\n{body}\n===PUSH_BODY_END===", flush=True)
+    return common_notify.send_alert(title, body)
 
 
 def main():
