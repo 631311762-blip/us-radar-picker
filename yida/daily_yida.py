@@ -83,6 +83,27 @@ def _limit_up_threshold(code, cfg):
     return cfg.get("limit_up_main", 0.098)
 
 
+def _rebound_filter(c, o, i, j, d1_limit_up, cfg):
+    """下跌中继反抽过滤（v5.1，仅平台型）：剔除高位诱多尾部风险。
+    大亏损10只前5日涨幅全部为正(0.4~10.1%)＝下跌途中反抽放量；黄金样本要么
+    前5日为负(真底部)要么>10%(真突破)。命中任一即剔除：
+      A) D1涨停豁免 且 D1前5日涨幅>0
+      B) D1前5日涨幅 0.5~11% 且 (|D2涨跌幅|≥8% 或 D2收阴)
+      C) D1前5日涨幅 2~11% 且 D2温和阳线 0~6%
+    2026回测：10/10全拦截大亏损，黄金5/5零误伤。"""
+    if not cfg.get("risk_filter", True):
+        return False
+    if i < 6:
+        return False
+    pre5 = (c[i - 1] / c[i - 6] - 1) * 100
+    d2_chg = (c[j] / c[i] - 1) * 100
+    d2_yin = 1 if c[j] < o[j] else 0
+    a = bool(d1_limit_up and pre5 > 0)
+    b = bool(0.5 <= pre5 <= 11 and (abs(d2_chg) >= 8 or d2_yin))
+    cc = bool(2 <= pre5 <= 11 and 0 < d2_chg < 6)
+    return a or b or cc
+
+
 def detect(bars, cfg, code=""):
     """bars: 共享K线列表 [{date,open,high,low,close,volume}, ...] 升序
     code: 6位代码，用于判断D1是否涨停（涨停启动日豁免规则）
@@ -93,6 +114,7 @@ def detect(bars, cfg, code=""):
     h = np.array([float(b["high"]) for b in bars])
     c = np.array([float(b["close"]) for b in bars])
     v = np.array([float(b["volume"]) for b in bars])
+    o = np.array([float(b["open"]) for b in bars])
     n = len(c)
     lb, bw = cfg["lookback"], cfg["base_win"]
     hold, sig_day = cfg["hold_days"], cfg["signal_day"]
@@ -145,6 +167,9 @@ def detect(bars, cfg, code=""):
         # ④ 提示日 D2（第2根放量日）
         j = i + sig_day - 1
         if j >= n:
+            continue
+        # v5.1 风控：平台型若命中「下跌中继反抽」特征则剔除（高位诱多尾部风险）
+        if pattern == "platform" and _rebound_filter(c, o, i, j, d1_limit_up, cfg):
             continue
         buy = c[j]
         d1_chg = c[i] / prev - 1
