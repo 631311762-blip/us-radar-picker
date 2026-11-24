@@ -3,9 +3,9 @@
 
 口径（用户 2026-11-24 确立，详见 /workspace/回溯口径统一规范_2026-11-24.md）：
   - 提示日 D0 = 模型发出信号的交易日；所有"天"按交易日计（跳过周末/节假日，停牌顺延）。
-  - 买入：D+1（第二天）**开盘价** P_buy。
+  - 买入：D+1（T+1顺延）**开盘价** P_buy。
   - 卖出（均为当日**最高价**）：
-        1 -> D+1（第二天）；3 -> D+3（第四天）；5 -> D+5（第六天）；10 -> D+10（第十一天）。
+        1 -> D+2；3 -> D+4；5 -> D+6；10 -> D+11（T+1: 卖出较原口径顺延1天）。
   - 收益率 R_n = (H_(D+n) - P_buy) / P_buy * 100%。
   - 胜率：R_n > 0 的样本占比；收益率：R_n 的算术平均。
   - 复权：前复权(qfq)，避免除权跳空假跌。
@@ -58,7 +58,7 @@ def evaluate_signal(signal_date, code, bars, horizons=HORIZONS):
         "buy_price": round(p_buy, 4),
     }
     for n in horizons:
-        j = i0 + n                          # D+n
+        j = i0 + n + 1                      # T+1: 卖出顺延1天(D+n+1)
         if j >= len(bars):
             out["r%d" % n] = None           # 数据不足，该周期剔除
             out["sell_date_%d" % n] = None
