@@ -347,6 +347,7 @@ OPER_RULE = """**操作策略（本模型「管三天」，每次推荐必附）
 
 # 模型原始样本（用于回忆模型来源/标定口径；每条推送末尾附，便于对照）
 ORIGINAL_SAMPLES = "📌 模型原型：以上选股基于均普智能(688306)、幸福蓝海(300528)、仁信新材(301395)，提示日为假破位后收复支撑之日，基本特征：横盘支撑→假破位诱空→站回支撑博反弹得出。"
+STRATEGY_NOTE = "📈 最优策略：提示日次日开盘买入，持有至第10天(D+11)最高价卖出（2026年回溯胜率91%、平均收益+13.5%，按盘中最高价理想成交）；跌破买入价-5%止损（止损用于控制回撤，回溯显示会略降理想收益）。"
 
 # T+1 形态识别阈值
 UPPER_SHADOW_RATIO = 0.5   # 上影 >= 0.5×实体 视为「带上影」
@@ -588,7 +589,7 @@ def _push_report(cands, today):
     if not cands:
         push("%s %s（无信号）" % (MODEL_LABEL, today),
              "### %s\n\n今日无「假破位后收复支撑」候选（近 %d 交易日）。\n\n%s" % (
-                 MODEL_LABEL, CONST["MAX_AGE"], ORIGINAL_SAMPLES))
+                 MODEL_LABEL, CONST["MAX_AGE"], ORIGINAL_SAMPLES + "\n" + STRATEGY_NOTE))
         return
     _fresh = CONST["SECOND_CONFIRM_FRESH"]
     confirmed = [e for e in cands if isinstance(e.get("second_confirm"), dict)
@@ -630,7 +631,7 @@ def _push_report(cands, today):
                 e["code"], e.get("name", ""), e["support"], e["break_day"], e["sig_day"],
                 e.get("vol_ratio"), (e["op"].get("vol_ratio_buy") or 0), score(e)))
     # 固定操作策略（每次必附）+ 模型原始样本标注（便于回忆）
-    lines += ["", OPER_RULE, "", ORIGINAL_SAMPLES]
+    lines += ["", OPER_RULE, "", ORIGINAL_SAMPLES, STRATEGY_NOTE]
     push("%s %s（%d只）" % (MODEL_LABEL, today, len(cands)), "\n".join(lines))
 
 
