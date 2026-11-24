@@ -18,6 +18,7 @@ REC_FILE = "领湃_推荐记录.json"
 
 # 推送末尾附原型说明（供用户回忆模型设计源头）
 ORIGIN_NOTE = "📌 模型原型：以上选股基于领湃科技，提示日为回踩长期均线企稳当日，基本特征：前期试探→回落→踩长期均线企稳(B_V3.4.1)，立信/ST/SW_B三重过滤得出。"
+STRATEGY_NOTE = "📈 最优策略：提示日次日开盘买入，持有至次日(D+2)最高价卖出（2026年回溯胜率67%、平均收益+1.5%，按盘中最高价理想成交）；跌破买入价-5%止损（止损用于控制回撤，回溯显示会略降理想收益）。"
 
 
 def _settle_digest():
@@ -189,12 +190,12 @@ def main():
         msg = ("<h3>领湃模型 B_V3.4.1 %s 入选 %d 只</h3>"
                "<table border='1' cellspacing='0' cellpadding='4'>"
                "<tr><th>序号</th><th>名称</th><th>代码</th><th>评分</th><th>贴线</th><th>间距</th><th>距前高</th><th>财报/预告</th></tr>"
-               "%s</table>%s%s<p style='color:#888;font-size:12px;margin-top:8px'>%s</p>") % (today, len(top), rows, warn, _settle_digest(), ORIGIN_NOTE)
+               "%s</table>%s%s<p style='color:#888;font-size:12px;margin-top:8px'>%s</p>") % (today, len(top), rows, warn, _settle_digest(), ORIGIN_NOTE + STRATEGY_NOTE)
         tb.push_once("领湃模型 %s 入选%d只" % (today, len(top)), msg,
                      template="html", kind="signal")
     else:
         tb.push_once("领湃模型 %s 无信号" % today,
-                     "<p>今日无 B_V3.4.1 回踩企稳信号。</p>" + _settle_digest() + "<p style='color:#888;font-size:12px'>%s</p>" % ORIGIN_NOTE,
+                     "<p>今日无 B_V3.4.1 回踩企稳信号。</p>" + _settle_digest() + "<p style='color:#888;font-size:12px'>%s</p>" % (ORIGIN_NOTE + STRATEGY_NOTE),
                      template="html", kind="notice")
 
     print("[完成] %s" % today)
