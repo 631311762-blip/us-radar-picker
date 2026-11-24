@@ -196,9 +196,8 @@ jobs:
           echo "兜底触发原因：$REASON"
           # 与 common/registry.json 中 enabled 的模型对应（含 11-23 补建的 yida 怡达模型）。
           # 2026-11-23 起易点模型(yidian.yml)已停用（收益低、被怡达模型替换），从兜底列表移除。
-          # high_shadow.yml 在代码迁移完成前会自行检测并正常跳过。
-          WFS="shanshui.yml lingpei.yml low_shadow.yml low_shadow2.yml \
-               kaizhong.yml yida.yml powei.yml high_shadow.yml stock-v3-daily.yml"
+          WFS="shanshui.yml lingpei.yml low_shadow2.yml \
+               kaizhong.yml yida.yml powei.yml stock-v3-daily.yml"
           OK=0; FAIL=0
           for wf in $WFS; do
             echo "---- dispatch $wf ----"
