@@ -3,26 +3,32 @@
 """
 怡达模型 · 每日选股（接入统一前置流水线）
 ================================================================
-源自怡达股份(300721) 2026-08~11 走势提炼，全A股回溯验证：
-  放量4倍版 2026 命中率 90.9%；放量2倍版 88.1%。
+源自怡达股份(300721) 2026-08~11 走势提炼，全A股回溯验证。
 
-【版本】v3 涨停豁免版（2026-11-24 回退）
-  · 已移除 v4 的「D1放量长阳>5%」「D2量价约束」两条形态过滤
-  · 三只黄金样本（超声电子/肯特股份/怡达股份）为此版标定样本
-  · 保留：阴跌≥30% / 平台放量2~7倍 / D1涨停豁免 / CV<20% / D2提示 / 5日退出
+【版本】v5 双标签融合版（2026-11-24）
+  · 一套引擎通吃两种强势形态：平台型（怡达原型）+ 加速型（南极光原型）
+  · 三类黄金样本标定：超声电子/肯特股份/怡达股份（平台型）、南极光（加速型）
+  · 两类信号互斥：按 CV 与逐日递增性自动分流，互不稀释
+
+【统一骨架】阴跌 + 连续4天≥2倍放量 + D1前一日≤2.5倍 + 提示日D2
+【双标签分流】
+  · 平台型(platform)：CV<20% 平稳放量
+      - 阴跌≥30%，D1涨停豁免或2~7倍，D2~D4严格2~7倍
+      - 跟踪5日 + 破位/缩量退出；2026信号349个，3日最高≥3%准确率81.9%
+  · 加速型(accel)：CV≥20% 且四天量能逐日递增（v1<v2<v3<v4）
+      - 阴跌≥20%，四天均≥2倍（不设上限，加速型可爆量）
+      - 跟踪3日固定止盈（无破位退出）；2026信号43个，3日收盘≥3%准确率81.4%
+      - 黄金样本：南极光300940 提示11-19 买11.88 → 3日+19.1%
 
 模型规则（参数见 config.json，可改）：
-  ① 阴跌前置：D1前一日收盘较过去60日最高价跌幅 ≥ 30%，且收盘 < MA60
-  ② 平台放量：连续4天(D1~D4)成交量均为 D1前20日均量的 2~7 倍
-     ★涨停豁免：D1若为涨停板(主板10cm/双创20cm/北交30cm)，封板导致量能不足2倍属正常，
-       豁免D1倍数，其余D2~D4仍严格2~7倍（2026回测新增17个信号，命中率100%）
-  ③ 量能平稳：四天量能变异系数 CV < 20%（排除逐日爆量）
-  ④ 提示日 = 放量第2天(D2)，以 D2 收盘价买入
-  ⑤ 退出机制：提示日后关注5天，任一触发即停止关注：
-     - 破位：收盘价 < D1实体中点(开+收)/2
-     - 缩量：成交量 < 放量四天均量 × 0.5
-     触发当日按最高价结算（保留当日浮盈）
-  ⑥ 命中 = 关注期内最高收益 ≥ 3%
+  ① 阴跌前置：D1前一日收盘较过去60日最高价跌幅达标，且收盘 < MA60
+     （平台型≥30% / 加速型≥20%）
+  ② 放量：连续4天(D1~D4)成交量 ≥ D1前20日均量的 2倍
+     · 平台型：D1涨停豁免或2~7倍，D2~D4严格2~7倍，且 CV<20%
+     · 加速型：四天≥2倍、CV≥20%、逐日严格递增（这是"加速"核心）
+  ③ 提示日 = 放量第2天(D2)，以 D2 收盘价买入
+  ④ 退出：平台型跟踪5日(破位/缩量退出)；加速型跟踪3日固定止盈
+  ⑤ 命中 = 关注期内最高收益 ≥ 3%
 
 推送（严格两段式，2026-11-24 定版）：
   · 第一段 = 当天提示的票（signal == 最新交易日）
@@ -103,81 +109,82 @@ def detect(bars, cfg, code=""):
         if not np.isfinite(b) or b <= 0 or not np.isfinite(peak[i]):
             continue
         prev = c[i - 1]
-        # ① 阴跌 + 空头排列
-        if not (prev / peak[i] - 1 <= -cfg["decline_min"] and prev < ma60[i]):
+        decline = prev / peak[i] - 1
+        if prev >= ma60[i]:          # 统一骨架：必须在 MA60 之下（空头排列）
             continue
-        # ② 平台放量 D1~D4
+        # ② 连续4天放量 D1~D4（统一骨架）
         vols = v[i:i + 4]
         if len(vols) < 4:
             continue
         ratios = vols / b
-        # —— 涨停启动日豁免 ——
-        # D1涨停(主板10cm/双创20cm/北交30cm)时，封板导致量能不足2倍属正常，
-        # 豁免D1放量倍数；其余D2~D4仍严格2~7倍。
         d1_limit_up = c[i] / c[i - 1] - 1 >= _limit_up_threshold(code, cfg)
-        if not d1_limit_up and not (cfg["vol_lo"] <= ratios[0] <= cfg["vol_hi"]):
-            continue
-        if not np.all((ratios[1:] >= cfg["vol_lo"]) & (ratios[1:] <= cfg["vol_hi"])):
-            continue
-        # ③ 量能平稳（豁免日仍用四天原始量算CV，保证平台整体平稳）
-        cv = np.std(vols) / np.mean(vols)
-        if cv > cfg["cv_max"]:
-            continue
         # D1前一日不得已放量（确保D1是启动首日）
         if v[i - 1] / b > 2.5:
             continue
-        # D1 涨幅（仅记录，不做形态过滤——v3 已回退 D1长阳/D2量价约束）
-        d1_chg = c[i] / prev - 1
+        cv = np.std(vols) / np.mean(vols)
+        accel = bool(vols[0] < vols[1] < vols[2] < vols[3])   # 逐日严格递增 = 加速特征
+
+        # ===== 双标签分流（互斥）=====
+        pattern, pat_hold = None, hold
+        if cv < cfg["cv_max"]:
+            # —— 平台型：阴跌≥30% + D1涨停豁免/2~7倍 + D2~D4严格2~7倍 ——
+            #    D1涨停时豁免其2倍下限（封板量能不足属正常），D2~D4仍严格2~7倍
+            if decline <= -cfg["decline_min"] and (
+                d1_limit_up or (cfg["vol_lo"] <= ratios[0] <= cfg["vol_hi"])
+            ) and np.all((ratios[1:] >= cfg["vol_lo"]) & (ratios[1:] <= cfg["vol_hi"])):
+                pattern, pat_hold = "platform", cfg["hold_days"]
+        elif accel:
+            # —— 加速型：阴跌≥20% + 四天≥2倍递增 + CV≥20% ——
+            #    加速型不享受涨停豁免（递增形态本身要求逐日放量）
+            if (decline <= -cfg.get("accel_decline_min", 0.20)
+                    and np.all(ratios >= cfg["vol_lo"])):
+                pattern, pat_hold = "accel", cfg.get("accel_hold_days", 3)
+        if pattern is None:
+            continue
+
         # ④ 提示日 D2（第2根放量日）
         j = i + sig_day - 1
         if j >= n:
             continue
         buy = c[j]
-        # ⑤ 退出机制：第一根放量K线实体中点（破位线）
-        d1_open = float(bars[i]["open"])
-        d1_close = float(bars[i]["close"])
-        break_line = (d1_open + d1_close) / 2
-        # 缩量线：放量四天均量的一半
+        d1_chg = c[i] / prev - 1
+        # 破位线 = 第一根放量K线实体中点；缩量线 = 四日均量×ratio
+        break_line = (float(bars[i]["open"]) + float(bars[i]["close"])) / 2
         shrink_line = np.mean(vols) * cfg.get("shrink_ratio", 0.5)
 
-        # 从提示日次日起，逐日检查退出条件（最多关注 hold 天）
-        exit_reason = None
-        exit_day = None
-        max_price = h[j]                       # 提示日当日最高也计入
-        last_close = c[j]
+        # 退出机制：平台型走破位/缩量；加速型只跟踪固定天数（不设破位退出）
+        exit_reason, exit_day = None, None
+        max_price = h[j]
         checked = 0
-        for k in range(j + 1, min(j + 1 + hold, n)):
+        for k in range(j + 1, min(j + 1 + pat_hold, n)):
             checked += 1
-            max_price = max(max_price, h[k])   # 触发前(含当日)最高价
-            last_close = c[k]
-            # 破位：收盘价跌破实体中点
-            if c[k] < break_line:
-                exit_reason = "破位"
-                exit_day = dates[k]
-                break
-            # 缩量：成交量低于放量四天均量的一半
-            if v[k] < shrink_line:
-                exit_reason = "缩量"
-                exit_day = dates[k]
-                break
-        # 结算：按触发当日最高价（保留当日浮盈）；未触发则按关注期内最高价
-        ret5 = float(max_price / buy - 1) if checked > 0 else None
+            max_price = max(max_price, h[k])
+            if pattern == "platform":
+                if c[k] < break_line:
+                    exit_reason, exit_day = "破位", dates[k]
+                    break
+                if v[k] < shrink_line:
+                    exit_reason, exit_day = "缩量", dates[k]
+                    break
+        ret = float(max_price / buy - 1) if checked > 0 else None
         return dict(
-            code=str(bars[j]).zfill(6) if False else "",  # 占位，主程序填 code
+            code="",  # 占位，主程序填 code
+            pattern=pattern,
             d1=dates[i], signal=dates[j],
             buy=round(float(buy), 2),
             d1_chg=round(float(d1_chg) * 100, 1),
             d2_vol_ratio=round(float(v[j] / v[i]), 2),
-            decline=round(float(prev / peak[i] - 1) * 100, 1),
+            decline=round(float(decline) * 100, 1),
             vol_mult=round(float(np.mean(ratios)), 2),
             cv=round(float(cv) * 100, 1),
             break_line=round(float(break_line), 2),
             shrink_line=round(float(shrink_line)),
+            hold_days=pat_hold,
             exit_reason=exit_reason,
             exit_day=exit_day,
             held_days=checked,
-            ret5=round(ret5 * 100, 1) if ret5 is not None else None,
-            hit=bool(ret5 is not None and ret5 >= cfg["target"]),
+            ret5=round(ret * 100, 1) if ret is not None else None,
+            hit=bool(ret is not None and ret >= cfg["target"]),
         )
     return None
 
@@ -213,6 +220,8 @@ def _load_reco_signals(ctx):
             sigs[key] = dict(
                 code=code, name=p.get("name", ""), signal=signal,
                 buy=raw.get("buy") or p.get("close"),
+                pattern=raw.get("pattern", "platform"),   # 历史信号默认平台型
+                hold_days=raw.get("hold_days", CFG.get("hold_days", 5)),
                 break_line=raw.get("break_line"),
                 shrink_line=raw.get("shrink_line"),
                 vol_mult=raw.get("vol_mult"), decline=raw.get("decline"),
@@ -237,24 +246,28 @@ def _track_signal(sig, bars, cfg, latest_date):
     if j < 1:
         return None
     buy = float(sig["buy"]) if sig.get("buy") else c[j]
+    pattern = sig.get("pattern", "platform")
+    pat_hold = int(sig.get("hold_days") or (
+        cfg.get("accel_hold_days", 3) if pattern == "accel" else cfg["hold_days"]))
     # 从K线重算破位线/缩量线（D1=D2前一根，绝不依赖台账可能缺失的字段）
     d1 = j - 1
     bl = (o[d1] + c[d1]) / 2
     sl = float(np.mean(v[max(0, d1):d1 + 4])) * cfg.get("shrink_ratio", 0.5)
     exit_day, exit_reason = None, None
     maxp = h[j]
-    for k in range(j + 1, min(j + 1 + cfg["hold_days"], len(c))):
+    for k in range(j + 1, min(j + 1 + pat_hold, len(c))):
         maxp = max(maxp, h[k])
-        if c[k] < bl:
-            exit_day, exit_reason = dates[k], "破位"
-            break
-        if v[k] < sl:
-            exit_day, exit_reason = dates[k], "缩量"
-            break
+        if pattern == "platform":      # 加速型固定止盈，不设破位/缩量退出
+            if c[k] < bl:
+                exit_day, exit_reason = dates[k], "破位"
+                break
+            if v[k] < sl:
+                exit_day, exit_reason = dates[k], "缩量"
+                break
     ret = (maxp / buy - 1) * 100 if buy > 0 else 0.0
     held = sum(1 for d in dates if sig_date < d <= latest_date)
-    return dict(exit_day=exit_day, exit_reason=exit_reason,
-                ret=round(ret, 1), held=held, break_line=round(float(bl), 2))
+    return dict(exit_day=exit_day, exit_reason=exit_reason, pattern=pattern,
+                pat_hold=pat_hold, ret=round(ret, 1), held=held, break_line=round(float(bl), 2))
 
 
 def _push_two_section(ctx, picks, universe, cfg):
@@ -278,6 +291,8 @@ def _push_two_section(ctx, picks, universe, cfg):
             code=code, name=p.get("name", ""), signal=signal,
             buy=p.get("buy"), vol_mult=p.get("vol_mult"),
             decline=p.get("decline"), cv=p.get("cv"),
+            pattern=p.get("pattern", "platform"),
+            hold_days=p.get("hold_days"),
         )
 
     # 2) 最新提示日 与 最新交易日（以某只票的K线末日为准）
@@ -307,34 +322,37 @@ def _push_two_section(ctx, picks, universe, cfg):
         if st["exit_day"]:
             dropped.append(f"{code} {sig.get('name','')} {st['exit_reason']}({st['exit_day']})")
             continue
-        # 观察期满 → 剔除
-        if st["held"] >= cfg["hold_days"]:
+        # 观察期满 → 剔除（按各自形态的跟踪周期）
+        if st["held"] >= st["pat_hold"]:
             dropped.append(f"{code} {sig.get('name','')} 观察期满{st['held']}日")
             continue
         # 最新提示日那批 → 第一段；更早的历史提示仍在观察 → 第二段
         (seg1 if sig_date == latest_signal else seg2).append(item)
 
-    # 4) 组装推送（只有两段）
+    # 4) 组装推送（只有两段，票名带形态标签）
+    def tag(x):
+        return "⚡加速" if x.get("pattern") == "accel" else "🔵平台"
     sig_mmdd = latest_signal[5:] if len(latest_signal) >= 10 else today
-    lines = [f"**怡达 · {today}** ｜ 样本{len(universe)} ｜ 已剔除破位/期满{len(dropped)}只", ""]
+    n_accel = sum(1 for x in seg1 + seg2 if x.get("pattern") == "accel")
+    lines = [f"**怡达·双模型 {today}** ｜ 样本{len(universe)} ｜ 已剔除破位/期满{len(dropped)}只", ""]
 
     lines.append(f"【一、当天提示 {sig_mmdd}·{len(seg1)}只】")
     if not seg1:
         lines.append("今日无新提示")
     for x in sorted(seg1, key=lambda z: -float(z.get("vol_mult") or 0)):
         ret = f"{x['ret']:+.1f}%" if x.get("ret") is not None else "—"
-        lines.append(f"`{x['code']}` {x['name']} 买{x['buy']} 观察{x['held']}日 {ret}")
+        lines.append(f"`{x['code']}` {x['name']} {tag(x)} 买{x['buy']} 观察{x['held']}日 {ret}")
 
-    lines += ["", f"【二、历史提示·观察中 {len(seg2)}只（未破位5日内）】"]
+    lines += ["", f"【二、历史提示·观察中 {len(seg2)}只（未破位）】"]
     if not seg2:
         lines.append("无")
     for x in sorted(seg2, key=lambda z: z["signal"], reverse=True):
         flag = "✓" if x["ret"] >= cfg["target"] * 100 else ""
-        lines.append(f"`{x['code']}` {x['name']} {x['signal'][5:]}提示 买{x['buy']} "
-                     f"观察{x['held']}日 {x['ret']:+.1f}%{flag}")
+        lines.append(f"`{x['code']}` {x['name']} {tag(x)} {x['signal'][5:]}提示 买{x['buy']} "
+                     f"观察{x['held']}/{x['pat_hold']}日 {x['ret']:+.1f}%{flag}")
 
-    lines += ["", "阴跌≥30% 平台放量2~7倍 D2提示 观察5天", "⚠️非投资建议"]
-    title = f"怡达 {today} · 当日提示{len(seg1)} 观察中{len(seg2)}"
+    lines += ["", "🔵平台:阴跌≥30%平稳放量跟5日 ｜ ⚡加速:阴跌≥20%递增放量跟3日", "⚠️非投资建议"]
+    title = f"怡达 {today} · 提示{len(seg1)} 观察中{len(seg2)}(加速{n_accel})"
     body = "\n".join(lines)
     print(f"[yida] ===PUSH_BODY_START===\n{title}\n{body}\n===PUSH_BODY_END===", flush=True)
     return common_notify.send_alert(title, body)
@@ -367,9 +385,11 @@ def main():
         sig["board"] = x.get("board", "")
         picks.append(sig)
 
-    print(f"[yida] 识别信号 {len(picks)} 个", flush=True)
+    print(f"[yida] 识别信号 {len(picks)} 个（平台{sum(1 for p in picks if p.get('pattern')=='platform')} "
+          f"/ 加速{sum(1 for p in picks if p.get('pattern')=='accel')}）", flush=True)
     for p in picks:
-        print(f"  {p['code']} {p['name']} 提示日{p['signal']} "
+        tag = "⚡加速" if p.get("pattern") == "accel" else "🔵平台"
+        print(f"  {p['code']} {p['name']} {tag} 提示日{p['signal']} "
               f"阴跌{p['decline']}% 放量{p['vol_mult']}x CV{p['cv']}%", flush=True)
 
     # 台账（自动进入统一回溯）
