@@ -104,6 +104,42 @@ def _rebound_filter(c, o, i, j, d1_limit_up, cfg):
     return a or b or cc
 
 
+def exit_sim(o, h, c, v, dates, j, buy, pattern, pat_hold, cfg, break_line, shrink_line, n):
+    """v5.2 分类止盈模拟，返回 (ret%, exit_reason, exit_day, held, max_price)。
+    平台型：盘中触及 tp_activate(默认+10%)激活移动止盈，此后收盘跌破『持仓期收盘峰值
+      ×(1-tp_drawdown)』离场；破位/缩量硬退出优先；pat_hold 日到期按收盘平仓。
+    加速型：死拿 pat_hold 日收盘，不设任何中途退出。
+    ret 为策略实际退出收益（不再是关注期最高价），hit 据此判定。"""
+    max_price = float(h[j])
+    if pattern == "accel":
+        k = min(j + pat_hold, n - 1)
+        if k > j:
+            max_price = max(max_price, float(np.max(h[j + 1:k + 1])))
+        ret = (float(c[k]) / buy - 1) * 100
+        return ret, None, None, k - j, max_price
+
+    # ---- 平台型：硬退出 + 宽松移动止盈 + 到期 ----
+    activate = cfg.get("tp_activate", 0.10)
+    drawdown = cfg.get("tp_drawdown", 0.03)
+    peak_close = buy
+    activated = False
+    for k in range(j + 1, min(j + 1 + pat_hold, n)):
+        hi, cl = float(h[k]), float(c[k])
+        max_price = max(max_price, hi)
+        peak_close = max(peak_close, cl)
+        if not activated and hi / buy - 1 >= activate:
+            activated = True
+        if cl < break_line:
+            return (cl / buy - 1) * 100, "破位", dates[k], k - j, max_price
+        if v[k] < shrink_line:
+            return (cl / buy - 1) * 100, "缩量", dates[k], k - j, max_price
+        if activated and cl <= peak_close * (1 - drawdown):
+            return (cl / buy - 1) * 100, "移动止盈", dates[k], k - j, max_price
+    k = min(j + pat_hold, n - 1)
+    ret = (float(c[k]) / buy - 1) * 100
+    return ret, None, None, k - j, max_price
+
+
 def detect(bars, cfg, code=""):
     """bars: 共享K线列表 [{date,open,high,low,close,volume}, ...] 升序
     code: 6位代码，用于判断D1是否涨停（涨停启动日豁免规则）
@@ -177,21 +213,9 @@ def detect(bars, cfg, code=""):
         break_line = (float(bars[i]["open"]) + float(bars[i]["close"])) / 2
         shrink_line = np.mean(vols) * cfg.get("shrink_ratio", 0.5)
 
-        # 退出机制：平台型走破位/缩量；加速型只跟踪固定天数（不设破位退出）
-        exit_reason, exit_day = None, None
-        max_price = h[j]
-        checked = 0
-        for k in range(j + 1, min(j + 1 + pat_hold, n)):
-            checked += 1
-            max_price = max(max_price, h[k])
-            if pattern == "platform":
-                if c[k] < break_line:
-                    exit_reason, exit_day = "破位", dates[k]
-                    break
-                if v[k] < shrink_line:
-                    exit_reason, exit_day = "缩量", dates[k]
-                    break
-        ret = float(max_price / buy - 1) if checked > 0 else None
+        # v5.2 分类止盈结算：平台型=破位/缩量+宽松移动止盈+到期；加速型=死拿pat_hold日收盘
+        ret, exit_reason, exit_day, checked, max_price = exit_sim(
+            o, h, c, v, dates, j, buy, pattern, pat_hold, cfg, break_line, shrink_line, n)
         return dict(
             code="",  # 占位，主程序填 code
             pattern=pattern,
@@ -208,8 +232,9 @@ def detect(bars, cfg, code=""):
             exit_reason=exit_reason,
             exit_day=exit_day,
             held_days=checked,
-            ret5=round(ret * 100, 1) if ret is not None else None,
-            hit=bool(ret is not None and ret >= cfg["target"]),
+            ret5=round(ret, 1) if ret is not None else None,  # v5.2: exit_sim已返回百分数
+            hmax=round(float(max_price / buy - 1) * 100, 1),  # 关注期最高价收益(参考)
+            hit=bool(ret is not None and ret >= cfg["target"] * 100),  # target(0.03)转百分数
         )
     return None
 
@@ -278,21 +303,18 @@ def _track_signal(sig, bars, cfg, latest_date):
     d1 = j - 1
     bl = (o[d1] + c[d1]) / 2
     sl = float(np.mean(v[max(0, d1):d1 + 4])) * cfg.get("shrink_ratio", 0.5)
-    exit_day, exit_reason = None, None
-    maxp = h[j]
-    for k in range(j + 1, min(j + 1 + pat_hold, len(c))):
-        maxp = max(maxp, h[k])
-        if pattern == "platform":      # 加速型固定止盈，不设破位/缩量退出
-            if c[k] < bl:
-                exit_day, exit_reason = dates[k], "破位"
-                break
-            if v[k] < sl:
-                exit_day, exit_reason = dates[k], "缩量"
-                break
-    ret = (maxp / buy - 1) * 100 if buy > 0 else 0.0
+    # v5.2 分类止盈：只跟踪到 latest_date，未走完持有期的按当前最新价临时结算
+    avail = min(j + pat_hold, len(c) - 1)                  # 持有期上限
+    avail = min(avail, max(j, dates.index(latest_date) if latest_date in dates else len(c) - 1))
+    ret_pct, exit_reason, exit_day, held, maxp = exit_sim(
+        np.array(o), np.array(h), np.array(c), np.array(v), dates,
+        j, buy, pattern, pat_hold, cfg, bl, sl, avail + 1)
+    # 尚未触发退出且未走完 → 标记跟踪中，按最新收盘临时结算
+    if exit_reason is None and avail >= j:
+        ret_pct = (c[avail] / buy - 1) * 100 if buy > 0 else 0.0
     held = sum(1 for d in dates if sig_date < d <= latest_date)
     return dict(exit_day=exit_day, exit_reason=exit_reason, pattern=pattern,
-                pat_hold=pat_hold, ret=round(ret, 1), held=held, break_line=round(float(bl), 2))
+                pat_hold=pat_hold, ret=round(ret_pct, 1), held=held, break_line=round(float(bl), 2))
 
 
 def _push_two_section(ctx, picks, universe, cfg):
