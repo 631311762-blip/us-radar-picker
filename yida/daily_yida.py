@@ -5,10 +5,12 @@
 ================================================================
 源自怡达股份(300721) 2026-08~11 走势提炼，全A股回溯验证。
 
-【版本】v5 双标签融合版（2026-11-24）
+【版本】v5.3 实盘买点版（2026-11-25）
   · 一套引擎通吃两种强势形态：平台型（怡达原型）+ 加速型（南极光原型）
   · 三类黄金样本标定：超声电子/肯特股份/怡达股份（平台型）、南极光（加速型）
   · 两类信号互斥：按 CV 与逐日递增性自动分流，互不稀释
+  · v5.3 实盘买点：D2盘后出信号当日买不到 → 次日D3开盘价买入 + T+1(次日才可卖,退出从D4起)
+    （entry_rule 可切回 d2_close 回退 v5.2；2026回测 D3开盘买+4.92%/命中49.8%,黄金样本全保住）
 
 【统一骨架】阴跌 + 连续4天≥2倍放量 + D1前一日≤2.5倍 + 提示日D2
 【双标签分流】
@@ -104,17 +106,22 @@ def _rebound_filter(c, o, i, j, d1_limit_up, cfg):
     return a or b or cc
 
 
-def exit_sim(o, h, c, v, dates, j, buy, pattern, pat_hold, cfg, break_line, shrink_line, n):
-    """v5.2 分类止盈模拟，返回 (ret%, exit_reason, exit_day, held, max_price)。
+def exit_sim(o, h, c, v, dates, j, buy, pattern, pat_hold, cfg, break_line, shrink_line, n,
+             buy_idx=None):
+    """v5.3 分类止盈模拟，返回 (ret%, exit_reason, exit_day, held, max_price)。
+    v5.3 新增 buy_idx=实际买入日索引（D3）：T+1 当日不可卖，退出判定从 buy_idx+1（D4）起。
+      不传 buy_idx 时兼容 v5.2（判定从 j+1 起）。
     平台型：盘中触及 tp_activate(默认+10%)激活移动止盈，此后收盘跌破『持仓期收盘峰值
       ×(1-tp_drawdown)』离场；破位/缩量硬退出优先；pat_hold 日到期按收盘平仓。
     加速型：死拿 pat_hold 日收盘，不设任何中途退出。
     ret 为策略实际退出收益（不再是关注期最高价），hit 据此判定。"""
-    max_price = float(h[j])
+    max_price = float(h[buy_idx] if buy_idx is not None else j)
+    # 判定起点：v5.3 T+1 = 买入次日；v5.2 = D2 次日
+    check_from = (buy_idx + 1) if buy_idx is not None else (j + 1)
     if pattern == "accel":
         k = min(j + pat_hold, n - 1)
         if k > j:
-            max_price = max(max_price, float(np.max(h[j + 1:k + 1])))
+            max_price = max(max_price, float(np.max(h[check_from:k + 1])) if k >= check_from else max_price)
         ret = (float(c[k]) / buy - 1) * 100
         return ret, None, None, k - j, max_price
 
@@ -123,7 +130,8 @@ def exit_sim(o, h, c, v, dates, j, buy, pattern, pat_hold, cfg, break_line, shri
     drawdown = cfg.get("tp_drawdown", 0.03)
     peak_close = buy
     activated = False
-    for k in range(j + 1, min(j + 1 + pat_hold, n)):
+    # T+1：买当天(check_from 之前)不判定退出，但峰值照常累积
+    for k in range(check_from, min(j + pat_hold, n)):
         hi, cl = float(h[k]), float(c[k])
         max_price = max(max_price, hi)
         peak_close = max(peak_close, cl)
@@ -207,20 +215,39 @@ def detect(bars, cfg, code=""):
         # v5.1 风控：平台型若命中「下跌中继反抽」特征则剔除（高位诱多尾部风险）
         if pattern == "platform" and _rebound_filter(c, o, i, j, d1_limit_up, cfg):
             continue
-        buy = c[j]
         d1_chg = c[i] / prev - 1
         # 破位线 = 第一根放量K线实体中点；缩量线 = 四日均量×ratio
         break_line = (float(bars[i]["open"]) + float(bars[i]["close"])) / 2
         shrink_line = np.mean(vols) * cfg.get("shrink_ratio", 0.5)
 
-        # v5.2 分类止盈结算：平台型=破位/缩量+宽松移动止盈+到期；加速型=死拿pat_hold日收盘
-        ret, exit_reason, exit_day, checked, max_price = exit_sim(
-            o, h, c, v, dates, j, buy, pattern, pat_hold, cfg, break_line, shrink_line, n)
+        # v5.3 实盘买点：D2盘后出信号买不到 → 次日D3开盘价买入，T+1从D4起判定退出
+        entry_rule = cfg.get("entry_rule", "d3_open")
+        buy_idx = j + 1  # D3 买入日
+        pending = False  # 当天最新提示：D3尚未到来，无法知道开盘价
+        if entry_rule == "d3_open" and buy_idx < n:
+            buy = float(o[buy_idx])       # D3 开盘价（真实可成交）
+        elif entry_rule == "d3_open":
+            buy = float(c[j])             # D3未到，占位（主程序标注待开盘）
+            pending = True
+        else:
+            buy = float(c[j])             # 回退 v5.2：D2 收盘买
+            buy_idx = None
+
+        # v5.3 分类止盈结算（T+1：买当天不判定退出）
+        if pending:
+            # D3 未到，尚无买入与持有，收益不可结算
+            ret, exit_reason, exit_day, checked, max_price = None, None, None, 0, float(c[j])
+        else:
+            ret, exit_reason, exit_day, checked, max_price = exit_sim(
+                o, h, c, v, dates, j, buy, pattern, pat_hold, cfg, break_line, shrink_line, n,
+                buy_idx=buy_idx)
         return dict(
             code="",  # 占位，主程序填 code
             pattern=pattern,
             d1=dates[i], signal=dates[j],
             buy=round(float(buy), 2),
+            entry_day=dates[buy_idx] if (buy_idx is not None and buy_idx < n) else "",
+            pending=pending,  # True=当天提示,D3未开盘,买入价占位
             d1_chg=round(float(d1_chg) * 100, 1),
             d2_vol_ratio=round(float(v[j] / v[i]), 2),
             decline=round(float(decline) * 100, 1),
@@ -232,7 +259,7 @@ def detect(bars, cfg, code=""):
             exit_reason=exit_reason,
             exit_day=exit_day,
             held_days=checked,
-            ret5=round(ret, 1) if ret is not None else None,  # v5.2: exit_sim已返回百分数
+            ret5=round(ret, 1) if ret is not None else None,  # exit_sim已返回百分数
             hmax=round(float(max_price / buy - 1) * 100, 1),  # 关注期最高价收益(参考)
             hit=bool(ret is not None and ret >= cfg["target"] * 100),  # target(0.03)转百分数
         )
@@ -295,7 +322,6 @@ def _track_signal(sig, bars, cfg, latest_date):
     j = dates.index(sig_date)
     if j < 1:
         return None
-    buy = float(sig["buy"]) if sig.get("buy") else c[j]
     pattern = sig.get("pattern", "platform")
     pat_hold = int(sig.get("hold_days") or (
         cfg.get("accel_hold_days", 3) if pattern == "accel" else cfg["hold_days"]))
@@ -303,18 +329,27 @@ def _track_signal(sig, bars, cfg, latest_date):
     d1 = j - 1
     bl = (o[d1] + c[d1]) / 2
     sl = float(np.mean(v[max(0, d1):d1 + 4])) * cfg.get("shrink_ratio", 0.5)
-    # v5.2 分类止盈：只跟踪到 latest_date，未走完持有期的按当前最新价临时结算
+    # v5.3 实盘买点：历史票用 D3 开盘价重算买入（不信台账旧 buy）
+    entry_rule = cfg.get("entry_rule", "d3_open")
+    buy_idx = j + 1
+    if entry_rule == "d3_open" and buy_idx < len(c):
+        buy = float(o[buy_idx])   # D3 开盘价（真实可成交）
+    else:
+        buy = float(sig["buy"]) if sig.get("buy") else c[j]  # 回退 v5.2 / D3未到
+        buy_idx = None
+    # 分类止盈：只跟踪到 latest_date，未走完持有期的按当前最新价临时结算
     avail = min(j + pat_hold, len(c) - 1)                  # 持有期上限
     avail = min(avail, max(j, dates.index(latest_date) if latest_date in dates else len(c) - 1))
     ret_pct, exit_reason, exit_day, held, maxp = exit_sim(
         np.array(o), np.array(h), np.array(c), np.array(v), dates,
-        j, buy, pattern, pat_hold, cfg, bl, sl, avail + 1)
+        j, buy, pattern, pat_hold, cfg, bl, sl, avail + 1, buy_idx=buy_idx)
     # 尚未触发退出且未走完 → 标记跟踪中，按最新收盘临时结算
     if exit_reason is None and avail >= j:
         ret_pct = (c[avail] / buy - 1) * 100 if buy > 0 else 0.0
     held = sum(1 for d in dates if sig_date < d <= latest_date)
     return dict(exit_day=exit_day, exit_reason=exit_reason, pattern=pattern,
-                pat_hold=pat_hold, ret=round(ret_pct, 1), held=held, break_line=round(float(bl), 2))
+                pat_hold=pat_hold, ret=round(ret_pct, 1), held=held,
+                buy=round(buy, 2), break_line=round(float(bl), 2))
 
 
 def _push_two_section(ctx, picks, universe, cfg):
@@ -383,12 +418,17 @@ def _push_two_section(ctx, picks, universe, cfg):
     n_accel = sum(1 for x in seg1 + seg2 if x.get("pattern") == "accel")
     lines = [f"**怡达·双模型 {today}** ｜ 样本{len(universe)} ｜ 已剔除破位/期满{len(dropped)}只", ""]
 
+    entry_open = cfg.get("entry_rule", "d3_open") == "d3_open"
     lines.append(f"【一、当天提示 {sig_mmdd}·{len(seg1)}只】")
     if not seg1:
         lines.append("今日无新提示")
     for x in sorted(seg1, key=lambda z: -float(z.get("vol_mult") or 0)):
-        ret = f"{x['ret']:+.1f}%" if x.get("ret") is not None else "—"
-        lines.append(f"`{x['code']}` {x['name']} {tag(x)} 买{x['buy']} 观察{x['held']}日 {ret}")
+        if entry_open and x.get("pending"):
+            # 当天提示：D3尚未开盘，买入价未知，明确操作指令
+            lines.append(f"`{x['code']}` {x['name']} {tag(x)} **次日开盘介入** · 勿追尾盘")
+        else:
+            ret = f"{x['ret']:+.1f}%" if x.get("ret") is not None else "—"
+            lines.append(f"`{x['code']}` {x['name']} {tag(x)} 买{x['buy']} 观察{x['held']}日 {ret}")
 
     lines += ["", f"【二、历史提示·观察中 {len(seg2)}只（未破位）】"]
     if not seg2:
@@ -398,7 +438,9 @@ def _push_two_section(ctx, picks, universe, cfg):
         lines.append(f"`{x['code']}` {x['name']} {tag(x)} {x['signal'][5:]}提示 买{x['buy']} "
                      f"观察{x['held']}/{x['pat_hold']}日 {x['ret']:+.1f}%{flag}")
 
-    lines += ["", "🔵平台:阴跌≥30%平稳放量跟5日 ｜ ⚡加速:阴跌≥20%递增放量跟3日", "⚠️非投资建议"]
+    foot = ("🔵平台:阴跌≥30%平稳放量跟5日 ｜ ⚡加速:阴跌≥20%递增放量跟3日" if not entry_open
+            else "📌买点:提示次日开盘价介入(T+1次日可卖,勿等尾盘) ｜ 🔵平台跟5日 ⚡加速跟3日")
+    lines += ["", foot, "⚠️非投资建议"]
     title = f"怡达 {today} · 提示{len(seg1)} 观察中{len(seg2)}(加速{n_accel})"
     body = "\n".join(lines)
     print(f"[yida] ===PUSH_BODY_START===\n{title}\n{body}\n===PUSH_BODY_END===", flush=True)
