@@ -2758,6 +2758,88 @@
         "ret": null,
         "done": false
       }
+    },
+    {
+      "code": "600436",
+      "name": "片仔癀",
+      "date": "2026-11-24",
+      "batch": "2026-11-24",
+      "score": 60.01,
+      "dev_signed": 0.0183,
+      "dev60": 0.0183,
+      "drop_from_peak": 0.0814,
+      "gap_days": 19,
+      "trial_date": "2026-10-27",
+      "fall_pp": 2.29,
+      "sig_vr40": 0.709,
+      "shrink_prev3": 0.88,
+      "trial_vr": 2.046,
+      "k_amp": 0.0234,
+      "k_lower": 0.571,
+      "k_c_from_low": 0.0138,
+      "k_low_vs_prev": -0.0079,
+      "near_ma": "MA60",
+      "entry_close": 126.76,
+      "position": "MA60上方",
+      "t3": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t5": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t10": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      }
+    },
+    {
+      "code": "603351",
+      "name": "威尔药业",
+      "date": "2026-11-24",
+      "batch": "2026-11-24",
+      "score": 50.39,
+      "dev_signed": -0.0363,
+      "dev60": 0.0363,
+      "drop_from_peak": 0.1269,
+      "gap_days": 21,
+      "trial_date": "2026-10-23",
+      "fall_pp": 7.55,
+      "sig_vr40": 0.495,
+      "shrink_prev3": 0.714,
+      "trial_vr": 1.796,
+      "k_amp": 0.0341,
+      "k_lower": 0.371,
+      "k_c_from_low": 0.0182,
+      "k_low_vs_prev": -0.0258,
+      "near_ma": "MA60",
+      "entry_close": 25.79,
+      "position": "深破MA60",
+      "t3": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t5": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t10": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      }
     }
   ]
 }

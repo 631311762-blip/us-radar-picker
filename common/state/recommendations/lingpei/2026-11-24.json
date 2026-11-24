@@ -1,0 +1,77 @@
+{
+  "date": "2026-11-24",
+  "model": "lingpei",
+  "count": 2,
+  "picks": [
+    {
+      "code": "600436",
+      "name": "片仔癀",
+      "close": null,
+      "score": 60.01,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 60.01,
+        "gap_days": 19,
+        "drop_from_peak": 0.0814,
+        "dev60": 0.0183,
+        "dev_signed": 0.0183,
+        "fall_pp": 2.29,
+        "sig_vr40": 0.709,
+        "shrink_prev3": 0.88,
+        "trial_vr": 2.046,
+        "k_amp": 0.0234,
+        "k_lower": 0.571,
+        "k_c_from_low": 0.0138,
+        "k_low_vs_prev": -0.0079,
+        "preprobe_date": "2026-11-20",
+        "preprobe_lower": 0.78,
+        "preprobe_pullback": 0.0176,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-27",
+        "code": "600436",
+        "name": "片仔癀",
+        "entry_close": 126.76
+      }
+    },
+    {
+      "code": "603351",
+      "name": "威尔药业",
+      "close": null,
+      "score": 50.39,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 50.39,
+        "gap_days": 21,
+        "drop_from_peak": 0.1269,
+        "dev60": 0.0363,
+        "dev_signed": -0.0363,
+        "fall_pp": 7.55,
+        "sig_vr40": 0.495,
+        "shrink_prev3": 0.714,
+        "trial_vr": 1.796,
+        "k_amp": 0.0341,
+        "k_lower": 0.371,
+        "k_c_from_low": 0.0182,
+        "k_low_vs_prev": -0.0258,
+        "preprobe_date": "2026-11-17",
+        "preprobe_lower": 0.429,
+        "preprobe_pullback": 0.0229,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-23",
+        "code": "603351",
+        "name": "威尔药业",
+        "entry_close": 25.79
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 777,
+    "universe": 4546,
+    "dropped": 0
+  },
+  "written_at": "2026-11-24T16:40:25+08:00"
+}

@@ -89,3 +89,10 @@
 {"date": "2026-11-19", "model": "powei", "code": "000521", "name": "长虹美菱", "sig_day": "2026-11-16", "sig_close": 4.31, "support": 4.28, "break_to_sig": 10, "score": 19}
 {"date": "2026-11-19", "model": "powei", "code": "603998", "name": "方盛制药", "sig_day": "2026-11-16", "sig_close": 10.16, "support": 10.15, "break_to_sig": 2, "score": 27}
 {"date": "2026-11-19", "model": "powei", "code": "000521", "name": "长虹美菱", "sig_day": "2026-11-16", "sig_close": 4.31, "support": 4.28, "break_to_sig": 10, "score": 19}
+{"date": "2026-11-24", "model": "powei", "code": "600189", "name": "泉阳泉", "sig_day": "2026-11-24", "sig_close": 8.87, "support": 8.14, "break_to_sig": 1, "score": 32}
+{"date": "2026-11-24", "model": "powei", "code": "603009", "name": "北特科技", "sig_day": "2026-11-24", "sig_close": 47.8, "support": 47.5, "break_to_sig": 1, "score": 32}
+{"date": "2026-11-24", "model": "powei", "code": "603728", "name": "鸣志电器", "sig_day": "2026-11-24", "sig_close": 52.38, "support": 48.91, "break_to_sig": 1, "score": 32}
+{"date": "2026-11-24", "model": "powei", "code": "601606", "name": "长城军工", "sig_day": "2026-11-24", "sig_close": 30.81, "support": 29.21, "break_to_sig": 2, "score": 31}
+{"date": "2026-11-24", "model": "powei", "code": "600558", "name": "大西洋", "sig_day": "2026-11-24", "sig_close": 4.77, "support": 4.74, "break_to_sig": 2, "score": 31}
+{"date": "2026-11-24", "model": "powei", "code": "600814", "name": "杭州解百", "sig_day": "2026-11-24", "sig_close": 7.59, "support": 6.86, "break_to_sig": 2, "score": 31}
+{"date": "2026-11-24", "model": "powei", "code": "603666", "name": "亿嘉和", "sig_day": "2026-11-24", "sig_close": 27.9, "support": 24.7, "break_to_sig": 1, "score": 29}
