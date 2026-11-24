@@ -136,8 +136,8 @@ jobs:
           fi
           echo "主流水线卡死/锁死/未跑：派发各模型独立流程（独立 group，不受主锁约束）"
           # 与 fallback-2300.yml 的 WFS 保持一致（10 个模型全覆盖，含 11-23 补建的 yida.yml）。
-          WFS="shanshui.yml lingpei.yml low_shadow.yml low_shadow2.yml \
-               kaizhong.yml yidian.yml yida.yml powei.yml high_shadow.yml stock-v3-daily.yml"
+          WFS="shanshui.yml lingpei.yml low_shadow2.yml \
+               kaizhong.yml yidian.yml yida.yml powei.yml stock-v3-daily.yml"
           OK=0; FAIL=0
           for wf in $WFS; do
             if gh api -X POST "repos/$REPO/actions/workflows/$wf/dispatches" -f ref=main; then
