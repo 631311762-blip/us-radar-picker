@@ -74,15 +74,26 @@ def verify_one(code, s):
     j = i + CFG["signal_day"] - 1
     buy = c[j]
     bl = (o[i] + c[i]) / 2; sl = np.mean(vols) * CFG["shrink_ratio"]
-    maxp = h[j]; exit_reason = None
-    for k in range(j + 1, min(j + 1 + pat_hold, len(c))):
-        maxp = max(maxp, h[k])
-        if pat == "platform":
-            if c[k] < bl:
-                exit_reason = "破位"; break
-            if v[k] < sl:
-                exit_reason = "缩量"; break
-    ret = (maxp / buy - 1) * 100
+    # v5.2：直接复用线上 exit_sim，保证收益口径与 detect 完全一致
+    try:
+        sys.path.insert(0, os.path.join(REPO, "yida"))
+        _kit = type(sys)("kit"); sys.modules.setdefault("kit", _kit)
+        _nt = type(sys)("notify"); _nt.send_alert = lambda *a, **k: (True, "")
+        sys.modules.setdefault("notify", _nt)
+        import daily_yida as dy
+        ret, exit_reason, _, _, maxp = dy.exit_sim(
+            o, h, c, v, [b["d"] for b in bars], j, buy,
+            "accel" if pat == "accel" else "platform", pat_hold, CFG,
+            bl, sl, len(c))
+    except Exception:
+        # 回退：旧口径（最高价收益）
+        maxp = h[j]; exit_reason = None
+        for k in range(j + 1, min(j + 1 + pat_hold, len(c))):
+            maxp = max(maxp, h[k])
+            if pat == "platform":
+                if c[k] < bl: exit_reason = "破位"; break
+                if v[k] < sl: exit_reason = "缩量"; break
+        ret = (maxp / buy - 1) * 100
     hit = ret >= CFG["target"] * 100
     info = dict(
         signal=bars[j]["d"], pattern=pat,
