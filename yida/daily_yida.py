@@ -167,7 +167,12 @@ def _fake_break(c, i, st, plat_low):
 
 def exit_sim(o, h, c, v, dates, j, buy, pattern, pat_hold, cfg, break_line, shrink_line, n,
              buy_idx=None):
-    """v5.3 分类止盈模拟，返回 (ret%, exit_reason, exit_day, held, max_price)。
+    """返回 (ret%, exit_reason, exit_day, held, max_price)。
+    v6.1 收益口径开关 ret_basis：
+      · "high"（默认）：买入后持有窗口内最高价收益 = (窗口最高价/买入价-1)*100。
+        用户认可口径——盘中可触及，符合"D3-D4-D5最高点"止盈。
+      · "strategy"：v5.3 分类止盈（破位/缩量/移动止盈/到期收盘），保守口径。
+    v5.3 说明（strategy口径）：
     v5.3 新增 buy_idx=实际买入日索引（D3）：T+1 当日不可卖，退出判定从 buy_idx+1（D4）起。
       不传 buy_idx 时兼容 v5.2（判定从 j+1 起）。
     平台型：盘中触及 tp_activate(默认+10%)激活移动止盈，此后收盘跌破『持仓期收盘峰值
@@ -175,6 +180,14 @@ def exit_sim(o, h, c, v, dates, j, buy, pattern, pat_hold, cfg, break_line, shri
     加速型：死拿 pat_hold 日收盘，不设任何中途退出。
     ret 为策略实际退出收益（不再是关注期最高价），hit 据此判定。"""
     max_price = float(h[buy_idx] if buy_idx is not None else j)
+    # v6.1 最高价口径：买入后持有窗口(D3~D5)内最高价收益，用户认可口径
+    if cfg.get("ret_basis", "high") == "high" and buy_idx is not None:
+        end = min(j + pat_hold, n - 1)
+        if end >= buy_idx:
+            win_high = float(np.max(h[buy_idx:end + 1]))
+            max_price = win_high
+            ret = (win_high / buy - 1) * 100
+            return ret, None, None, end - j, max_price
     # 判定起点：v5.3 T+1 = 买入次日；v5.2 = D2 次日
     check_from = (buy_idx + 1) if buy_idx is not None else (j + 1)
     if pattern == "accel":
@@ -255,39 +268,41 @@ def detect(bars, cfg, code=""):
             continue
         r21 = float(v[j] / v[i])     # D2/D1 量比 = 标签预判分水岭
 
-        # ===== 双标签预判（互斥，只用2天信息）=====
-        pattern, pat_hold = None, hold
-        if r21 >= cfg.get("vol_ratio_accel", 1.35):
-            # 加速型预判：D2量≥1.35×D1(递增启动) + 阴跌≥20% + 两天都≥2倍(不设上限)
-            #   加速型不享受涨停豁免（递增形态本身要求逐日放量）
-            if (decline <= -cfg.get("accel_decline_min", 0.20)
-                    and np.all(ratios >= cfg["vol_lo"])):
-                pattern, pat_hold = "accel", cfg.get("accel_hold_days", 3)
-        else:
-            # 平台型预判：量能平稳(量比<1.35) + 阴跌≥30% + D1涨停豁免/2~7倍 + D2严格2~7倍
-            if decline <= -cfg["decline_min"] and (
-                d1_limit_up or (cfg["vol_lo"] <= ratios[0] <= cfg["vol_hi"])
-            ) and (cfg["vol_lo"] <= ratios[1] <= cfg["vol_hi"]):
-                pattern, pat_hold = "platform", cfg["hold_days"]
-        if pattern is None:
+        # ===== v6.1 统一纳入门槛（只用D1+D2两天，修复v5.4双标签分流边界缺陷）=====
+        # 旧版按r21硬分流后各卡各门槛：涨停票(r21≥1.35)被判加速却要求D1≥2x而漏掉；
+        #   阴跌20~30%的票(r21<1.35)被判平台却要求≥30%而漏掉。共漏18/273历史样本。
+        # 新版：统一门槛=阴跌≥20% + D1放量(涨停豁免或≥2x) + D2放量≥2x；
+        #   r21仅用于标签展示(加速/平台)，不再因标签不同而卡门槛。392样本+曼卡龙全纳入。
+        decline_ok = decline <= -cfg.get("accel_decline_min", 0.20)
+        d1_vol_ok = d1_limit_up or ratios[0] >= cfg["vol_lo"]
+        d2_vol_ok = ratios[1] >= cfg["vol_lo"]
+        if not (decline_ok and d1_vol_ok and d2_vol_ok):
             continue
+        # 标签预判（仅展示/分级，不影响纳入）
+        if r21 >= cfg.get("vol_ratio_accel", 1.35):
+            pattern, pat_hold = "accel", cfg.get("accel_hold_days", 3)
+        else:
+            pattern, pat_hold = "platform", cfg["hold_days"]
         # v5.1 风控：平台型若命中「下跌中继反抽」特征则剔除（高位诱多尾部风险）
         if pattern == "platform" and _rebound_filter(c, o, i, j, d1_limit_up, cfg):
             continue
-        # ===== v6 形态精选三重硬过滤（2026回测:410→83信号,深亏9.7%→3.7%）=====
-        # ① D1质量：阳包阴 或 D0涨停豁免
+        # ===== v6.1 形态字段：仅计算供★分级展示，三重硬过滤默认全部关闭 =====
+        # 依据(2026-11-25 最高价口径决定性验证)：
+        #   392历史样本+曼卡龙必须100%纳入；最高价口径下 v6砍掉的275只收益+8.90%/命中80%/深亏0，
+        #   与保留的+10.15%/82%/0几乎一致——形态过滤没筛掉风险，白白丢了机会。
+        #   收盘口径下"阳包阴最优"是假象(最高价口径各组均+9~10.7%)。
+        # 字段照算(供tier分级/回溯)，三个过滤由 config 开关控制，默认 false=全纳入。
         shape_ok, d0_lu, d1_baoyin = _d1_shape_ok(o, c, code, i, cfg)
-        if not shape_ok:
-            continue
-        # ② D2回吐不过半（D0涨停按涨停半幅）
         give_ok, giveback, give_half = _d2_giveback_ok(c, i, j, d0_lu, cfg)
-        if not give_ok:
-            continue
-        # ③ D1前平台企稳 CV≤3%
         plat_cv, plat_st, plat_low = _platform_cv(c, l, i, cfg)
-        if plat_cv > cfg.get("platform_cv_max", 0.03):
+        # —— 三重硬过滤（默认关，仅回退/用户自建筛选时开启）——
+        if cfg.get("shape_filter", False) and not shape_ok:
             continue
-        # ④ 假破位收复：仅★分级,不硬过滤（避免误伤肯特/南极光黄金样本）
+        if cfg.get("giveback_filter", False) and not give_ok:
+            continue
+        if cfg.get("platform_cv_filter", False) and plat_cv > cfg.get("platform_cv_max", 0.03):
+            continue
+        # ★假破位收复：仅分级标记,不硬过滤（不影响纳入，只排序优先）
         fake_break = _fake_break(c, i, plat_st, plat_low) if cfg.get("tier1_fake_break", True) else False
         tier = 1 if fake_break else 2
         d1_chg = c[i] / prev - 1
