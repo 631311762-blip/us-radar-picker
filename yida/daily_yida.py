@@ -278,6 +278,17 @@ def detect(bars, cfg, code=""):
         d2_vol_ok = ratios[1] >= cfg["vol_lo"]
         if not (decline_ok and d1_vol_ok and d2_vol_ok):
             continue
+        # ===== v6.2 D1真涨过滤（2026-11-25）：D1收盘≥前收 或 D0涨停豁免 =====
+        # 背景：维尔利11-23是"假阳真跌"(开2.75收2.78但较11-20收2.80仍跌0.71%)，
+        #   本质是下跌途中的放量、非企稳启动；纯涨幅门槛会把它放进来。
+        # 规则：D1必须相对前一日真涨(收盘≥前收)；若D0涨停(如肯特二次8-24的D0=8-21涨停)则豁免。
+        # 验证：黄金5/5全保住(肯特核心8-21涨停+20%真涨；肯特二次靠D0涨停豁免)、
+        #   曼卡龙11-23(+16%)保住、维尔利(-0.71%且D0非涨停)精准挡掉。
+        if cfg.get("d1_real_up_filter", True):
+            d1_real_up = c[i] >= c[i - 1]
+            d0_limit_up = c[i - 1] / c[i - 2] - 1 >= _limit_up_threshold(code, cfg) if i >= 2 else False
+            if not (d1_real_up or d0_limit_up):
+                continue
         # 标签预判（仅展示/分级，不影响纳入）
         if r21 >= cfg.get("vol_ratio_accel", 1.35):
             pattern, pat_hold = "accel", cfg.get("accel_hold_days", 3)
