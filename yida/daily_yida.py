@@ -523,19 +523,15 @@ def _push_two_section(ctx, picks, universe, cfg):
     sig_mmdd = latest_signal[5:] if len(latest_signal) >= 10 else today
     n_accel = sum(1 for x in seg1 + seg2 if x.get("pattern") == "accel")
     n_tier1 = sum(1 for x in seg1 if int(x.get("tier") or 2) == 1)
-    lines = [f"**怡达·v6形态精选 {today}** ｜ 样本{len(universe)} ｜ 已剔除破位/期满{len(dropped)}只", ""]
-
     entry_open = cfg.get("entry_rule", "d3_open") == "d3_open"
-    lines.append(f"【一、当天提示 {sig_mmdd}·{len(seg1)}只(★假破位{n_tier1})】")
+    lines = [f"**怡达v6.1 · {today}提示** ｜ 样本{len(universe)} ｜ D2当天实时预判", ""]
+
+    lines.append(f"【当天提示 {sig_mmdd} · {len(seg1)}只（★假破位{n_tier1}）】")
     if not seg1:
-        lines.append("今日无新提示")
+        lines.append("当日无新提示")
+    # 干净版：个股只列代码/名称/标签，策略与买点统一放脚注说明一次
     for x in sorted(seg1, key=rank):
-        if entry_open and x.get("pending"):
-            # 当天提示：D3尚未开盘，买入价未知，明确操作指令
-            lines.append(f"`{x['code']}` {x['name']} {tag(x)} **次日开盘介入** · 勿追尾盘")
-        else:
-            ret = f"{x['ret']:+.1f}%" if x.get("ret") is not None else "—"
-            lines.append(f"`{x['code']}` {x['name']} {tag(x)} 买{x['buy']} 观察{x['held']}日 {ret}")
+        lines.append(f"`{x['code']}` {x['name']} {tag(x)}")
 
     lines += ["", f"【二、历史提示·观察中 {len(seg2)}只（未破位）】"]
     if not seg2:
@@ -546,9 +542,9 @@ def _push_two_section(ctx, picks, universe, cfg):
                      f"观察{x['held']}/{x['pat_hold']}日 {x['ret']:+.1f}%{flag}")
 
     foot = ("★假破位收复优先 ｜ 🔵平台/⚡加速均跟3日" if not entry_open
-            else "📌次日开盘介入(T+1次日可卖,勿追尾盘) ｜ ★假破位优先 ｜ 🔵平台/⚡加速均跟3日")
+            else "📌 D2当天盘后提示，D3开盘价介入(T+1次日可卖,勿等尾盘) ｜ 🔵平台/⚡加速均跟3日 ｜ 最高价口径")
     lines += ["", foot, "⚠️非投资建议"]
-    title = f"怡达v6 {today} · 提示{len(seg1)}(★{n_tier1}) 观察中{len(seg2)}"
+    title = f"怡达v6.1 {today} · 提示{len(seg1)}(★{n_tier1}) 观察中{len(seg2)}"
     body = "\n".join(lines)
     print(f"[yida] ===PUSH_BODY_START===\n{title}\n{body}\n===PUSH_BODY_END===", flush=True)
     return common_notify.send_alert(title, body)
