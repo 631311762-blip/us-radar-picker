@@ -47,12 +47,12 @@
   "log": "shadow_log.jsonl",
   "db": "shadow_db.jsonl",
   "start_from": "2026-11-06",
-  "n_recorded": 12,
-  "n_settled": 6,
+  "n_recorded": 13,
+  "n_settled": 23,
   "stat": {
-   "n": 6,
-   "g10": 17.89,
-   "hit": 33.3
+   "n": 23,
+   "g10": 8.78,
+   "hit": 8.7
   }
  }
 }
