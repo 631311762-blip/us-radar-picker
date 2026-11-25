@@ -12,6 +12,9 @@
     "RECLAIM_UPPER_MAX": 0.4,
     "RECLAIM_FAIL_DROP": 0.05,
     "RECLAIM_FAIL_FIB": 0.618,
+    "VREV_PRE3_MAX": -0.09,
+    "VREV_BODY_MAX": -0.06,
+    "VREV_NEWLOW_WIN": 5,
     "MAX_AGE": 3,
     "TOP_N": 30,
     "KLINE_COUNT": 330,
@@ -20,5 +23,5 @@
     "SECOND_CONFIRM_VOL": 1.2,
     "SECOND_CONFIRM_FRESH": 1
   },
-  "updated_at": "2026-11-20 06:22"
+  "updated_at": "2026-11-25 23:08"
 }

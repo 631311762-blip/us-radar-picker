@@ -80,6 +80,13 @@ CONST = {
     "RECLAIM_UPPER_MAX": 0.40, # 收复日上影/振幅 上限（排除长上影冲高回落假收复）
     "RECLAIM_FAIL_DROP": 0.05, # 【已废弃·兜底保留】旧规则：收盘较收复日收盘跌超5%剔除
     "RECLAIM_FAIL_FIB": 0.618, # 收复后失效门槛（现行）：以「破位低点→收复高点」为一波，收盘跌破该波0.618黄金回撤位→收复失败，剔除
+    # ── 暴跌V反硬过滤（2026-11-25 全市场回溯落地）──
+    # 收复前若是「连续暴跌+末日大阴+创新低」的深V反抽（如捷安高科11-23型下跌中继），
+    # 无缩量/无企稳平台，非洗盘 —— 直接剔除。回溯：剔39只、黄金四样本误伤0。
+    # 三条件须同时成立：收复前3日累计跌幅≤-9% 且 末日实体≤-6% 且 末日收盘创近5日新低。
+    "VREV_PRE3_MAX": -0.09,   # 收复前3日累计跌幅上限：close[sig-1]/close[sig-3]-1 ≤ -9%
+    "VREV_BODY_MAX": -0.06,   # 收复前1日实体上限：close[sig-1]/open[sig-1]-1 ≤ -6%
+    "VREV_NEWLOW_WIN": 5,     # 创新低窗口：末日收盘 ≤ 其前5日最低收盘
     "MAX_AGE": 3,       # 仅输出近 N 个交易日发生收复的信号
     "TOP_N": 30,        # 进入推荐台账 / 推送的前 N 只
     "KLINE_COUNT": 330, # 拉取的 K 线根数
@@ -160,6 +167,10 @@ def detect(bars, const=None):
     MAX_GAP = c["MAX_GAP"]; RECLAIM_BODY_MIN = c["RECLAIM_BODY_MIN"]; RECLAIM_UPPER_MAX = c["RECLAIM_UPPER_MAX"]
     RECLAIM_FAIL_DROP = c.get("RECLAIM_FAIL_DROP", 0.05)
     RECLAIM_FAIL_FIB = c.get("RECLAIM_FAIL_FIB", 0.618)
+    # 暴跌V反硬过滤参数
+    VREV_PRE3_MAX = c.get("VREV_PRE3_MAX", -0.09)
+    VREV_BODY_MAX = c.get("VREV_BODY_MAX", -0.06)
+    VREV_NEWLOW_WIN = c.get("VREV_NEWLOW_WIN", 5)
     if len(bars) < WIN + 20:
         return []
     N = len(bars)
@@ -257,6 +268,21 @@ def detect(bars, const=None):
         fail = any(bars[j]["close"] < fib_floor for j in range(sig + 1, N))
         if fail:
             t = sig + 1; continue
+        # ── 暴跌V反硬过滤（收复前无缩量/无企稳的连续暴跌深V反抽）──
+        # 用收复日之前已知的数据判定，三条件同时成立即剔除：
+        #   ① 收复前3日累计跌幅 ≤ -9%   : close[sig-1]/close[sig-3]-1
+        #   ② 收复前1日(末日)实体 ≤ -6%  : close[sig-1]/open[sig-1]-1
+        #   ③ 末日收盘创近5日新低        : close[sig-1] <= min(close[sig-6:sig-1])
+        # 全局回溯（2026-01起，3740候选）：严格阈值剔39只、黄金四样本误伤0。
+        # 数据不足（sig<6）时不触发该过滤，仅靠其余条件判定。
+        if sig >= 6:
+            last = bars[sig - 1]
+            pre3 = last["close"] / bars[sig - 3]["close"] - 1
+            body = last["close"] / last["open"] - 1
+            prior5 = [bars[j]["close"] for j in range(sig - 1 - VREV_NEWLOW_WIN, sig - 1)]
+            newlow = last["close"] <= min(prior5) if prior5 else False
+            if pre3 <= VREV_PRE3_MAX and body <= VREV_BODY_MAX and newlow:
+                t = sig + 1; continue
         avgvol = sum(x["volume"] for x in win[-20:]) / 20
         def ret(n):
             j = min(sig + n, N - 1)
@@ -343,11 +369,12 @@ OPER_RULE = """**操作策略（本模型「管三天」，每次推荐必附）
 - **买点量能（分层参考·非硬过滤）**：回测显示「买点放量 + 破位→收复间隔≤3」组合未来 3 日胜率最高（71.5%），列为**量能精选层（优先关注）**；缩量承接型仍保留但排序靠后。两者均不剔除。
 - **二次确认（二次提示点）**：收复后 1~5 日内再现「放量上涨（收涨≥3%）」即确认非单纯反弹；**仅当确认日距今 ≤1 交易日**才列为**第一优先级**推送，确认日距今 >1 交易日（涨势已兑现/回落）则**自动降级为观察样本**，避免旧信号霸榜。**二次确认是「优先级提示」而非「买点」**：回测确认日追高买入为负期望（3日胜率44.5%／均收−0.57%），正期望买点仍在收复日 T+1/T+2；未达确认条件的作为**观察样本**继续跟踪。
 - **收复后失效剔除（0.618 黄金分割）**：以「破位低点→收复日最高」为一波拉升，取 0.618 黄金回撤位作防线（floor = 收复日最高 − 0.618×(收复日最高−破位低点)）；收复日后任一交易日**收盘跌破该防线**即视为有效跌破黄金支撑、收复失败，直接剔除，不再推送、不再"管三天"（如北方长龙/内蒙一机/华联股份）。仅盘中插针不算，以收盘为准。
+- **暴跌V反硬过滤（2026-11-25）**：收复前若「连续暴跌+末日大阴+创新低」——前3日累计跌幅≤-9%、末日实体≤-6%、末日收盘创近5日新低，三条件同时成立——判为无缩量/无企稳的下跌中继深V反抽，直接剔除（非洗盘）。全市场回溯剔39只、四黄金样本误伤0。
 - 风控：跌破支撑下 3~5% 止损；到达 +8~12% 或放量滞涨可提前止盈。"""
 
 # 模型原始样本（用于回忆模型来源/标定口径；每条推送末尾附，便于对照）
-ORIGINAL_SAMPLES = "📌 模型原型：以上选股基于均普智能(688306)、幸福蓝海(300528)、仁信新材(301395)，提示日为假破位后收复支撑之日，基本特征：横盘支撑→假破位诱空→站回支撑博反弹得出。"
-STRATEGY_NOTE = "📈 最优策略：提示日次日开盘买入，持有至第10天(D+11)最高价卖出（2026年回溯胜率91%、平均收益+13.5%，按盘中最高价理想成交）；跌破买入价-5%止损（止损用于控制回撤，回溯显示会略降理想收益）。"
+ORIGINAL_SAMPLES = ("📌 **模型原始样本**（建模标尺，供回忆对照）："
+                    "均普智能 sh688306、幸福蓝海 sz300528、仁信新材 sz301395。")
 
 # T+1 形态识别阈值
 UPPER_SHADOW_RATIO = 0.5   # 上影 >= 0.5×实体 视为「带上影」
@@ -440,13 +467,6 @@ def op_plan(bars, sig):
 
 # ============================ 推送（PushPlus, 与仓库统一） ============================
 def push(title, content):
-    try:                       # 临近财报/预告：微信推送加醒目标识（离线读本地日历）
-        import sys as _sys
-        _sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
-        import report_risk as _rr
-        title, content = _rr.decorate(title, content, "markdown")
-    except Exception:
-        pass
     token = (os.environ.get("PUSHPLUS_TOKEN") or "").strip()
     if not token:
         print("[推送] 未配置 PUSHPLUS_TOKEN，仅打印")
@@ -589,7 +609,7 @@ def _push_report(cands, today):
     if not cands:
         push("%s %s（无信号）" % (MODEL_LABEL, today),
              "### %s\n\n今日无「假破位后收复支撑」候选（近 %d 交易日）。\n\n%s" % (
-                 MODEL_LABEL, CONST["MAX_AGE"], ORIGINAL_SAMPLES + "\n" + STRATEGY_NOTE))
+                 MODEL_LABEL, CONST["MAX_AGE"], ORIGINAL_SAMPLES))
         return
     _fresh = CONST["SECOND_CONFIRM_FRESH"]
     confirmed = [e for e in cands if isinstance(e.get("second_confirm"), dict)
@@ -631,7 +651,7 @@ def _push_report(cands, today):
                 e["code"], e.get("name", ""), e["support"], e["break_day"], e["sig_day"],
                 e.get("vol_ratio"), (e["op"].get("vol_ratio_buy") or 0), score(e)))
     # 固定操作策略（每次必附）+ 模型原始样本标注（便于回忆）
-    lines += ["", OPER_RULE, "", ORIGINAL_SAMPLES, STRATEGY_NOTE]
+    lines += ["", OPER_RULE, "", ORIGINAL_SAMPLES]
     push("%s %s（%d只）" % (MODEL_LABEL, today, len(cands)), "\n".join(lines))
 
 
