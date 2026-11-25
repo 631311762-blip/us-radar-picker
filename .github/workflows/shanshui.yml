@@ -22,6 +22,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 2026-11-25：同 yidian.yml，善水已在 registry 停用，但旧版 watchdog 派发名单
+      # 仍含本文件；以 registry.enabled 为唯一开关，避免误派发时照常抓数并推送。
+      - name: 停用校验（registry.enabled=false 则跳过）
+        id: guard
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          ms = [m for m in json.load(open('common/registry.json'))['models']
+                if m['name'] == 'shanshui']
+          print('run=%s' % ('false' if ms and not ms[0].get('enabled') else 'true'))
+          PY
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -31,6 +43,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: 运行善水模型（自身代码路径）
+        if: steps.guard.outputs.run == 'true'
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           STATE_DIR: shanshui/state
@@ -41,7 +54,7 @@ jobs:
           python3 daily_shanshui.py --model v10 --top 10
 
       - name: 回写状态（供次日复盘）
-        if: always()
+        if: always() && steps.guard.outputs.run == 'true'
         run: |
           git config user.name "shanshui-bot"
           git config user.email "shanshui-bot@users.noreply.github.com"

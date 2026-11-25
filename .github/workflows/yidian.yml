@@ -41,6 +41,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 2026-11-25：本流程虽已停用，但旧版 watchdog 的派发名单仍含 yidian.yml，
+      # 被误派发时 run.py 会照常抓数并推送（11-25 即因此收到「数据源异常告警」）。
+      # 这里以 registry.enabled 为唯一开关：false 时整条流程直接空跑，不抓数、不推送。
+      - name: 停用校验（registry.enabled=false 则跳过）
+        id: guard
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          ms = [m for m in json.load(open('common/registry.json'))['models']
+                if m['name'] == 'yidian']
+          print('run=%s' % ('false' if ms and not ms[0].get('enabled') else 'true'))
+          PY
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -50,6 +63,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: 运行易点模型选股（自身代码路径）
+        if: steps.guard.outputs.run == 'true'
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           STATE_DIR: yidian/state
@@ -60,7 +74,7 @@ jobs:
           python3 yidian/run.py
 
       - name: 回写状态与归档（供次日复盘）
-        if: always()
+        if: always() && steps.guard.outputs.run == 'true'
         run: |
           git config user.name "yidian-bot"
           git config user.email "yidian-bot@users.noreply.github.com"
