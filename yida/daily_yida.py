@@ -302,6 +302,19 @@ def detect(bars, cfg, code=""):
             d2_holds = c[j] >= c[i]
             if not (d1_chg_pct >= cfg.get("weak_rebound_d1_min", 0.10) or d2_holds):
                 continue
+        # ===== v6.5 收复前5日跌幅过滤（2026-11-25 折中版，默认开）=====
+        # 背景：用户要求"D1D2两天必须收复前5日跌幅，避免下跌弱反弹"。
+        # 直接硬卡"D2收盘≥5日前收盘"会误伤15只深跌V反强势票(如科兴D2-12.6%但3日+23%)。
+        # 折中版：只在【前5日确实在跌(跌幅≤阈值-3%)】且【D2仍未收复5日前收盘】时才剔除——
+        #   放过"前5没怎么跌、只是D2深调"的票；只剔"真跌了却没收回"的弱反弹。
+        # 只用 D1(i)、D2(j) 及 j-5 收盘，全部在提示日及之前，严守D2当天预判。
+        # 验证：黄金6样本零误伤；392可核验273只剔除21只(均值+8.14%/命中81.0% < 保留+13.30%/93.3%)；
+        #   对11-25当天10只新提示零影响(全部已收复5日)。false可回退v6.4。
+        if cfg.get("recover5_filter", False) and j >= 5:
+            c5 = c[j - 5]                       # 5个交易日前收盘
+            dec5 = c[i - 1] / c5 - 1            # 前5日跌幅(到D1前收)
+            if dec5 <= -cfg.get("recover5_dec5_min", 0.03) and c[j] < c5:
+                continue                        # 真跌了却没收回 → 弱反弹,剔除
         # 标签预判（仅展示/分级，不影响纳入）
         if r21 >= cfg.get("vol_ratio_accel", 1.35):
             pattern, pat_hold = "accel", cfg.get("accel_hold_days", 3)
