@@ -47,6 +47,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CFG = json.load(open(os.path.join(BASE_DIR, "config.json"), encoding="utf-8"))
 SH, POS, VOL, SC = CFG["shape"], CFG["position"], CFG["volume"], CFG["score"]
 FLT = CFG.get("filter", {})   # 可选二次过滤层；旧版 config 缺该段时为空 dict，向后兼容
+PDV = CFG.get("pre_divergence", {})  # 可选「前置下跌+量能背离」层；缺省即关闭
 PSH = CFG.get("push", {})     # 可选微信推送层；旧版 config 缺该段时为空 dict，自动静默
 KLINE_COUNT = 160          # 共享K线缓存单只读取根数（低位判定需 >= 61）
 RECO_DIR = os.path.join(BASE_DIR, "..", "common", "state", "recommendations", "low_shadow2")
@@ -162,13 +163,20 @@ def detect(df):
     # 前两日累计涨跌 = 信号日前1日收盘 / 前3日收盘 - 1（即信号之前两根K线的累计涨跌）。
     # 仅作为特征列输出给可选过滤层使用，不参与 sig 判定 —— 核心口径逐行不变。
     prior2_cum = c.shift(1) / c.shift(3).where(lambda s: s > 0) - 1
+    # 前置特征（全部只用信号日之前的数据，无前视）：供 pre_divergence 过滤/加分层使用
+    _dw = int(PDV.get("decline_window", 10)); _vw = int(PDV.get("vol_window", 5))
+    _cp = c.shift(1)
+    pre_decline = _cp / c.shift(_dw + 1).where(lambda s: s > 0) - 1
+    _v_roll = v.shift(1).rolling(_vw).mean()
+    pre_vol_trend = _v_roll / _v_roll.shift(_vw).where(lambda s: s > 0)
     out = pd.DataFrame({
         "date": df["date"], "open": o, "close": c, "high": h, "low": l,
         "pct": (c / prec - 1) * 100,
         "upper_body": upper / body, "upper_range": upper / rng,
         "lower_range": lower / rng, "vol_ratio": v / vol_ma5,
         "vol_ratio_prev": vol_ratio_prev, "pos60": c / hh60,
-        "upper_pct": upper_pct, "prior2_cum": prior2_cum, "sig": sig})
+        "upper_pct": upper_pct, "prior2_cum": prior2_cum,
+        "pre_decline": pre_decline, "pre_vol_trend": pre_vol_trend, "sig": sig})
     return out
 
 
@@ -186,6 +194,16 @@ def score(row):
     s = min(row["upper_pct"], SC["upper_cap"]) / SC["upper_cap"] * SC["upper_weight"]
     s += vol_score(row["vol_ratio"], row["vol_ratio_prev"])
     s += min(abs(row["pos60"] - SC["position_target"]) / SC["position_span"], 1.0) * SC["position_weight"]
+    # 前置下跌+缩量加分：跌得越深、量能萎缩越明显，加分越多（0~bonus_weight）
+    if PDV.get("enabled", False) and PDV.get("bonus_weight"):
+        try:
+            d = float(row["pre_decline"]); vt = float(row["pre_vol_trend"])
+            depth = min(max((-d + float(PDV.get("decline_max", -0.08))) / 0.12, 0.0), 1.0)
+            shrink = min(max((float(PDV.get("vol_trend_max", 0.85)) - vt) / 0.35, 0.0), 1.0)
+            if np.isfinite(depth) and np.isfinite(shrink):
+                s += (0.6 * depth + 0.4 * shrink) * float(PDV["bonus_weight"])
+        except (TypeError, ValueError, KeyError):
+            pass
     return round(float(s), 1)
 
 
@@ -214,6 +232,16 @@ def pass_filter(row):
                 return False
         except (TypeError, ValueError, KeyError):
             return False
+    # 前置下跌+量能背离层（config.pre_divergence 驱动）：只认信号日之前的数据
+    if PDV.get("enabled", False):
+        try:
+            d = float(row["pre_decline"]); vt = float(row["pre_vol_trend"])
+            if not (np.isfinite(d) and d <= float(PDV.get("decline_max", -0.08))):
+                return False
+            if not (np.isfinite(vt) and vt < float(PDV.get("vol_trend_max", 0.85))):
+                return False
+        except (TypeError, ValueError, KeyError):
+            return False
     return True
 
 
@@ -221,6 +249,8 @@ def pass_filter(row):
 # 微信推送层（2026-11-16，config.push 驱动）—— 独立于选股核心，异常全吞
 # ----------------------------------------------------------------------------
 def build_title(date, n):
+    if n == 0:
+        return "低位上影线二 · %s · %s" % (date, PSH.get("empty_text") or "五谷丰登")
     tpl = PSH.get("title_template") or "低位上影线二 · {date} · {n}只"
     return tpl.format(date=date, n=n)
 
@@ -259,12 +289,16 @@ def build_markdown(date, picks, stats=None, replay=False):
                     i, p.get("code", ""), p.get("name", ""), p.get("close", ""), p.get("score", "")))
         L.append("")
     else:
-        L += ["**今日空仓（0 只）**", "",
-              "新口径过滤后无信号通过，属阈值预期结果，**不是漏跑或数据源故障**。", ""]
+        L += ["**%s**" % (PSH.get("empty_text") or "五谷丰登"), "",
+              "今日无符合条件标的（空仓），属阈值预期结果，**不是漏跑或数据源故障**。", ""]
 
     # 运行口径与统计
     detail = ["- 口径：前两日累计涨跌 ≤ 0 且 当日量/前5日均量 ≥ 1.1（量比上限 2.2 不变）",
               "- 过滤层：`%s`" % ("on" if FLT.get("enabled", False) else "off")]
+    if PDV.get("enabled", False):
+        detail.append("- 前置背离层：前%d日跌幅 ≤ %.0f%% 且 前%d日量能趋势 < %.2f（已启用）"
+                      % (PDV.get("decline_window", 10), PDV.get("decline_max", -0.08) * 100,
+                         PDV.get("vol_window", 5), PDV.get("vol_trend_max", 0.85)))
     if stats:
         if stats.get("universe"):
             detail.append("- 样本池 %s 只 / 有效K线 %s" % (stats.get("universe"), stats.get("scanned", "—")))
@@ -464,7 +498,10 @@ def main():
                 "vol_ratio_prev": round(float(r["vol_ratio_prev"]), 2),
                 "prior2_cum": round(float(r["prior2_cum"]) * 100, 2),
                 "pos60": round(float(r["pos60"]) * 100, 1),
-                "filter": "v20261115_hard" if FLT.get("enabled", False) else "off",
+                "pre_decline": round(float(r["pre_decline"]) * 100, 2),
+                "pre_vol_trend": round(float(r["pre_vol_trend"]), 2),
+                "filter": ("v20261115_hard" if FLT.get("enabled", False) else "off")
+                          + ("+pre_div" if PDV.get("enabled", False) else ""),
                 "source": "low_shadow2",
             }})
         # 总预算保护：无论卡在哪只，到点强制收尾，保证推送层一定执行

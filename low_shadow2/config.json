@@ -39,11 +39,26 @@
       "vol_ratio": "当日成交量 / 前5日均量（不含当日），与 volume.ma5_cap 同口径"
     }
   },
+  "pre_divergence": {
+    "enabled": true,
+    "decline_window": 10,
+    "decline_max": -0.08,
+    "vol_window": 5,
+    "vol_trend_max": 0.85,
+    "bonus_weight": 12,
+    "note": "信号发生之前的「下跌 + 量能萎缩」层（2026-11-25 用户确认启用）。全部取信号日之前的数据，无前视。enabled=false 一键回滚。",
+    "definitions": {
+      "pre_decline": "信号日前1日收盘 / 信号日前11日收盘 - 1（默认 10 日窗口）",
+      "pre_vol_trend": "信号日前5日均量 / 再前5日均量（<1 即缩量，与当日量比无关）"
+    },
+    "research": "2025-09-25~2026-11-13, 423 条信号：深跌(≤-8%)+强缩量(<0.85) 保留 172 条，T+5 80.2%/+13.08%；被剔除 251 条 T+5 61.4%/+3.78%（z=+4.12）。剔除 2026-07 后保留组 70.4%/+5.30 vs 59.9%/+2.61（z=+1.39，不显著）。代价：日均推送 4.8→1.9 只，49% 交易日空仓。"
+  },
   "push": {
     "enabled": true,
     "channel": "pushplus",
     "fallback_on_failure": true,
     "empty_notice": true,
+    "empty_text": "五谷丰登",
     "title_template": "低位上影线二 · {date} · {n}只",
     "template": "markdown",
     "note": "收盘后把当日清单推送到微信。主通道 PushPlus（PUSHPLUS_TOKEN），失败/未配置时兜底 Server酱（SERVERCHAN_SENDKEY）；空仓也推一条状态通知，避免「没消息=没跑」的误判。enabled=false 一键关闭；--no-push 供本地复跑/回溯使用，不误发。异常全部吞掉，推送失败绝不影响选股与台账。",
@@ -88,6 +103,14 @@
   "task_cron": "0 20 15 * * 1-5",
   "task_time": "15:20",
   "_change_log": [
+    {
+      "date": "2026-11-25",
+      "field": "pre_divergence",
+      "from": null,
+      "to": "enabled=true (前10日跌幅<=-8% 且 前5日量能趋势<0.85, 排序加分12)",
+      "reason": "用户确认：信号发生之前若出现「下跌 + 量能萎缩(背离)」，按硬过滤执行并保留排序加分；空仓推送文案改为「五谷丰登」。",
+      "backtest": "423 条信号：保留 172 条 T+5 80.2%/+13.08%，被剔除 251 条 61.4%/+3.78%；剔除 2026-07 后 70.4% vs 59.9%(z=1.39)。日均 4.8→1.9 只，49% 交易日空仓。"
+    },
     {
       "date": "2026-11-11",
       "field": "volume.ma5_cap",
