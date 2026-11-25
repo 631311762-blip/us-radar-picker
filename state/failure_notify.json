@@ -19,17 +19,23 @@
   },
   "2026-11-25": {
     "date": "2026-11-25",
-    "count": 1,
+    "count": 2,
     "first_at": "2026-11-25T17:37:00+08:00",
-    "last_at": "2026-11-25T17:37:00+08:00",
+    "last_at": "2026-11-25T23:57:16+08:00",
     "workflows": [
-      "A股模型统一流水线（共同前置层）"
+      "A股模型统一流水线（共同前置层）",
+      "A股模型 23点独立兜底"
     ],
     "runs": [
       {
         "id": "45577512589",
         "url": "https://github.com/631311762-blip/us-radar-picker/actions/runs/45577512589",
         "workflow": "A股模型统一流水线（共同前置层）"
+      },
+      {
+        "id": "45649768782",
+        "url": "https://github.com/631311762-blip/us-radar-picker/actions/runs/45649768782",
+        "workflow": "A股模型 23点独立兜底"
       }
     ],
     "sent": true,
