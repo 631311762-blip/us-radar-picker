@@ -1,0 +1,99 @@
+{
+  "date": "2026-11-25",
+  "model": "low_shadow2",
+  "count": 6,
+  "picks": [
+    {
+      "code": "300981",
+      "name": "中红医疗",
+      "close": 12.88,
+      "score": 97.8,
+      "board": "",
+      "raw": {
+        "code": "300981",
+        "name": "中红医疗",
+        "close": 12.88,
+        "score": 97.8,
+        "board": ""
+      }
+    },
+    {
+      "code": "603318",
+      "name": "水发燃气",
+      "close": 6.78,
+      "score": 90.3,
+      "board": "",
+      "raw": {
+        "code": "603318",
+        "name": "水发燃气",
+        "close": 6.78,
+        "score": 90.3,
+        "board": ""
+      }
+    },
+    {
+      "code": "000523",
+      "name": "红棉股份",
+      "close": 2.59,
+      "score": 78.5,
+      "board": "",
+      "raw": {
+        "code": "000523",
+        "name": "红棉股份",
+        "close": 2.59,
+        "score": 78.5,
+        "board": ""
+      }
+    },
+    {
+      "code": "600272",
+      "name": "开开实业",
+      "close": 10.89,
+      "score": 72.6,
+      "board": "",
+      "raw": {
+        "code": "600272",
+        "name": "开开实业",
+        "close": 10.89,
+        "score": 72.6,
+        "board": ""
+      }
+    },
+    {
+      "code": "002259",
+      "name": "升达林业",
+      "close": 3.19,
+      "score": 66.0,
+      "board": "",
+      "raw": {
+        "code": "002259",
+        "name": "升达林业",
+        "close": 3.19,
+        "score": 66.0,
+        "board": ""
+      }
+    },
+    {
+      "code": "002135",
+      "name": "东南网架",
+      "close": 3.68,
+      "score": 65.3,
+      "board": "",
+      "raw": {
+        "code": "002135",
+        "name": "东南网架",
+        "close": 3.68,
+        "score": 65.3,
+        "board": ""
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 777,
+    "universe": 4546,
+    "dropped": 0
+  },
+  "written_at": "2026-11-25T22:30:16+08:00"
+}
