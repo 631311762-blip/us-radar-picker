@@ -65,8 +65,9 @@
       "cmd": "python3 stock-v3/daily_v3.py",
       "enabled": true,
       "settle": false,
-      "timeout": 1800,
-      "_note": "2026-11-18 起主榜切换为奥雅式模型(oya_model.py)：横盘→放量试盘→破位洗盘→盘中放量突破首日推；旧v3.1降为参照。自带 回溯/进化/选股/推送/云端备份 独立子系统；settle=false 跳过公共回溯（自有 feedback 闭环）。历史耗时约 20 分钟，显式放宽超时到 1800s。"
+      "timeout": 3600,
+      "retries": 0,
+      "_note": "2026-11-18 起主榜切换为奥雅式模型(oya_model.py)：横盘→放量试盘→破位洗盘→盘中放量突破首日推；旧v3.1降为参照。自带 回溯/进化/选股/推送/云端备份 独立子系统；settle=false 跳过公共回溯（自有 feedback 闭环）。2026-11-25：实测单次需 30~60 分钟，原 1800s 必然超时、靠 2 次重试硬扛（11-24 run_summary 记录 exit=124 / 3601.9s），改为单次 3600s、retries=0，避免重试再吃一轮超时。"
     },
     {
       "name": "high_shadow",

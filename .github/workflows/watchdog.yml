@@ -1,12 +1,12 @@
 name: A股流水线保底监控
 # 背景：GitHub 对该仓库的 scheduled workflow 偶发漏跑、且严重延迟
 #       （实测 11-10 延迟49分钟、11-11 延迟47分钟才点火）。
-# 作用：本 watchdog 在主流水线 cron(北京16:05) 之后约75分钟检查当日状态：
+# 作用：本 watchdog 在主流水线 cron(北京15:10) 之后约2小时检查当日状态：
 #       - 已成功运行        -> 跳过（无论延迟多久，结果已出）
 #       - 正常在途(in_progress) -> 跳过（等它跑完，避免双跑）
 #       - 卡死(in_progress 超90min) / 锁死(pending/queued 超15min)
-#                           -> 派发各模型【独立 workflow】兜底
-#       - 完全没跑 / 仅失败  -> 派发各模型【独立 workflow】兜底
+#                           -> 派发【未产出模型】的独立 workflow 兜底
+#       - 完全没跑 / 仅失败  -> 派发【未产出模型】的独立 workflow 兜底
 #
 # 【2026-11-23 方案A：占锁修复】
 #   根因：统一流水线 concurrency group=a-share-pipeline / cancel-in-progress:false，
@@ -16,25 +16,27 @@ name: A股流水线保底监控
 #   修复：卡死/锁死时改派【独立模型 workflow】——它们各自用独立 concurrency
 #         group，不受主锁约束（11-23 晚即靠 6 个独立流程救场验证有效）。
 #         不改 cancel-in-progress:true，避免拦腰砍断正常 run / 重复推送。
-#   防重复：派发前查当日独立流程是否已被派发过（含 fallback-2300），有则跳过；
-#         各模型 push_guard 再兜一层同日去重。
-# 注意：watchdog 自身也是 schedule，理论上也可能被 GitHub 延迟/漏跑；但它与主流程
-#       是两个独立定时，同时漏跑的概率远低于单个，作为“保底中的保底”。
+#
+# 【2026-11-25 修复：按模型判断，不再用单个模型代表全部】
+#   11-25 主流水线失败后本 watchdog 已拉起部分独立流程（领湃 18:28 推送成功），
+#   但 23:00 兜底只看「领湃是否推送」就把整条兜底 skip，主升浪当天没有补推。
+#   现在改为逐个模型检查各自的产出标记，只派发「未产出且不在途」的模型；
+#   各模型都有自己的推送去重，重复派发不会重复推送。
 on:
   schedule:
-    # 北京时间 17:20（UTC 09:20），晚于 主流程cron(16:05)+最大实测延迟(47min) 的安全余量
+    # 北京时间 17:20（UTC 09:20），晚于 主流程cron(15:10)+最大实测延迟(47min) 的安全余量
     - cron: '20 9 * * 1-5'
   workflow_dispatch: {}
 
 permissions:
-  actions: write   # 需要调用 workflow dispatch API 补跑主流水线
+  actions: write   # 需要调用 workflow dispatch API 补跑
   contents: read
 
 jobs:
   watchdog:
     runs-on: ubuntu-latest
     steps:
-      - name: 检查今日主流水线状态
+      - name: 检查今日主流水线状态（按模型判断产出）
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -42,104 +44,137 @@ jobs:
         run: |
           python3 - <<'PY'
           import os, json, urllib.request, datetime
+
           repo = os.environ['REPO']; tok = os.environ['GH_TOKEN']
-          today = datetime.datetime.utcnow().strftime('%Y-%m-%d')
-          url = f"https://api.github.com/repos/{repo}/actions/workflows/412216318/runs?per_page=100"
-          req = urllib.request.Request(url, headers={
-              'Authorization': f'Bearer {tok}',
-              'Accept': 'application/vnd.github+json'})
-          data = json.load(urllib.request.urlopen(req))
+          now = datetime.datetime.now(datetime.timezone.utc)
+          today = now.strftime('%Y-%m-%d')
+          today_bjt = datetime.datetime.now(
+              datetime.timezone(datetime.timedelta(hours=8))).strftime('%Y-%m-%d')
+
+          WFS = ['lingpei.yml', 'low_shadow2.yml', 'kaizhong.yml',
+                 'yida.yml', 'powei.yml', 'stock-v3-daily.yml']
+
+          def gh(path):
+              req = urllib.request.Request(
+                  'https://api.github.com/repos/%s/%s' % (repo, path),
+                  headers={'Authorization': 'Bearer ' + tok,
+                           'Accept': 'application/vnd.github+json',
+                           'User-Agent': 'watchdog'})
+              with urllib.request.urlopen(req, timeout=25) as r:
+                  return json.load(r)
+
+          def raw(path):
+              req = urllib.request.Request(
+                  'https://raw.githubusercontent.com/%s/main/%s' % (repo, path),
+                  headers={'Authorization': 'Bearer ' + tok, 'User-Agent': 'watchdog'})
+              with urllib.request.urlopen(req, timeout=25) as r:
+                  return r.read().decode('utf-8', 'replace')
+
+          def pushed_today(wf):
+              try:
+                  if wf == 'lingpei.yml':
+                      return today_bjt in raw('lingpei/lingpei/state/领湃_推送去重.json')
+                  if wf == 'stock-v3-daily.yml':
+                      for line in reversed(raw('stock-v3/push_log.jsonl').splitlines()[-80:]):
+                          try:
+                              rec = json.loads(line)
+                          except Exception:
+                              continue
+                          if rec.get('ok') and rec.get('date') == today_bjt:
+                              return True
+                      return False
+                  if wf == 'powei.yml':
+                      return ('"date": "%s"' % today_bjt) in raw('powei/state/index.jsonl')
+                  if wf == 'yida.yml':
+                      return raw('common/state/recommendations/yida/%s.json'
+                                 % today_bjt) is not None
+                  if wf == 'low_shadow2.yml':
+                      return raw('common/state/recommendations/low_shadow2/%s.json'
+                                 % today_bjt) is not None
+                  if wf == 'kaizhong.yml':
+                      items = gh('contents/kaizhong/state/reports?ref=main')
+                      return any(today_bjt in it.get('name', '') for it in items)
+              except Exception as e:
+                  print('WARN 读 %s 产出标记失败(%s)，按未产出处理' % (wf, e))
+              return False
+
+          def active_today(wf):
+              try:
+                  for r in gh('actions/workflows/%s/runs?per_page=16' % wf)['workflow_runs']:
+                      if r['created_at'][:10] == today and r['status'] in (
+                              'in_progress', 'queued', 'pending', 'requested'):
+                          return True
+              except Exception as e:
+                  print('WARN 查 %s 运行状态失败(%s)' % (wf, e))
+              return False
+
           has_success = False
           has_running = False
           stuck_run = None
-          # 主流水线正常应在 90 分钟内跑完（并行后实际仅几分钟）。
-          # 两类需派独立流程兜底的异常：
+          # 主流水线正常应在 90 分钟内跑完（并行后实际仅几分钟）。两类需兜底：
           #   1) in_progress 超 STALE_MINUTES(90) -> 服务端卡死的僵尸 run
           #   2) queued/pending/requested 超 PENDING_STALE_MINUTES(15)
           #      -> 有僵尸 run 占着 group 锁，新 run 一直排队进不去（占锁死锁）
           STALE_MINUTES = 90
           PENDING_STALE_MINUTES = 15
-          now = datetime.datetime.now(datetime.timezone.utc)
-          for r in data['workflow_runs']:
-              if r['created_at'][:10] != today:
-                  continue
-              st, con = r['status'], r.get('conclusion')
-              if st == 'completed' and con == 'success':
-                  has_success = True
-                  print(f"今日已成功运行: run {r['id']} @ {r['created_at']}")
-                  break
-              if st in ('in_progress', 'queued', 'pending', 'requested'):
-                  has_running = True
-                  started = datetime.datetime.fromisoformat(
-                      (r.get('run_started_at') or r['created_at']).replace('Z', '+00:00'))
-                  age_min = (now - started).total_seconds() / 60
-                  print(f"今日运行记录: run {r['id']} {st}，已 {age_min:.0f} 分钟")
-                  if st == 'in_progress' and age_min > STALE_MINUTES:
-                      stuck_run = r['id']
-                      print(f"[WARN] 主流水线 run {r['id']} in_progress 超 {STALE_MINUTES} 分钟，判定卡死")
-                  elif st in ('queued', 'pending', 'requested') and age_min > PENDING_STALE_MINUTES:
-                      stuck_run = r['id']
-                      print(f"[WARN] 主流水线 run {r['id']} {st} 超 {PENDING_STALE_MINUTES} 分钟仍进不去，判定被占锁死锁")
-
-          # 幂等（2026-11-24 修复）：不能只看「派发过」，必须确认那次派发真的推送成功。
-          # 11-23 lingpei 被派发且 success，但 em_hist 失败早退、当天零推送，旧逻辑据此 skip
-          # 导致无人补发。改为核验推送去重标记（仅真正推送时写入并回写）是否含今日日期。
-          indep_dispatched = False
           try:
-              probe = "https://api.github.com/repos/%s/actions/workflows/lingpei.yml/runs?per_page=30" % repo
-              req2 = urllib.request.Request(probe, headers={
-                  'Authorization': f'Bearer {tok}', 'Accept': 'application/vnd.github+json'})
-              d2 = json.load(urllib.request.urlopen(req2, timeout=20))
-              dispatched = [r2 for r2 in d2.get('workflow_runs', [])
-                            if r2['created_at'][:10] == today and str(r2.get('event','')) == 'workflow_dispatch']
-              if dispatched:
-                  print(f"今日独立流程已派发 {len(dispatched)} 次: {[r['id'] for r in dispatched]}")
-                  today_bjt = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime('%Y-%m-%d')
-                  pushed_today = False
-                  try:
-                      raw = ("https://raw.githubusercontent.com/%s/main/"
-                             "lingpei/lingpei/state/领湃_推送去重.json" % repo)
-                      req3 = urllib.request.Request(raw, headers={
-                          'Authorization': f'Bearer {tok}', 'User-Agent': 'watchdog'})
-                      marks = json.load(urllib.request.urlopen(req3, timeout=20))
-                      pushed_today = any(str(k).startswith(today_bjt) for k in marks.keys())
-                      print(f"推送去重标记今日({today_bjt})={pushed_today}, 标记={list(marks.keys())[-3:]}")
-                  except Exception as e3:
-                      print(f"[WARN] 读推送标记失败({e3})，按未推送处理")
-                  indep_dispatched = pushed_today
+              data = gh('actions/workflows/412216318/runs?per_page=100')
+              for r in data['workflow_runs']:
+                  if r['created_at'][:10] != today:
+                      continue
+                  st, con = r['status'], r.get('conclusion')
+                  if st == 'completed' and con == 'success':
+                      has_success = True
+                      print('今日已成功运行: run %s @ %s' % (r['id'], r['created_at']))
+                      break
+                  if st in ('in_progress', 'queued', 'pending', 'requested'):
+                      has_running = True
+                      started = datetime.datetime.fromisoformat(
+                          (r.get('run_started_at') or r['created_at']).replace('Z', '+00:00'))
+                      age_min = (now - started).total_seconds() / 60
+                      print('今日运行记录: run %s %s，已 %.0f 分钟' % (r['id'], st, age_min))
+                      if st == 'in_progress' and age_min > STALE_MINUTES:
+                          stuck_run = r['id']
+                          print('[WARN] 主流水线 run %s in_progress 超 %d 分钟，判定卡死'
+                                % (r['id'], STALE_MINUTES))
+                      elif st in ('queued', 'pending', 'requested') and age_min > PENDING_STALE_MINUTES:
+                          stuck_run = r['id']
+                          print('[WARN] 主流水线 run %s %s 超 %d 分钟仍进不去，判定被占锁死锁'
+                                % (r['id'], st, PENDING_STALE_MINUTES))
           except Exception as e:
-              print(f"[WARN] 查询独立流程派发痕迹失败({e})，按未派发处理")
+              print('WARN 查询主流水线状态失败(%s)，按未产出处理' % e)
+
+          missing = [wf for wf in WFS if not pushed_today(wf) and not active_today(wf)]
+          print('未产出模型: %s' % (' '.join(missing) or '无'))
 
           if has_success:
-              decision = 'skip'
-          elif indep_dispatched:
-              decision = 'skip'       # 今日独立流程已派发且确实推送成功，避免重复
+              decision, targets = 'skip', []
+          elif not missing:
+              decision, targets = 'skip', []
           elif stuck_run is not None:
-              decision = 'dispatch'   # 卡死/锁死：派独立流程兜底（绕开主锁）
+              decision, targets = 'dispatch', missing
           elif has_running:
-              decision = 'skip'       # 正常在途，等其完成避免双跑
+              decision, targets = 'skip', []
           else:
-              decision = 'dispatch'   # 没跑/失败：派独立流程兜底
-          print(f"DECISION={decision}")
-          open('/tmp/wd_decision', 'w').write(decision)
+              decision, targets = 'dispatch', missing
+          print('DECISION=%s TARGETS=%s' % (decision, ' '.join(targets) or '-'))
+          out = os.environ.get('GITHUB_OUTPUT')
+          if out:
+              with open(out, 'a', encoding='utf-8') as fh:
+                  fh.write('decision=%s\n' % decision)
+                  fh.write('wfs=%s\n' % ' '.join(targets))
           PY
-      - name: 派发独立模型流程兜底（绕开主锁，如需要）
-        if: steps.check.outcome == 'success'
+      - name: 派发未产出模型的独立流程兜底（绕开主锁，如需要）
+        if: steps.check.outputs.decision == 'dispatch' && steps.check.outputs.wfs != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          TARGETS: ${{ steps.check.outputs.wfs }}
         run: |
-          DEC=$(cat /tmp/wd_decision 2>/dev/null)
-          if [ "$DEC" != "dispatch" ]; then
-            echo "今日主流水线已成功/正常在途/独立流程已兜底，跳过派发"
-            exit 0
-          fi
-          echo "主流水线卡死/锁死/未跑：派发各模型独立流程（独立 group，不受主锁约束）"
-          # 与 fallback-2300.yml 的 WFS 保持一致（10 个模型全覆盖，含 11-23 补建的 yida.yml）。
-          WFS="shanshui.yml lingpei.yml low_shadow2.yml \
-               kaizhong.yml yidian.yml yida.yml powei.yml stock-v3-daily.yml"
+          echo "未产出模型：$TARGETS"
+          # 与 fallback-2300.yml 保持一致（registry 中 enabled 的模型）
           OK=0; FAIL=0
-          for wf in $WFS; do
+          for wf in $TARGETS; do
             if gh api -X POST "repos/$REPO/actions/workflows/$wf/dispatches" -f ref=main; then
               echo "OK   $wf"; OK=$((OK+1))
             else
@@ -149,6 +184,6 @@ jobs:
           done
           echo "独立流程派发完成：成功 $OK，失败 $FAIL"
           if [ "$OK" -eq 0 ]; then
-            echo "::error::独立流程全部派发失败"
+            echo "::error::未产出模型全部派发失败"
             exit 1
           fi
