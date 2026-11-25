@@ -1974,10 +1974,10 @@
         "done": true
       },
       "t10": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-24",
+        "close": 8.36,
+        "ret": -0.0659,
+        "done": true
       }
     },
     {
@@ -2015,10 +2015,10 @@
         "done": true
       },
       "t10": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-24",
+        "close": 7.25,
+        "ret": -0.1369,
+        "done": true
       }
     },
     {
@@ -2056,10 +2056,10 @@
         "done": true
       },
       "t10": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-24",
+        "close": 6.81,
+        "ret": -0.1303,
+        "done": true
       }
     },
     {
@@ -2097,10 +2097,10 @@
         "done": true
       },
       "t10": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-24",
+        "close": 24.42,
+        "ret": -0.1611,
+        "done": true
       }
     },
     {
@@ -2138,10 +2138,10 @@
         "done": true
       },
       "t10": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-24",
+        "close": 18.15,
+        "ret": -0.1266,
+        "done": true
       }
     },
     {
@@ -2337,10 +2337,10 @@
         "done": true
       },
       "t5": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-25",
+        "close": 24.95,
+        "ret": -0.0131,
+        "done": true
       },
       "t10": {
         "date": null,
@@ -2378,10 +2378,10 @@
         "done": true
       },
       "t5": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-25",
+        "close": 7.52,
+        "ret": -0.0635,
+        "done": true
       },
       "t10": {
         "date": null,
@@ -2419,10 +2419,10 @@
         "done": true
       },
       "t5": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-25",
+        "close": 27.67,
+        "ret": -0.106,
+        "done": true
       },
       "t10": {
         "date": null,
@@ -2460,10 +2460,10 @@
         "done": true
       },
       "t5": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-25",
+        "close": 22.8,
+        "ret": -0.0717,
+        "done": true
       },
       "t10": {
         "date": null,
@@ -2501,10 +2501,10 @@
         "done": true
       },
       "t5": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-25",
+        "close": 12.8,
+        "ret": -0.0909,
+        "done": true
       },
       "t10": {
         "date": null,
@@ -2542,10 +2542,10 @@
         "done": true
       },
       "t5": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-25",
+        "close": 81.48,
+        "ret": -0.0607,
+        "done": true
       },
       "t10": {
         "date": null,
@@ -2583,10 +2583,10 @@
         "done": true
       },
       "t5": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-25",
+        "close": 148.51,
+        "ret": -0.0473,
+        "done": true
       },
       "t10": {
         "date": null,
@@ -2624,10 +2624,10 @@
         "done": true
       },
       "t5": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-25",
+        "close": 9.01,
+        "ret": -0.0908,
+        "done": true
       },
       "t10": {
         "date": null,
@@ -2665,10 +2665,10 @@
         "done": true
       },
       "t5": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-25",
+        "close": 42.37,
+        "ret": -0.0801,
+        "done": true
       },
       "t10": {
         "date": null,
@@ -2706,10 +2706,10 @@
         "done": true
       },
       "t5": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-25",
+        "close": 15.6,
+        "ret": -0.0692,
+        "done": true
       },
       "t10": {
         "date": null,
@@ -2747,10 +2747,10 @@
         "done": true
       },
       "t5": {
-        "date": null,
-        "close": null,
-        "ret": null,
-        "done": false
+        "date": "2026-11-25",
+        "close": 6.09,
+        "ret": -0.066,
+        "done": true
       },
       "t10": {
         "date": null,
