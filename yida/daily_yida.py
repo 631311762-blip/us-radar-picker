@@ -108,6 +108,63 @@ def _rebound_filter(c, o, i, j, d1_limit_up, cfg):
     return a or b or cc
 
 
+def _d1_shape_ok(o, c, code, i, cfg):
+    """v6 规则①：D1质量 = 阳包阴 或 D0涨停豁免。
+    阳包阴 = D0阴线 且 D1阳线 且 D1收≥D0开 且 D1开≤D0收。
+    D0涨停(主板9.8%/双创19.5%/北交29.5%)则豁免——救回'涨停后整理'的追涨型样本(超声/肯特二次)。
+    返回 (是否通过, D0是否涨停, D1是否阳包阴)。"""
+    if not cfg.get("shape_filter", True):
+        return True, False, False
+    if i < 2:
+        return True, False, False
+    d0_lu = c[i - 1] / c[i - 2] - 1 >= _limit_up_threshold(code, cfg)
+    d0_yin = c[i - 1] < o[i - 1]
+    d1_yang = c[i] > o[i]
+    baoyin = bool(d0_yin and d1_yang and c[i] >= o[i - 1] and o[i] <= c[i - 1])
+    return (d0_lu or baoyin), bool(d0_lu), baoyin
+
+
+def _d2_giveback_ok(c, i, j, d0_lu, cfg):
+    """v6 规则②：D2回吐不过半。D2收盘不得把D1涨幅跌回一半以上；
+    D0涨停时按D0涨停幅度的一半为限(追涨型样本的缓冲更宽)。
+    giveback = D1收 - D2收；half = D0涨停半幅 或 D1涨幅半幅。"""
+    if not cfg.get("giveback_filter", True):
+        return True, 0.0, 0.0
+    d1_gain = c[i] - c[i - 1]
+    half = (c[i - 1] - c[i - 2]) / 2 if d0_lu else d1_gain / 2
+    giveback = c[i] - c[j]
+    return giveback <= half, float(giveback), float(half)
+
+
+def _platform_cv(c, low, i, cfg):
+    """v6 规则③：D1前的下跌企稳平台。在 D1前 lookback~3 日区间找收盘CV最小的
+    win 日窗口，返回 (最小CV, 窗口起点, 平台低点=窗口内最低价)。平台越窄越可靠。
+    与回测口径一致：CV用收盘价算，平台低点用 low 的最低值。"""
+    win = int(cfg.get("platform_cv_win", 5))
+    lbk = int(cfg.get("platform_cv_lookback", 12))
+    best = None
+    for st in range(max(win, i - lbk), i - 3):
+        seg = c[st:st + win]
+        if len(seg) < win:
+            continue
+        cv = float(np.std(seg) / np.mean(seg)) if np.mean(seg) > 0 else 9.9
+        if best is None or cv < best[0]:
+            best = (cv, st)
+    if best is None:
+        return 9.9, i - win, float(np.min(low[max(0, i - win):i]))
+    cv, st = best
+    return cv, st, float(np.min(low[st:st + win]))
+
+
+def _fake_break(c, i, st, plat_low):
+    """v6 规则④(分级非过滤)：假破位收复 = 平台后曾有收盘跌破平台低点，但D1火速收复。
+    仅作★一级标记，不做硬过滤——肯特/南极光等黄金样本无破位，硬过滤会误伤。"""
+    if i <= st + 5:
+        return False
+    broke = any(c[t] < plat_low for t in range(st + 5, i))
+    return bool(broke and c[i] > plat_low)
+
+
 def exit_sim(o, h, c, v, dates, j, buy, pattern, pat_hold, cfg, break_line, shrink_line, n,
              buy_idx=None):
     """v5.3 分类止盈模拟，返回 (ret%, exit_reason, exit_day, held, max_price)。
@@ -161,6 +218,7 @@ def detect(bars, cfg, code=""):
     c = np.array([float(b["close"]) for b in bars])
     v = np.array([float(b["volume"]) for b in bars])
     o = np.array([float(b["open"]) for b in bars])
+    l = np.array([float(b["low"]) for b in bars])
     n = len(c)
     lb, bw = cfg["lookback"], cfg["base_win"]
     hold, sig_day = cfg["hold_days"], cfg["signal_day"]
@@ -216,6 +274,22 @@ def detect(bars, cfg, code=""):
         # v5.1 风控：平台型若命中「下跌中继反抽」特征则剔除（高位诱多尾部风险）
         if pattern == "platform" and _rebound_filter(c, o, i, j, d1_limit_up, cfg):
             continue
+        # ===== v6 形态精选三重硬过滤（2026回测:410→83信号,深亏9.7%→3.7%）=====
+        # ① D1质量：阳包阴 或 D0涨停豁免
+        shape_ok, d0_lu, d1_baoyin = _d1_shape_ok(o, c, code, i, cfg)
+        if not shape_ok:
+            continue
+        # ② D2回吐不过半（D0涨停按涨停半幅）
+        give_ok, giveback, give_half = _d2_giveback_ok(c, i, j, d0_lu, cfg)
+        if not give_ok:
+            continue
+        # ③ D1前平台企稳 CV≤3%
+        plat_cv, plat_st, plat_low = _platform_cv(c, l, i, cfg)
+        if plat_cv > cfg.get("platform_cv_max", 0.03):
+            continue
+        # ④ 假破位收复：仅★分级,不硬过滤（避免误伤肯特/南极光黄金样本）
+        fake_break = _fake_break(c, i, plat_st, plat_low) if cfg.get("tier1_fake_break", True) else False
+        tier = 1 if fake_break else 2
         d1_chg = c[i] / prev - 1
         # v5.4：破位线 = D1实体中点；缩量线 = 两天放量均量×ratio（预判只用D1/D2）
         break_line = (float(bars[i]["open"]) + float(bars[i]["close"])) / 2
@@ -255,6 +329,14 @@ def detect(bars, cfg, code=""):
             decline=round(float(decline) * 100, 1),
             vol_mult=round(float(np.mean(ratios)), 2),
             cv=round(float(cv) * 100, 1),
+            # v6 形态字段（供分级展示/回溯）
+            tier=tier,                          # 1=★假破位收复(一级), 2=普通平台(二级)
+            fake_break=bool(fake_break),
+            d0_limit_up=bool(d0_lu),
+            d1_baoyin=bool(d1_baoyin),
+            plat_cv=round(float(plat_cv) * 100, 1),   # 平台收盘CV(%)
+            plat_low=round(float(plat_low), 2),
+            giveback=round(float(giveback), 2),
             break_line=round(float(break_line), 2),
             shrink_line=round(float(shrink_line)),
             hold_days=pat_hold,
@@ -377,6 +459,9 @@ def _push_two_section(ctx, picks, universe, cfg):
             decline=p.get("decline"), cv=p.get("cv"),
             pattern=p.get("pattern", "platform"),
             hold_days=p.get("hold_days"),
+            tier=p.get("tier", 2), fake_break=p.get("fake_break", False),
+            plat_cv=p.get("plat_cv"), d1_baoyin=p.get("d1_baoyin"),
+            d0_limit_up=p.get("d0_limit_up"),
         )
 
     # 2) 最新提示日 与 最新交易日（以某只票的K线末日为准）
@@ -413,18 +498,23 @@ def _push_two_section(ctx, picks, universe, cfg):
         # 最新提示日那批 → 第一段；更早的历史提示仍在观察 → 第二段
         (seg1 if sig_date == latest_signal else seg2).append(item)
 
-    # 4) 组装推送（只有两段，票名带形态标签）
+    # 4) 组装推送（只有两段，票名带形态标签 + v6★分级）
     def tag(x):
-        return "⚡加速" if x.get("pattern") == "accel" else "🔵平台"
+        base = "⚡加速" if x.get("pattern") == "accel" else "🔵平台"
+        return ("★" + base) if int(x.get("tier") or 2) == 1 else base
+    # 一级(假破位收复)优先：tier小者在前，同级按放量倍数
+    def rank(z):
+        return (int(z.get("tier") or 2), -float(z.get("vol_mult") or 0))
     sig_mmdd = latest_signal[5:] if len(latest_signal) >= 10 else today
     n_accel = sum(1 for x in seg1 + seg2 if x.get("pattern") == "accel")
-    lines = [f"**怡达·双模型 {today}** ｜ 样本{len(universe)} ｜ 已剔除破位/期满{len(dropped)}只", ""]
+    n_tier1 = sum(1 for x in seg1 if int(x.get("tier") or 2) == 1)
+    lines = [f"**怡达·v6形态精选 {today}** ｜ 样本{len(universe)} ｜ 已剔除破位/期满{len(dropped)}只", ""]
 
     entry_open = cfg.get("entry_rule", "d3_open") == "d3_open"
-    lines.append(f"【一、当天提示 {sig_mmdd}·{len(seg1)}只】")
+    lines.append(f"【一、当天提示 {sig_mmdd}·{len(seg1)}只(★假破位{n_tier1})】")
     if not seg1:
         lines.append("今日无新提示")
-    for x in sorted(seg1, key=lambda z: -float(z.get("vol_mult") or 0)):
+    for x in sorted(seg1, key=rank):
         if entry_open and x.get("pending"):
             # 当天提示：D3尚未开盘，买入价未知，明确操作指令
             lines.append(f"`{x['code']}` {x['name']} {tag(x)} **次日开盘介入** · 勿追尾盘")
@@ -435,15 +525,15 @@ def _push_two_section(ctx, picks, universe, cfg):
     lines += ["", f"【二、历史提示·观察中 {len(seg2)}只（未破位）】"]
     if not seg2:
         lines.append("无")
-    for x in sorted(seg2, key=lambda z: z["signal"], reverse=True):
+    for x in sorted(seg2, key=lambda z: (z["signal"], int(z.get("tier") or 2)), reverse=True):
         flag = "✓" if x["ret"] >= cfg["target"] * 100 else ""
         lines.append(f"`{x['code']}` {x['name']} {tag(x)} {x['signal'][5:]}提示 买{x['buy']} "
                      f"观察{x['held']}/{x['pat_hold']}日 {x['ret']:+.1f}%{flag}")
 
-    foot = ("🔵平台:阴跌≥30%平稳放量跟5日 ｜ ⚡加速:阴跌≥20%递增放量跟3日" if not entry_open
-            else "📌买点:提示次日开盘价介入(T+1次日可卖,勿等尾盘) ｜ 🔵平台跟5日 ⚡加速跟3日")
+    foot = ("★假破位收复优先 ｜ 🔵平台/⚡加速均跟3日" if not entry_open
+            else "📌次日开盘介入(T+1次日可卖,勿追尾盘) ｜ ★假破位优先 ｜ 🔵平台/⚡加速均跟3日")
     lines += ["", foot, "⚠️非投资建议"]
-    title = f"怡达 {today} · 提示{len(seg1)} 观察中{len(seg2)}(加速{n_accel})"
+    title = f"怡达v6 {today} · 提示{len(seg1)}(★{n_tier1}) 观察中{len(seg2)}"
     body = "\n".join(lines)
     print(f"[yida] ===PUSH_BODY_START===\n{title}\n{body}\n===PUSH_BODY_END===", flush=True)
     return common_notify.send_alert(title, body)
@@ -476,12 +566,16 @@ def main():
         sig["board"] = x.get("board", "")
         picks.append(sig)
 
-    print(f"[yida] 识别信号 {len(picks)} 个（平台{sum(1 for p in picks if p.get('pattern')=='platform')} "
-          f"/ 加速{sum(1 for p in picks if p.get('pattern')=='accel')}）", flush=True)
-    for p in picks:
-        tag = "⚡加速" if p.get("pattern") == "accel" else "🔵平台"
+    n_t1 = sum(1 for p in picks if int(p.get("tier") or 2) == 1)
+    print(f"[yida-v6] 识别信号 {len(picks)} 个（平台{sum(1 for p in picks if p.get('pattern')=='platform')} "
+          f"/ 加速{sum(1 for p in picks if p.get('pattern')=='accel')} / ★假破位{n_t1}）", flush=True)
+    for p in sorted(picks, key=lambda z: (int(z.get("tier") or 2), -float(z.get("vol_mult") or 0))):
+        tag = "★⚡加速" if p.get("pattern") == "accel" and int(p.get("tier") or 2) == 1 else (
+            "★🔵平台" if int(p.get("tier") or 2) == 1 else (
+                "⚡加速" if p.get("pattern") == "accel" else "🔵平台"))
         print(f"  {p['code']} {p['name']} {tag} 提示日{p['signal']} "
-              f"阴跌{p['decline']}% 放量{p['vol_mult']}x CV{p['cv']}%", flush=True)
+              f"阴跌{p['decline']}% 放量{p['vol_mult']}x 平台CV{p.get('plat_cv')}% "
+              f"D0涨停{'是' if p.get('d0_limit_up') else '否'}/阳包阴{'是' if p.get('d1_baoyin') else '否'}", flush=True)
 
     # 台账（自动进入统一回溯）
     ctx.record(picks)
