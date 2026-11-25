@@ -1,7 +1,7 @@
 {
   "start_date": "2026-11-21",
   "init_count": 26,
-  "last_record": "2026-11-24",
+  "last_record": "2026-11-25",
   "stats": {
     "live": {
       "S": {
@@ -66,5 +66,5 @@
   "gate_reason": "live 核心样本 0/30，未达标",
   "live_count": 1,
   "hist_count": 26,
-  "last_evaluate": "2026-11-24"
+  "last_evaluate": "2026-11-25"
 }
