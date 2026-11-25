@@ -430,47 +430,56 @@ def _load_reco_signals(ctx):
     return sigs
 
 
-def _track_signal(sig, bars, cfg, latest_date):
-    """把单条信号跟踪到最新交易日。破位线/缩量线一律从K线重算，不依赖台账字段
-    （历史台账常缺 break_line，导致破位判断失效、破位票被误推）。
-    D2=signal，D1=signal前一根；破位线=D1实体中点，缩量线=D1+D2两天均量×shrink_ratio(v5.4与detect一致)。"""
+def _track_signal(sig, bars, cfg, latest_date, latest_trading_day=None):
+    """把单条历史信号跟踪到最新交易日（v6.4 跟踪规则）。
+    ★ 跟踪三日：D2提示后 D3/D4/D5 三个交易日，期满满自然结束（不再推送）。
+    ★ 止损出局：跟踪期内收盘跌破 D1 阳线实体中点 (开+收)/2 → 出局。
+      此止损独立于 ret_basis，最高价口径下也照常生效（修复旧版 exit_sim 被绕过的bug）。
+    ★ stop_by_low=true 时改用盘中最低价触及止损线判定，默认按收盘价(稳健)。
+    所有线均从K线重算，不依赖台账可能缺失的字段。"""
     dates = [str(b["date"]) for b in bars]
     o = [float(b["open"]) for b in bars]
     h = [float(b["high"]) for b in bars]
+    l = [float(b["low"]) for b in bars]
     c = [float(b["close"]) for b in bars]
-    v = [float(b["volume"]) for b in bars]
     sig_date = sig.get("signal", "")
     if sig_date not in dates:
         return None
-    j = dates.index(sig_date)
+    j = dates.index(sig_date)          # D2 提示日
     if j < 1:
         return None
     pattern = sig.get("pattern", "platform")
-    pat_hold = int(sig.get("hold_days") or (
-        cfg.get("accel_hold_days", 3) if pattern == "accel" else cfg["hold_days"]))
-    # 从K线重算破位线/缩量线（D1=D2前一根，绝不依赖台账可能缺失的字段）
+    pat_hold = int(cfg.get("track_days", 3))   # v6.4 统一跟3日
     d1 = j - 1
-    bl = (o[d1] + c[d1]) / 2
-    sl = float(np.mean(v[max(0, d1):j + 1])) * cfg.get("shrink_ratio", 0.5)  # v5.4: D1+D2两天均量
-    # v5.3 实盘买点：历史票用 D3 开盘价重算买入（不信台账旧 buy）
+    bl = (o[d1] + c[d1]) / 2                   # D1实体中点=止损线
+    # 最新交易日索引（真实数据末日）
+    last_idx = len(c) - 1
+    ref_day = latest_trading_day or latest_date
+    if ref_day in dates:
+        last_idx = dates.index(ref_day)
+    # 买入价 D3 开盘
     entry_rule = cfg.get("entry_rule", "d3_open")
     buy_idx = j + 1
     if entry_rule == "d3_open" and buy_idx < len(c):
-        buy = float(o[buy_idx])   # D3 开盘价（真实可成交）
+        buy = float(o[buy_idx])
     else:
-        buy = float(sig["buy"]) if sig.get("buy") else c[j]  # 回退 v5.2 / D3未到
-        buy_idx = None
-    # 分类止盈：只跟踪到 latest_date，未走完持有期的按当前最新价临时结算
-    avail = min(j + pat_hold, len(c) - 1)                  # 持有期上限
-    avail = min(avail, max(j, dates.index(latest_date) if latest_date in dates else len(c) - 1))
-    ret_pct, exit_reason, exit_day, held, maxp = exit_sim(
-        np.array(o), np.array(h), np.array(c), np.array(v), dates,
-        j, buy, pattern, pat_hold, cfg, bl, sl, avail + 1, buy_idx=buy_idx)
-    # 尚未触发退出且未走完 → 标记跟踪中，按最新收盘临时结算
-    if exit_reason is None and avail >= j:
-        ret_pct = (c[avail] / buy - 1) * 100 if buy > 0 else 0.0
-    held = sum(1 for d in dates if sig_date < d <= latest_date)
-    return dict(exit_day=exit_day, exit_reason=exit_reason, pattern=pattern,
+        buy = float(sig["buy"]) if sig.get("buy") else c[j]
+    # ---- 跟踪窗口 D3..D(j+pat_hold) ----
+    win_end = min(j + pat_hold, last_idx, len(c) - 1)
+    stop_reason, stop_day, stop_ret = None, None, None
+    for k in range(j + 1, win_end + 1):
+        trig = (l[k] < bl) if cfg.get("stop_by_low", False) else (c[k] < bl)
+        if trig:
+            stop_reason, stop_day = "破D1半", dates[k]
+            stop_ret = (c[k] / buy - 1) * 100 if buy > 0 else 0.0
+            break
+    held = sum(1 for d in dates if sig_date < d <= dates[last_idx])
+    if stop_ret is not None:
+        ret_pct = stop_ret
+    else:
+        px = float(c[last_idx])
+        ret_pct = (px / buy - 1) * 100 if buy > 0 else 0.0
+    return dict(exit_day=stop_day, exit_reason=stop_reason, pattern=pattern,
                 pat_hold=pat_hold, ret=round(ret_pct, 1), held=held,
                 buy=round(buy, 2), break_line=round(float(bl), 2))
 
@@ -484,6 +493,7 @@ def _push_two_section(ctx, picks, universe, cfg):
     """
     import datetime
     today = datetime.datetime.now(kit.cm.BJT).strftime("%m-%d")
+    today_full = datetime.datetime.now(kit.cm.BJT).strftime("%Y-%m-%d")
 
     # 1) 汇总所有信号：台账历史 + 本次 picks（picks 参数最全，覆盖同 key）
     allsig = _load_reco_signals(ctx)
@@ -503,9 +513,11 @@ def _push_two_section(ctx, picks, universe, cfg):
             d0_limit_up=p.get("d0_limit_up"),
         )
 
-    # 2) 最新提示日 与 最新交易日（以某只票的K线末日为准）
-    latest_signal = max(v["signal"] for v in allsig.values()) if allsig else ""
-    latest_date = latest_signal
+    # 2) v6.4铁律：第一段=当天新提示，signal必须严格等于系统当日(today_full)。
+    #    绝不用max(台账signal)冒充当天——否则流水线失败当天会把昨日信号重推。
+    #    第二段历史跟踪的终点=样本K线真实末日(latest_date)，与系统当日可能不同(周末/停牌)。
+    latest_signal = today_full
+    latest_date = today_full
     for (code, _), sig in allsig.items():
         b = kit.cm.load_kline(code, offline=True)
         if b:
@@ -548,7 +560,8 @@ def _push_two_section(ctx, picks, universe, cfg):
     n_accel = sum(1 for x in seg1 + seg2 if x.get("pattern") == "accel")
     n_tier1 = sum(1 for x in seg1 if int(x.get("tier") or 2) == 1)
     entry_open = cfg.get("entry_rule", "d3_open") == "d3_open"
-    lines = [f"**怡达v6.1 · {today}提示** ｜ 样本{len(universe)} ｜ D2当天实时预判", ""]
+    ver = str(cfg.get("_version", "v6.4")).split()[0]
+    lines = [f"**怡达{ver} · {today}提示** ｜ 样本{len(universe)} ｜ D2当天实时预判", ""]
 
     lines.append(f"【当天提示 {sig_mmdd} · {len(seg1)}只（★假破位{n_tier1}）】")
     if not seg1:
@@ -557,7 +570,7 @@ def _push_two_section(ctx, picks, universe, cfg):
     for x in sorted(seg1, key=rank):
         lines.append(f"`{x['code']}` {x['name']} {tag(x)}")
 
-    lines += ["", f"【二、历史提示·观察中 {len(seg2)}只（未破位）】"]
+    lines += ["", f"【二、历史跟踪·持有中 {len(seg2)}只（未出局）】"]
     if not seg2:
         lines.append("无")
     for x in sorted(seg2, key=lambda z: (z["signal"], int(z.get("tier") or 2)), reverse=True):
@@ -565,10 +578,10 @@ def _push_two_section(ctx, picks, universe, cfg):
         lines.append(f"`{x['code']}` {x['name']} {tag(x)} {x['signal'][5:]}提示 买{x['buy']} "
                      f"观察{x['held']}/{x['pat_hold']}日 {x['ret']:+.1f}%{flag}")
 
-    foot = ("★假破位收复优先 ｜ 🔵平台/⚡加速均跟3日" if not entry_open
-            else "📌 D2当天盘后提示，D3开盘价介入(T+1次日可卖,勿等尾盘) ｜ 🔵平台/⚡加速均跟3日 ｜ 最高价口径")
+    foot = ("★假破位收复优先 ｜ 跟3日,三日内收盘破D1阳线实体一半即出局" if not entry_open
+            else "📌 D2当天盘后提示,D3开盘价介入(T+1次日可卖) ｜ 跟3日,三日内收盘跌破D1阳线实体一半即出局 ｜ 最高价口径")
     lines += ["", foot, "⚠️非投资建议"]
-    title = f"怡达v6.1 {today} · 提示{len(seg1)}(★{n_tier1}) 观察中{len(seg2)}"
+    title = f"怡达{ver} {today} · 新提示{len(seg1)}(★{n_tier1}) 跟踪中{len(seg2)}"
     body = "\n".join(lines)
     print(f"[yida] ===PUSH_BODY_START===\n{title}\n{body}\n===PUSH_BODY_END===", flush=True)
     return common_notify.send_alert(title, body)
