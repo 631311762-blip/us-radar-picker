@@ -39,6 +39,7 @@ UNIVERSE_JSON = os.path.join(STATE_DIR, "universe.json")
 META_JSON = os.path.join(STATE_DIR, "meta.json")
 LIXIN_JSON = os.path.join(STATE_DIR, "lixin_exclude.json")
 REGULATORY_JSON = os.path.join(STATE_DIR, "regulatory_exclude.json")
+UNLOCK_JSON = os.path.join(STATE_DIR, "unlock_exclude.json")
 os.makedirs(KLINE_DIR, exist_ok=True)
 
 
@@ -82,6 +83,44 @@ def load_lixin_exclude():
             return set(json.load(fh).get("codes", []))
     except Exception:
         return set()
+
+
+def load_unlock_exclude(today=None):
+    """读取「大额限售解禁排除集」（由 unlock_risk.py 每周六生成）。
+
+    读取时按当日重算窗口：解禁日滑出 [today-Δ, today+Δ] 或批次占比不足
+    门槛的自动失效，文件即使一周未更新也不会继续误剔除。
+    """
+    if not os.path.exists(UNLOCK_JSON):
+        return set()
+    try:
+        with open(UNLOCK_JSON, "r", encoding="utf-8") as fh:
+            d = json.load(fh)
+    except Exception:
+        return set()
+    records = d.get("records") or {}
+    if not records:                     # 兼容仅存 codes 的旧文件
+        return set(d.get("codes") or [])
+    day = today or datetime.now(BJT).date()
+    win = int(d.get("window_days") or 30)
+    try:
+        big = float(d.get("big_ratio") or 0.10)
+    except (TypeError, ValueError):
+        big = 0.10
+    lo = (day - timedelta(days=win)).isoformat()
+    hi = (day + timedelta(days=win)).isoformat()
+    out = set()
+    for code, rec in records.items():
+        for b in (rec.get("batches") or []):
+            bd = str(b.get("date") or "")[:10]
+            try:
+                br = float(b.get("ratio") or 0)
+            except (TypeError, ValueError):
+                br = 0.0
+            if bd and lo <= bd <= hi and br >= big:
+                out.add(code)
+                break
+    return out
 
 # ------------------------------------------------------------------ 常量（与已验证的东财口径一致）
 BJT = timezone(timedelta(hours=8))
@@ -440,11 +479,12 @@ def check_base_universe_health(rows=None):
 
 
 def get_universe(verbose=True, apply_lixin=True, apply_regulatory=True,
-                 force_snapshot=False, prefer_snapshot=False):
+                 apply_unlock=True, force_snapshot=False, prefer_snapshot=False):
     """东方财富全市场列表，应用硬共识剔除，返回统一结构的样本池。
 
     apply_lixin=False 时跳过立信剔除；apply_regulatory=False 时跳过「近一年
-    监管立案/涉嫌违法」剔除。两者仅用于生成对应排除集时避免循环引用。
+    监管立案/涉嫌违法」剔除；apply_unlock=False 时跳过「大额限售解禁」剔除。
+    三者仅用于生成对应排除集时避免循环引用。
 
     返回字段：code, name, board, price, pct(涨跌幅%), turnover(换手%),
              mktcap(总市值), float_mktcap(流通市值), vr(量比)。
@@ -465,7 +505,8 @@ def get_universe(verbose=True, apply_lixin=True, apply_regulatory=True,
     """
     lixin = load_lixin_exclude() if apply_lixin else set()
     regulatory = load_regulatory_exclude() if apply_regulatory else set()
-    st_drop = lixin_drop = regulatory_drop = 0
+    unlock = load_unlock_exclude() if apply_unlock else set()
+    st_drop = lixin_drop = regulatory_drop = unlock_drop = 0
 
     # 快照优先快路径：仅当调用方要求且快照通过健康校验时启用。
     if prefer_snapshot and not force_snapshot:
@@ -547,7 +588,7 @@ def get_universe(verbose=True, apply_lixin=True, apply_regulatory=True,
         else:
             print("[common] 实时列表异常且无快照，样本池为空。")
             if verbose:
-                print("[common] 全市场样本池：0 只（ST/次新剔除 0，立信剔除 0，监管立案剔除 0）")
+                print("[common] 全市场样本池：0 只（ST/次新剔除 0，立信剔除 0，监管立案剔除 0，大解禁剔除 0）")
             LAST_UNIVERSE_STATUS.clear()
             LAST_UNIVERSE_STATUS.update({
                 "source": "none", "rows": 0,
@@ -570,6 +611,9 @@ def get_universe(verbose=True, apply_lixin=True, apply_regulatory=True,
             continue
         if code in regulatory:       # 条件⑤：近一年监管立案/涉嫌违法 物理剔除
             regulatory_drop += 1
+            continue
+        if code in unlock:           # 条件⑦：近 ±30 天大额限售解禁 物理剔除
+            unlock_drop += 1
             continue
         rows.append({
             "code": code, "name": nm, "board": r.get("board") or board_of(code),
@@ -608,8 +652,8 @@ def get_universe(verbose=True, apply_lixin=True, apply_regulatory=True,
                   % (priced, len(rows), filled))
     if verbose:
         print("[common] 全市场样本池：%d 只（ST/次新剔除 %d，立信剔除 %d，"
-              "监管立案剔除 %d）"
-              % (len(rows), st_drop, lixin_drop, regulatory_drop))
+              "监管立案剔除 %d，大解禁剔除 %d）"
+              % (len(rows), st_drop, lixin_drop, regulatory_drop, unlock_drop))
     LAST_UNIVERSE_STATUS.clear()
     LAST_UNIVERSE_STATUS.update({
         "source": "snapshot" if used_fallback else "realtime",
@@ -617,6 +661,7 @@ def get_universe(verbose=True, apply_lixin=True, apply_regulatory=True,
         "st_drop": st_drop,
         "lixin_drop": lixin_drop,
         "regulatory_drop": regulatory_drop,
+        "unlock_drop": unlock_drop,
     })
     return rows
 

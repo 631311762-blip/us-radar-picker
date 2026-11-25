@@ -24,8 +24,9 @@ on:
   #   · 周一~五（10 7 * * 1-5）只跑「日增量」——更新全市场行情 K 线 + 财报日历，
   #     立信/监管立案/基础快照直接复用上一周六产出的缓存，前置层只留行情一条耗时链路。
   #   · 周六（0 1 * * 6，北京 09:00）跑「周刷新」——集中全量重扫立信（F10+公告全年）、
-  #     监管立案（滚动一年基线）、重建 base_universe.json；休市无新行情故跳过 K 线，
-  #     下游模型因 trading_day=false 自动跳过。周一~五即用新刷新的信息选股。
+  #     监管立案（滚动一年基线）、大额限售解禁（前后30天，占总股本≥10%）、重建
+  #     base_universe.json；休市无新行情故跳过 K 线，下游模型因 trading_day=false
+  #     自动跳过。周一~五即用新刷新的信息选股。
   # 已停用 5 个被本流水线取代的独立 A 股 workflow
   #（shanshui/low_shadow/lingpei/kaizhong/yidian），避免重复运行。
   # 美股 us-radar-picker.yml 仍保持独立运行（不同市场，不共享前置层）。
@@ -112,6 +113,9 @@ jobs:
           KZ_WORKERS: ${{ vars.KZ_WORKERS || '16' }}
           # 临近定期报告/业绩预告的推送标注窗口（自然日，默认15天）
           REPORT_RISK_DAYS: ${{ vars.REPORT_RISK_DAYS || '15' }}
+          # 大额限售解禁排除口径：前后各 N 天窗口内，解禁股数/总股本 ≥ 比例
+          UNLOCK_WINDOW_DAYS: ${{ vars.UNLOCK_WINDOW_DAYS || '30' }}
+          UNLOCK_BIG_RATIO: ${{ vars.UNLOCK_BIG_RATIO || '0.10' }}
         run: |
           set -o pipefail
           ARGS=""
@@ -156,6 +160,9 @@ jobs:
               "- 样本池：%s 只，来源：%s" % (m.get("universe_count", "-"), m.get("universe_source", "-")),
               "- 立信排除：%s 只；近一年监管立案/涉嫌违法排除：%s 只" % (
                   m.get("lixin_count", "-"), m.get("regulatory_count", "-")),
+              "- 大解禁排除（前后30天，占总股本≥10%%）：%s 只（%s）" % (
+                  m.get("unlock_count", "-"),
+                  "复用上周" if m.get("unlock_reused") else "本周重建"),
               "- 财报/预告窗口（%s 天内）：%s 只" % (
                   (m.get("report_risk") or {}).get("warn_days", "-"),
                   (m.get("report_risk") or {}).get("in_window", "-")),
@@ -231,6 +238,7 @@ jobs:
           git add common/state/lingpei*_lixin* 2>/dev/null || true
           git add common/state/lixin_exclude.json 2>/dev/null || true
           git add common/state/regulatory_exclude.json 2>/dev/null || true
+          git add common/state/unlock_exclude.json 2>/dev/null || true
           git add common/state/report_calendar.json 2>/dev/null || true
           git add common/state/recommendations 2>/dev/null || true
           # 按天推送去重标记：跨 runner 持久化，防主流水线/兜底/补跑/重试同日重复推送

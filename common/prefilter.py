@@ -14,15 +14,18 @@ prefilter.py —— 共同前置层入口（合并流水线第一步，全局强
                         即使未被 ST 也物理剔除，滚动 365 天自动失效）
   ⑥ 财报窗口标注     : 刷新 report_calendar.json（定期报告预约披露日），仅用于
                         微信推送时给「临近披露」的入选股票加醒目标识，不影响选股。
+  ⑦ 大解禁剔除       : 生成 unlock_exclude.json（过去+未来 30 天内「解禁股数/
+                        总股本 ≥ 10%」的股票；每周六识别，周中复用）。
 
-  ② ③ ⑤ 属于「准入剔除」，在样本池生成阶段物理生效 —— 样本池里根本不含这些
+  ② ③ ⑤ ⑦ 属于「准入剔除」，在样本池生成阶段物理生效 —— 样本池里根本不含这些
   代码，任何下游模型（哪怕自身没写立信/ST 判断）都不可能选到，实现
   「即使模型条件里没有，也是遗漏补上」的强制约束。
 
 产物（common/state/）：
   lixin_exclude.json  立信排除集（含命中依据）
   regulatory_exclude.json  近一年监管立案/涉嫌违法排除集（滚动窗口）
-  universe.json       已剔除 ST + 立信 + 监管立案 的全市场样本池
+  unlock_exclude.json 大额限售解禁排除集（前后 30 天，每周六识别）
+  universe.json       已剔除 ST + 立信 + 监管立案 + 大解禁 的全市场样本池
   market_daily/       2024 年起全市场日 K 分片（跨 runner 持久化，回测离线读取）
   klines/*.csv        当日模型使用的物化 K 线缓存（可重建，不入库）
   meta.json           本次运行元信息（trading_day / 各条件统计 / 降级状态 / 告警）
@@ -45,7 +48,8 @@ prefilter.py —— 共同前置层入口（合并流水线第一步，全局强
       整体只留行情增量这一条耗时链路。
     · 周六（周刷新模式）：休市无新行情，跳过 K 线；集中跑立信
       （--ann-full + --f10-full 全量）、监管立案（滚动一年 full 基线）、
-      并从实时列表重建 base_universe.json / universe.json。下游模型因
+      大额限售解禁（前后 30 天，重新识别），并从实时列表重建
+      base_universe.json / universe.json。下游模型因
       trading_day=false 自动跳过，本周一~周五即用新刷新的信息选股。
   模式由星期几自动判定（周六=5），也可用 --weekly-refresh / --no-weekly-refresh
   显式覆盖；周中发生的 ST/立信/监管变化要等到下周六才会反映（已确认取舍）。
@@ -100,6 +104,7 @@ def main():
     ap.add_argument("--no-kz", action="store_true", help="跳过凯众不复权 K 线预填（调试）")
     ap.add_argument("--no-lixin", action="store_true", help="跳过立信排除集更新，复用已有")
     ap.add_argument("--no-regulatory", action="store_true", help="跳过监管立案排除集更新，复用已有")
+    ap.add_argument("--no-unlock", action="store_true", help="跳过大解禁排除集更新，复用已有")
     ap.add_argument("--reg-full", action="store_true", help="监管立案扫描滚动一年基线（首次建库）")
     ap.add_argument("--no-report-risk", action="store_true", help="跳过定期报告预约披露日历刷新，复用已有")
     ap.add_argument("--weekly-refresh", action="store_true",
@@ -182,7 +187,7 @@ def main():
     else:
         import lixin as lx
         base_u = cm.get_universe(verbose=False, apply_lixin=False,
-                                 apply_regulatory=False,
+                                 apply_regulatory=False, apply_unlock=False,
                                  prefer_snapshot=(not refresh_base_snapshot))
         codes = [x["code"] for x in base_u]
         # F10 通道逐股扫描约 4 分钟，命中结果与历史并集合并、永不自动释放（见 lixin.build）。
@@ -214,7 +219,7 @@ def main():
     else:
         import regulatory as rg
         base_u = cm.get_universe(verbose=False, apply_lixin=False,
-                                 apply_regulatory=False,
+                                 apply_regulatory=False, apply_unlock=False,
                                  prefer_snapshot=(not refresh_base_snapshot))
         # 首次部署没有排除集文件或周刷新，跑滚动一年基线，避免只扫最近 10 天漏掉
         # 一年内已发生的立案；其余日增量本分支不进入。
@@ -229,10 +234,41 @@ def main():
                    "本次公告接口扫描 0 条（可能被限流），已保留历史排除记录、"
                    "未释放任何标的；请检查东财公告接口连通性。")
 
-    # ---- 条件③ + 生成样本池（ST 名称硬剔除 + 立信/监管立案物理剔除） ----
+    # ---- 条件⑦：大额限售解禁排除集（过去+未来 30 天，解禁股数/总股本 ≥ 10%）----
+    # 周六周刷新重建；周中复用上周六产出，读取时按当天窗口自动失效。
+    if args.no_unlock or not weekly_refresh:
+        unlock = cm.load_unlock_exclude()
+        why = "显式 --no-unlock" if args.no_unlock else "日增量模式（非周六）"
+        print("[prefilter] %s：复用已有大解禁排除集 %d 只" % (why, len(unlock)))
+        meta["unlock_count"] = len(unlock)
+        meta["unlock_reused"] = True
+    else:
+        try:
+            import unlock_risk as ur
+            _, ustats = ur.build(verbose=True)
+            meta["unlock_count"] = ustats.get("total_excluded", 0)
+            meta["unlock_stats"] = ustats
+            meta["unlock_reused"] = False
+            if ustats.get("scan_empty"):
+                _alert("解禁数据扫描为空",
+                       "东财解禁接口本次返回 0 条（可能被限流），已保留历史"
+                       "排除记录、未释放任何标的；请检查接口连通性。")
+        except Exception as e:
+            unlock = cm.load_unlock_exclude()
+            print("[prefilter] 大解禁识别失败，复用已有排除集 %d 只：%s"
+                  % (len(unlock), e))
+            meta["unlock_count"] = len(unlock)
+            meta["unlock_reused"] = True
+            meta["unlock_error"] = str(e)
+            _alert("大解禁识别失败",
+                   "本次未能刷新大额解禁排除集：%s。\n已复用上次结果（%d 只），"
+                   "选股不受阻断，但可能遗漏本周新增解禁标的。"
+                   % (e, len(unlock)))
+
+    # ---- 条件③ + 生成样本池（ST 名称硬剔除 + 立信/监管立案/大解禁物理剔除） ----
     # 日增量复用缓存 base_universe.json（prefer_snapshot，仅腾讯补当日价）；
     # 周刷新从实时列表拉取并刷新 base_universe.json。--no-fast-universe 在日增量下仍可关闭快照优先。
-    universe = cm.get_universe(prefer_snapshot=(not refresh_base_snapshot) and fast_universe)  # 内部已应用 ST + 立信 + 监管立案 剔除
+    universe = cm.get_universe(prefer_snapshot=(not refresh_base_snapshot) and fast_universe)  # 内部已应用 ST + 立信 + 监管立案 + 大解禁 剔除
     if not universe:
         # fail-degraded：常规路径（已含 get_universe 内部的快照回退）都拿不到样本池，
         # 再用「已通过健康校验」的快照强制重建一次，而不是直接 exit 1 让整条流水线红。
@@ -348,13 +384,15 @@ def main():
     meta["kline_source_status"] = cm.kline_source_status()
     cm.save_meta(meta)
     print("[prefilter] 完成：模式=%s，样本池 %d 只，立信排除 %d 只（%s），"
-          "监管立案排除 %d 只（%s），财报窗口 %s 只，trading_day=%s，"
-          "来源=%s，降级=%s，告警=%d 条"
+          "监管立案排除 %d 只（%s），大解禁排除 %d 只（%s），财报窗口 %s 只，"
+          "trading_day=%s，来源=%s，降级=%s，告警=%d 条"
           % ("周刷新" if weekly_refresh else "日增量",
              len(universe), meta.get("lixin_count", 0),
              "复用" if meta.get("lixin_reused") else "全量重扫",
              meta.get("regulatory_count", 0),
              "复用" if meta.get("regulatory_reused") else "全量重扫",
+             meta.get("unlock_count", 0),
+             "复用" if meta.get("unlock_reused") else "重建",
              (meta.get("report_risk") or {}).get("in_window", "-"), is_td,
              meta["universe_source"], meta["degraded"], len(ALERTS)))
     return 0
