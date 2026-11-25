@@ -289,6 +289,19 @@ def detect(bars, cfg, code=""):
             d0_limit_up = c[i - 1] / c[i - 2] - 1 >= _limit_up_threshold(code, cfg) if i >= 2 else False
             if not (d1_real_up or d0_limit_up):
                 continue
+        # ===== v6.3 弱反弹过滤（2026-11-25）：剔除"阴跌反弹一日游" =====
+        # 背景：茶花股份/宁波富达11-23这类——D0加速大阴、D1只是超跌反抽(涨幅<10%)、
+        #   D2随即跌回D1收盘之下(不续涨)。本质是下跌中继的弱反弹,非企稳启动。
+        # 规则：D1涨幅≥10%(涨停级启动) 或 D2收盘≥D1收盘(续涨确认)，两条满足其一才纳入；
+        #   两条都不满足(弱D1+回吐D2)→剔除。只用D1/D2,严守D2当天预判。
+        # 验证：黄金5+曼卡龙全保(超声/南极光靠D2续涨,肯特/怡达/曼卡龙靠D1涨幅)；
+        #   392可核验273只中剔除40只(14.7%),剔除组均值+9.46%/命中87.5%低于保留组
+        #   +13.50%/93.1%,零深亏——纯提纯、不避险。开关false可回退v6.2。
+        if cfg.get("weak_rebound_filter", True):
+            d1_chg_pct = c[i] / c[i - 1] - 1
+            d2_holds = c[j] >= c[i]
+            if not (d1_chg_pct >= cfg.get("weak_rebound_d1_min", 0.10) or d2_holds):
+                continue
         # 标签预判（仅展示/分级，不影响纳入）
         if r21 >= cfg.get("vol_ratio_accel", 1.35):
             pattern, pat_hold = "accel", cfg.get("accel_hold_days", 3)
