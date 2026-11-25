@@ -5,32 +5,34 @@
 ================================================================
 源自怡达股份(300721) 2026-08~11 走势提炼，全A股回溯验证。
 
-【版本】v5.3 实盘买点版（2026-11-25）
+【版本】v5.4 D2实时预判版（2026-11-25）
   · 一套引擎通吃两种强势形态：平台型（怡达原型）+ 加速型（南极光原型）
-  · 三类黄金样本标定：超声电子/肯特股份/怡达股份（平台型）、南极光（加速型）
-  · 两类信号互斥：按 CV 与逐日递增性自动分流，互不稀释
-  · v5.3 实盘买点：D2盘后出信号当日买不到 → 次日D3开盘价买入 + T+1(次日才可卖,退出从D4起)
-    （entry_rule 可切回 d2_close 回退 v5.2；2026回测 D3开盘买+4.92%/命中49.8%,黄金样本全保住）
+  · 黄金样本标定：超声电子/肯特股份/怡达股份（平台型）、南极光（加速型）
+  · v5.4 核心修正：取消"4天放量确认"滞后——原v5要D1~D4四根齐才能算CV分流,
+    导致D2提示实际要等D4收盘才发(马后炮,D3买点已过)。v5.4改为D2当天就用
+    D1+D2两天数据出提示,标签按 D2/D1量比 预判,确保D3可实际买入。
+  · 买点：D2盘后出信号 → 次日D3开盘价买入 + T+1(退出从D4起)
+    （entry_rule 可切回 d2_close 回退；黄金样本标签预判5/5正确）
 
-【统一骨架】阴跌 + 连续4天≥2倍放量 + D1前一日≤2.5倍 + 提示日D2
-【双标签分流】
-  · 平台型(platform)：CV<20% 平稳放量
-      - 阴跌≥30%，D1涨停豁免或2~7倍，D2~D4严格2~7倍
-      - 跟踪5日 + 破位/缩量退出；2026信号349个，3日最高≥3%准确率81.9%
-  · 加速型(accel)：CV≥20% 且四天量能逐日递增（v1<v2<v3<v4）
-      - 阴跌≥20%，四天均≥2倍（不设上限，加速型可爆量）
-      - 跟踪3日固定止盈（无破位退出）；2026信号43个，3日收盘≥3%准确率81.4%
-      - 黄金样本：南极光300940 提示11-19 买11.88 → 3日+19.1%
+【统一骨架】阴跌 + D1/D2连续2天≥2倍放量 + D1前一日≤2.5倍 + 提示日D2
+【双标签预判（只用D1/D2两天）】
+  · 平台型(platform)：D2/D1量比<1.35 量能平稳
+      - 阴跌≥30%，D1涨停豁免或2~7倍，D2严格2~7倍
+      - 跟踪5日 + 破位/缩量退出
+  · 加速型(accel)：D2/D1量比≥1.35（D2明显放量、递增启动）
+      - 阴跌≥20%，两天均≥2倍（不设上限）
+      - 跟踪3日固定止盈（无破位退出）
+      - 黄金样本：南极光300940 D2/D1量比1.54→预判加速型
 
 模型规则（参数见 config.json，可改）：
   ① 阴跌前置：D1前一日收盘较过去60日最高价跌幅达标，且收盘 < MA60
      （平台型≥30% / 加速型≥20%）
-  ② 放量：连续4天(D1~D4)成交量 ≥ D1前20日均量的 2倍
-     · 平台型：D1涨停豁免或2~7倍，D2~D4严格2~7倍，且 CV<20%
-     · 加速型：四天≥2倍、CV≥20%、逐日严格递增（这是"加速"核心）
-  ③ 提示日 = 放量第2天(D2)，以 D2 收盘价买入
-  ④ 退出：平台型跟踪5日(破位/缩量退出)；加速型跟踪3日固定止盈
-  ⑤ 命中 = 关注期内最高收益 ≥ 3%
+  ② 放量：D1、D2连续2天成交量 ≥ D1前20日均量的 2倍（v5.4预判,不再等D3/D4）
+     · 平台型：D1涨停豁免或2~7倍，D2严格2~7倍，且 D2/D1量比<1.35
+     · 加速型：两天≥2倍、D2/D1量比≥1.35（预判为递增启动）
+  ③ 提示日 = 放量第2天(D2)当天盘后即发（不再等D3/D4确认）
+  ④ 买点 = D3开盘价；退出：平台型跟踪5日(破位/缩量/移动止盈)；加速型跟踪3日固定
+  ⑤ 命中 = 策略退出收益 ≥ 3%；D3/D4若缩量,历史跟踪按破位/缩量退出兜底
 
 推送（严格两段式，2026-11-24 定版）：
   · 第一段 = 当天提示的票（signal == 最新交易日）
@@ -170,7 +172,8 @@ def detect(bars, cfg, code=""):
     ma60 = np.array([np.mean(c[i - lb:i]) if i >= lb else np.nan for i in range(n)])
     peak = np.array([np.max(h[i - lb:i]) if i >= lb else np.nan for i in range(n)])
 
-    for i in range(start, n - 1):
+    # v5.4：从后往前扫,优先返回窗口内【最新】信号(避免旧信号吃掉当天新提示)
+    for i in range(n - 2, start - 1, -1):
         b = base[i]
         if not np.isfinite(b) or b <= 0 or not np.isfinite(peak[i]):
             continue
@@ -178,47 +181,46 @@ def detect(bars, cfg, code=""):
         decline = prev / peak[i] - 1
         if prev >= ma60[i]:          # 统一骨架：必须在 MA60 之下（空头排列）
             continue
-        # ② 连续4天放量 D1~D4（统一骨架）
-        vols = v[i:i + 4]
-        if len(vols) < 4:
+        # v5.4 D2实时预判：只用 D1、D2 两根放量K线（不再等D3/D4）
+        #   原v5需四根齐才能算CV分流,导致D2提示滞后到D4收盘(马后炮)。
+        #   v5.4只要D1+D2连续2天放量就当天出提示,标签按 D2/D1 量比预判。
+        j = i + sig_day - 1          # 提示日 D2 = i+1
+        if j >= n:
+            continue
+        vols = v[i:j + 1]            # D1、D2 两根
+        if len(vols) < 2:
             continue
         ratios = vols / b
         d1_limit_up = c[i] / c[i - 1] - 1 >= _limit_up_threshold(code, cfg)
         # D1前一日不得已放量（确保D1是启动首日）
         if v[i - 1] / b > 2.5:
             continue
-        cv = np.std(vols) / np.mean(vols)
-        accel = bool(vols[0] < vols[1] < vols[2] < vols[3])   # 逐日严格递增 = 加速特征
+        r21 = float(v[j] / v[i])     # D2/D1 量比 = 标签预判分水岭
 
-        # ===== 双标签分流（互斥）=====
+        # ===== 双标签预判（互斥，只用2天信息）=====
         pattern, pat_hold = None, hold
-        if cv < cfg["cv_max"]:
-            # —— 平台型：阴跌≥30% + D1涨停豁免/2~7倍 + D2~D4严格2~7倍 ——
-            #    D1涨停时豁免其2倍下限（封板量能不足属正常），D2~D4仍严格2~7倍
-            if decline <= -cfg["decline_min"] and (
-                d1_limit_up or (cfg["vol_lo"] <= ratios[0] <= cfg["vol_hi"])
-            ) and np.all((ratios[1:] >= cfg["vol_lo"]) & (ratios[1:] <= cfg["vol_hi"])):
-                pattern, pat_hold = "platform", cfg["hold_days"]
-        elif accel:
-            # —— 加速型：阴跌≥20% + 四天≥2倍递增 + CV≥20% ——
-            #    加速型不享受涨停豁免（递增形态本身要求逐日放量）
+        if r21 >= cfg.get("vol_ratio_accel", 1.35):
+            # 加速型预判：D2量≥1.35×D1(递增启动) + 阴跌≥20% + 两天都≥2倍(不设上限)
+            #   加速型不享受涨停豁免（递增形态本身要求逐日放量）
             if (decline <= -cfg.get("accel_decline_min", 0.20)
                     and np.all(ratios >= cfg["vol_lo"])):
                 pattern, pat_hold = "accel", cfg.get("accel_hold_days", 3)
+        else:
+            # 平台型预判：量能平稳(量比<1.35) + 阴跌≥30% + D1涨停豁免/2~7倍 + D2严格2~7倍
+            if decline <= -cfg["decline_min"] and (
+                d1_limit_up or (cfg["vol_lo"] <= ratios[0] <= cfg["vol_hi"])
+            ) and (cfg["vol_lo"] <= ratios[1] <= cfg["vol_hi"]):
+                pattern, pat_hold = "platform", cfg["hold_days"]
         if pattern is None:
-            continue
-
-        # ④ 提示日 D2（第2根放量日）
-        j = i + sig_day - 1
-        if j >= n:
             continue
         # v5.1 风控：平台型若命中「下跌中继反抽」特征则剔除（高位诱多尾部风险）
         if pattern == "platform" and _rebound_filter(c, o, i, j, d1_limit_up, cfg):
             continue
         d1_chg = c[i] / prev - 1
-        # 破位线 = 第一根放量K线实体中点；缩量线 = 四日均量×ratio
+        # v5.4：破位线 = D1实体中点；缩量线 = 两天放量均量×ratio（预判只用D1/D2）
         break_line = (float(bars[i]["open"]) + float(bars[i]["close"])) / 2
         shrink_line = np.mean(vols) * cfg.get("shrink_ratio", 0.5)
+        cv = float(np.std(vols) / np.mean(vols))  # 两天量波动率(仅作展示参考,不再用于分流)
 
         # v5.3 实盘买点：D2盘后出信号买不到 → 次日D3开盘价买入，T+1从D4起判定退出
         entry_rule = cfg.get("entry_rule", "d3_open")
@@ -310,7 +312,7 @@ def _load_reco_signals(ctx):
 def _track_signal(sig, bars, cfg, latest_date):
     """把单条信号跟踪到最新交易日。破位线/缩量线一律从K线重算，不依赖台账字段
     （历史台账常缺 break_line，导致破位判断失效、破位票被误推）。
-    D2=signal，D1=signal前一根；破位线=D1实体中点，缩量线=D1~D4四日均量×shrink_ratio。"""
+    D2=signal，D1=signal前一根；破位线=D1实体中点，缩量线=D1+D2两天均量×shrink_ratio(v5.4与detect一致)。"""
     dates = [str(b["date"]) for b in bars]
     o = [float(b["open"]) for b in bars]
     h = [float(b["high"]) for b in bars]
@@ -328,7 +330,7 @@ def _track_signal(sig, bars, cfg, latest_date):
     # 从K线重算破位线/缩量线（D1=D2前一根，绝不依赖台账可能缺失的字段）
     d1 = j - 1
     bl = (o[d1] + c[d1]) / 2
-    sl = float(np.mean(v[max(0, d1):d1 + 4])) * cfg.get("shrink_ratio", 0.5)
+    sl = float(np.mean(v[max(0, d1):j + 1])) * cfg.get("shrink_ratio", 0.5)  # v5.4: D1+D2两天均量
     # v5.3 实盘买点：历史票用 D3 开盘价重算买入（不信台账旧 buy）
     entry_rule = cfg.get("entry_rule", "d3_open")
     buy_idx = j + 1
