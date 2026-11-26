@@ -702,7 +702,7 @@ def _push_two_section(ctx, picks, universe, cfg):
 
     foot = ("★假破位收复优先 ｜ 跟3日,三日内收盘破D1阳线实体一半即出局" if not entry_open
             else "📌 D2当天盘后提示,D3开盘价介入(T+1次日可卖) ｜ 跟3日,三日内收盘跌破D1阳线实体一半即出局 ｜ 最高价口径")
-    lines += ["", foot, "⚠️非投资建议"]
+    lines += ["", "📈 最优策略(v2口径)：D+1开盘买、当天不卖，持有至次日(D+2)卖出——最高价卖胜率61.11%/均+4.9%，收盘价卖胜率46.3%/均+1.4%（2026回溯，胜率=收益>3%）；跌破买入价-5%止损（控制回撤）。", foot, "⚠️非投资建议"]
     title = f"怡达{ver} {today} · 新提示{len(seg1)}(★{n_tier1}) 跟踪中{len(seg2)}"
     body = "\n".join(lines)
     print(f"[yida] ===PUSH_BODY_START===\n{title}\n{body}\n===PUSH_BODY_END===", flush=True)
