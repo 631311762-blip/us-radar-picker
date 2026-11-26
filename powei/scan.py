@@ -41,7 +41,8 @@ MAX_GAP    = 10     # 破位→收复间隔硬上限（交易日，不得大于1
 RECLAIM_BODY_MIN = 0.03  # 收复日实体最小涨幅（长阳底线；排除小短线/十字/阴线收复）
 RECLAIM_UPPER_MAX= 0.40  # 收复日上影/振幅 上限（排除长上影冲高回落假收复）
 RECLAIM_FAIL_DROP = 0.05 # 【已废弃·兜底保留】旧规则：收盘较收复日收盘跌超5%剔除
-RECLAIM_FAIL_FIB  = 0.618 # 收复后失效门槛（现行）：以「破位低点→收复高点」为一波，收盘跌破该波0.618黄金回撤位→收复失败，剔除
+RECLAIM_FAIL_FIB  = 0.618 # 收复后失效门槛（现行·2026-11-26定稿）：收复收盘-0.618×(收复收盘-收复开盘)，跌破即剔除
+START_BODY_MIN   = 0.05  # 启动阳线最小实体：破位后实体≥5%的阳线中最强者定为收复日（修超越11-11漏判）
 # ── 暴跌V反硬过滤（2026-11-25 全市场回溯落地）──
 # 收复前「连续暴跌+末日大阴+创新低」的深V反抽（如捷安高科11-23型下跌中继），无缩量/无企稳平台，
 # 非洗盘 → 直接剔除。回溯：剔39只、黄金四样本误伤0。三条件同时成立才剔：
@@ -209,6 +210,17 @@ def detect(d):
                 reclaim_idx=i; break
         if reclaim_idx is None:
             t = break_idx + 1; continue
+        # ── 启动阳线前置（2026-11-26 核心修复）──
+        # 收复日=破位后实体≥5%的最大实体阳线(启动阳)。修超越11-11(+10.8%)被高支撑19.11漏判、
+        # 错判成11-12(+3.77%次阳)。验证: 超越→11-11/均普→10-20/仁信→11-04/星源大西洋→11-24/幸福→11-02, 均不误杀。
+        best_sig=reclaim_idx
+        for k in range(real_break, reclaim_idx+1):
+            bk=d[k]
+            bk_body=(bk['close']-bk['open'])/bk['open'] if bk['open']>0 else 0
+            if bk_body>=START_BODY_MIN:
+                cur=(d[best_sig]['close']-d[best_sig]['open'])/d[best_sig]['open']
+                if bk_body>cur: best_sig=k
+        reclaim_idx=best_sig
         # 破位→收复间隔硬上限：不得大于 MAX_GAP 个交易日（≈两周内必须回来）
         # 用 real_break（真实破位日）算间隔，杜绝阳线误标把间隔缩短卡上限
         gap = reclaim_idx - real_break
@@ -225,13 +237,10 @@ def detect(d):
             t = break_idx + 1; continue
         if rb_up/rb_rng > RECLAIM_UPPER_MAX:
             t = break_idx + 1; continue
-        # ── 收复后失效门槛（0.618 黄金分割回撤）──
-        # 以「破位低点→收复日最高点」为一波拉升，取 0.618 回撤位作防线：
-        #   floor = H - 0.618*(H-L)，L=破位日前后最低、H=收复日最高
-        # 收复日后任一交易日收盘跌破该防线 → 有效跌破黄金支撑 → 收复失败，剔除。
-        wave_lo = min(x['low'] for x in d[max(0,real_break-1):sig+1])
-        wave_hi = d[sig]['high']
-        fib_floor = wave_hi - RECLAIM_FAIL_FIB * (wave_hi - wave_lo) if wave_hi > wave_lo else sig_close*(1-RECLAIM_FAIL_DROP)
+        # ── 收复后失效门槛（实体 0.618，2026-11-26 用户定稿）──
+        # floor = 收复收盘 - 0.618×(收复收盘-收复开盘)，跌破实体0.618处即结束跟踪。
+        # 验证: 星源防线40.18(11-25收37.75跌破✓剔)、大西洋4.62(收4.35跌破✓剔)、超越11-11防线17.45全守住不误杀。
+        fib_floor = rb_close - RECLAIM_FAIL_FIB * (rb_close - rb_open)
         fail = any(d[j]['close'] < fib_floor for j in range(sig+1, N))
         if fail:
             t = sig + 1; continue

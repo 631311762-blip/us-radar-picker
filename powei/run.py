@@ -79,7 +79,8 @@ CONST = {
     "RECLAIM_BODY_MIN": 0.03,  # 收复日实体最小涨幅（长阳底线；排除小短线/十字/阴线收复）
     "RECLAIM_UPPER_MAX": 0.40, # 收复日上影/振幅 上限（排除长上影冲高回落假收复）
     "RECLAIM_FAIL_DROP": 0.05, # 【已废弃·兜底保留】旧规则：收盘较收复日收盘跌超5%剔除
-    "RECLAIM_FAIL_FIB": 0.618, # 收复后失效门槛（现行）：以「破位低点→收复高点」为一波，收盘跌破该波0.618黄金回撤位→收复失败，剔除
+    "RECLAIM_FAIL_FIB": 0.618, # 收复后失效门槛（现行·2026-11-26定稿）：收复日实体0.618 = 收复收盘-0.618×(收复收盘-收复开盘)，跌破即剔除
+    "START_BODY_MIN": 0.05,    # 启动阳线最小实体：破位后实体≥5%的阳线中最强者定为收复日（修超越11-11漏判）
     # ── 暴跌V反硬过滤（2026-11-25 全市场回溯落地）──
     # 收复前若是「连续暴跌+末日大阴+创新低」的深V反抽（如捷安高科11-23型下跌中继），
     # 无缩量/无企稳平台，非洗盘 —— 直接剔除。回溯：剔39只、黄金四样本误伤0。
@@ -239,6 +240,22 @@ def detect(bars, const=None):
                 reclaim_idx = i; break
         if reclaim_idx is None:
             t = break_idx + 1; continue
+        # ── 启动阳线前置（2026-11-26 核心修复）──
+        # 用户定义：收复日 = 破位后「放量启动长阳」当天，而非收盘勉强站上高支撑的次阳。
+        # 旧逻辑用 S(破位前50根高位支撑, 如超越19.11)卡"收盘>=S"，把超越11-11(+10.8%真启动阳)
+        # 漏掉、错判成11-12(+3.77%次阳)。修复：在 real_break~reclaim_idx 区间内，
+        # 找实体≥START_BODY_MIN 的阳线中实体最大者作真收复日(启动阳)。
+        # 验证：超越→11-11、均普→10-20、仁信→11-04、星源/大西洋→11-24、幸福→11-02，均不误杀。
+        START_BODY_MIN = c.get("START_BODY_MIN", 0.05)
+        best_sig = reclaim_idx
+        for k in range(real_break, reclaim_idx + 1):
+            bk = bars[k]
+            bk_body = (bk["close"] - bk["open"]) / bk["open"] if bk["open"] > 0 else 0
+            if bk_body >= START_BODY_MIN:
+                cur_body = (bars[best_sig]["close"] - bars[best_sig]["open"]) / bars[best_sig]["open"]
+                if bk_body > cur_body:
+                    best_sig = k
+        reclaim_idx = best_sig
         # 破位→收复间隔硬上限：不得大于 MAX_GAP 个交易日（≈两周内必须回来）
         # 破位→收复间隔硬上限：用 real_break（真实破位日）算，杜绝阳线误标缩短间隔卡上限
         gap = reclaim_idx - real_break
@@ -257,14 +274,13 @@ def detect(bars, const=None):
             t += 1; continue
         if rb_up / rb_rng > RECLAIM_UPPER_MAX:         # 上影过长（冲高回落假收复）
             t += 1; continue
-        # ── 收复后失效门槛（0.618 黄金分割回撤）──
-        # 以「破位低点→收复日最高点」为一波拉升，取 0.618 回撤位作防线：
-        #   floor = H - 0.618*(H-L)，L=破位日前后最低、H=收复日最高
-        # 收复日后任一交易日收盘跌破该防线 → 有效跌破黄金支撑 → 收复失败，剔除。
-        # 相对旧「跌超5%」：用随波动自适应的黄金分割位，避免绝对值一刀切误杀（如超越科技）。
-        wave_lo = min(x["low"] for x in bars[max(0, real_break - 1):sig + 1])
-        wave_hi = bars[sig]["high"]
-        fib_floor = wave_hi - RECLAIM_FAIL_FIB * (wave_hi - wave_lo) if wave_hi > wave_lo else sig_close * (1 - RECLAIM_FAIL_DROP)
+        # ── 收复后失效门槛（实体 0.618，2026-11-26 用户定稿）──
+        # 用户定义：以「收复日(启动长阳)实体」为锚，跌破实体0.618处即结束跟踪。
+        #   floor = 收复日收盘 - 0.618*(收复日收盘 - 收复日开盘)
+        # 收复日后任一交易日收盘跌破该防线 → 收复失败，剔除。
+        # 验证：星源11-24防线40.18(11-25收37.75跌破✓剔)、大西洋防线4.62(收4.35跌破✓剔)；
+        #       超越收复日修正为11-11后防线17.45，后续9日全守住、不误杀。
+        fib_floor = rb_close - RECLAIM_FAIL_FIB * (rb_close - rb_open)
         fail = any(bars[j]["close"] < fib_floor for j in range(sig + 1, N))
         if fail:
             t = sig + 1; continue
