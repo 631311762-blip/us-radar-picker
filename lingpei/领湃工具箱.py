@@ -253,12 +253,40 @@ def push(title, content, template="markdown"):
 # 同日重复推送。标记落在 lingpei/lingpei/state（与台账同目录，随 state 回写
 # 入库），跨 runner 生效。
 PUSH_DEDUP_FILE = "领湃_推送去重.json"
+PUSH_MUTE_FILE = "领湃_推送静默.json"
 
 
 def _push_dedup_path():
     # 用 __file__ 固定绝对路径，不依赖 CWD / STATE_DIR，避免各流程落点错位
     return os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         "lingpei", "state", PUSH_DEDUP_FILE)
+
+
+def _push_mute_path():
+    # 与去重标记同目录，随 state 回写 GitHub 跨 runner 生效
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "lingpei", "state", PUSH_MUTE_FILE)
+
+
+def _write_push_dedup(key, p, rec, note=""):
+    """写推送去重标记（静默时也写，供兜底/看门狗判定「今日已处理」避免反复补派）。"""
+    rec = {key: datetime.datetime.now(BJT).isoformat(timespec="seconds") + note}
+    try:
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        json.dump(rec, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    except Exception as e:
+        print("[推送去重] 标记写入失败: %s" % e)
+
+
+def push_muted():
+    """读取微信推送静默开关。返回 True 表示暂停发微信（选股/台账照常）。
+    开关文件 state/领湃_推送静默.json：{"muted": true, ...}；恢复推送改 false 或删文件。
+    """
+    try:
+        d = json.load(open(_push_mute_path(), encoding="utf-8"))
+        return bool(d.get("muted"))
+    except Exception:
+        return False
 
 
 def push_once(title, content, template="markdown", kind="signal"):
@@ -270,6 +298,8 @@ def push_once(title, content, template="markdown", kind="signal"):
       "settle" —— 3/5/10 结算简报（默认不推，开关打开时独立成类）
     分类别去重，避免「先发无信号、后补出清单」被误拦。
     推送成功才写标记（失败允许补推）；LINGPEI_PUSH_FORCE=1 可强制绕过。
+    2026-11-26：用户要求暂停微信推送——静默模式下写「已处理」标记但不发微信，
+    兜底/看门狗读到今日标记即 skip，不会反复补派；选股/台账/结算完全不受影响。
     """
     day = today_str()
     key = "%s|%s" % (day, kind)
@@ -284,15 +314,15 @@ def push_once(title, content, template="markdown", kind="signal"):
             return False
     except Exception:
         rec = {}
+    # 静默模式：写「已处理」标记（防兜底补派），不实际发微信
+    if push_muted() and not force:
+        print("[推送静默] 用户已暂停微信推送，本次不发微信（已写去重标记供兜底识别）")
+        _write_push_dedup(key, p, rec, "|muted")
+        return False
     ok = push(title, content, template)
     if ok:
         # 只保留当天标记，文件不随日期膨胀
-        rec = {key: datetime.datetime.now(BJT).isoformat(timespec="seconds")}
-        try:
-            os.makedirs(os.path.dirname(p), exist_ok=True)
-            json.dump(rec, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-        except Exception as e:
-            print("[推送去重] 标记写入失败（不影响本次推送）: %s" % e)
+        _write_push_dedup(key, p, rec)
     return ok
 
 
