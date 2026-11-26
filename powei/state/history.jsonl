@@ -96,3 +96,10 @@
 {"date": "2026-11-24", "model": "powei", "code": "600558", "name": "大西洋", "sig_day": "2026-11-24", "sig_close": 4.77, "support": 4.74, "break_to_sig": 2, "score": 31}
 {"date": "2026-11-24", "model": "powei", "code": "600814", "name": "杭州解百", "sig_day": "2026-11-24", "sig_close": 7.59, "support": 6.86, "break_to_sig": 2, "score": 31}
 {"date": "2026-11-24", "model": "powei", "code": "603666", "name": "亿嘉和", "sig_day": "2026-11-24", "sig_close": 27.9, "support": 24.7, "break_to_sig": 1, "score": 29}
+{"date": "2026-11-26", "model": "powei", "code": "600814", "name": "杭州解百", "sig_day": "2026-11-24", "sig_close": 7.59, "support": 6.86, "break_to_sig": 2, "score": 51}
+{"date": "2026-11-26", "model": "powei", "code": "600189", "name": "泉阳泉", "sig_day": "2026-11-24", "sig_close": 8.87, "support": 8.14, "break_to_sig": 1, "score": 34}
+{"date": "2026-11-26", "model": "powei", "code": "600057", "name": "厦门象屿", "sig_day": "2026-11-26", "sig_close": 6.08, "support": 5.94, "break_to_sig": 1, "score": 32}
+{"date": "2026-11-26", "model": "powei", "code": "603666", "name": "亿嘉和", "sig_day": "2026-11-24", "sig_close": 27.9, "support": 24.7, "break_to_sig": 1, "score": 31}
+{"date": "2026-11-26", "model": "powei", "code": "600229", "name": "城市传媒", "sig_day": "2026-11-26", "sig_close": 5.95, "support": 5.57, "break_to_sig": 3, "score": 30}
+{"date": "2026-11-26", "model": "powei", "code": "600963", "name": "岳阳林纸", "sig_day": "2026-11-26", "sig_close": 3.49, "support": 3.3, "break_to_sig": 4, "score": 29}
+{"date": "2026-11-26", "model": "powei", "code": "002651", "name": "利君股份", "sig_day": "2026-11-24", "sig_close": 7.18, "support": 7.71, "break_to_sig": 6, "score": 27}

@@ -2840,6 +2840,211 @@
         "ret": null,
         "done": false
       }
+    },
+    {
+      "code": "920873",
+      "name": "中设咨询",
+      "date": "2026-11-26",
+      "batch": "2026-11-26",
+      "score": 88.84,
+      "dev_signed": 0.0086,
+      "dev60": 0.0086,
+      "drop_from_peak": 0.2213,
+      "gap_days": 24,
+      "trial_date": "2026-10-21",
+      "fall_pp": 7.95,
+      "sig_vr40": 0.378,
+      "shrink_prev3": 0.658,
+      "trial_vr": 2.215,
+      "k_amp": 0.0356,
+      "k_lower": 0.357,
+      "k_c_from_low": 0.0298,
+      "k_low_vs_prev": -0.0514,
+      "near_ma": "MA60",
+      "entry_close": 7.6,
+      "position": "MA60上方",
+      "t3": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t5": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t10": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      }
+    },
+    {
+      "code": "002960",
+      "name": "青鸟智控",
+      "date": "2026-11-26",
+      "batch": "2026-11-26",
+      "score": 79.09,
+      "dev_signed": -0.0058,
+      "dev60": 0.0058,
+      "drop_from_peak": 0.0987,
+      "gap_days": 22,
+      "trial_date": "2026-10-23",
+      "fall_pp": 5.74,
+      "sig_vr40": 0.818,
+      "shrink_prev3": 0.86,
+      "trial_vr": 2.9,
+      "k_amp": 0.0253,
+      "k_lower": 0.682,
+      "k_c_from_low": 0.018,
+      "k_low_vs_prev": -0.028,
+      "near_ma": "MA60",
+      "entry_close": 8.49,
+      "position": "贴线/略破",
+      "t3": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t5": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t10": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      }
+    },
+    {
+      "code": "600548",
+      "name": "深高速",
+      "date": "2026-11-26",
+      "batch": "2026-11-26",
+      "score": 73.18,
+      "dev_signed": -0.0039,
+      "dev60": 0.0039,
+      "drop_from_peak": 0.084,
+      "gap_days": 18,
+      "trial_date": "2026-10-29",
+      "fall_pp": 3.07,
+      "sig_vr40": 0.625,
+      "shrink_prev3": 0.616,
+      "trial_vr": 1.595,
+      "k_amp": 0.0191,
+      "k_lower": 0.625,
+      "k_c_from_low": 0.0182,
+      "k_low_vs_prev": -0.0108,
+      "near_ma": "MA60",
+      "entry_close": 8.4,
+      "position": "贴线/略破",
+      "t3": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t5": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t10": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      }
+    },
+    {
+      "code": "001979",
+      "name": "招商蛇口",
+      "date": "2026-11-26",
+      "batch": "2026-11-26",
+      "score": 54.54,
+      "dev_signed": -0.0344,
+      "dev60": 0.0344,
+      "drop_from_peak": 0.1456,
+      "gap_days": 21,
+      "trial_date": "2026-10-26",
+      "fall_pp": 4.29,
+      "sig_vr40": 0.479,
+      "shrink_prev3": 0.76,
+      "trial_vr": 1.816,
+      "k_amp": 0.0268,
+      "k_lower": 0.421,
+      "k_c_from_low": 0.0128,
+      "k_low_vs_prev": -0.0085,
+      "near_ma": "MA60",
+      "entry_close": 7.1,
+      "position": "深破MA60",
+      "t3": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t5": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t10": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      }
+    },
+    {
+      "code": "603183",
+      "name": "建研院",
+      "date": "2026-11-26",
+      "batch": "2026-11-26",
+      "score": 19.77,
+      "dev_signed": -0.0668,
+      "dev60": 0.0668,
+      "drop_from_peak": 0.1632,
+      "gap_days": 30,
+      "trial_date": "2026-10-13",
+      "fall_pp": 4.95,
+      "sig_vr40": 0.426,
+      "shrink_prev3": 0.647,
+      "trial_vr": 1.867,
+      "k_amp": 0.0178,
+      "k_lower": 0.5,
+      "k_c_from_low": 0.0136,
+      "k_low_vs_prev": -0.0179,
+      "near_ma": "MA60",
+      "entry_close": 4.46,
+      "position": "深破MA60",
+      "t3": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t5": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t10": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      }
     }
   ]
 }

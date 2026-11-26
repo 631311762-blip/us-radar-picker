@@ -1,0 +1,29 @@
+{
+  "date": "2026-11-26",
+  "model": "low_shadow2",
+  "count": 1,
+  "picks": [
+    {
+      "code": "301306",
+      "name": "西测测试",
+      "close": 56.88,
+      "score": 93.6,
+      "board": "",
+      "raw": {
+        "code": "301306",
+        "name": "西测测试",
+        "close": 56.88,
+        "score": 93.6,
+        "board": ""
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 777,
+    "universe": 4546,
+    "dropped": 0
+  },
+  "written_at": "2026-11-26T16:43:37+08:00"
+}

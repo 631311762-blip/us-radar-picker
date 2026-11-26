@@ -31,16 +31,16 @@
   "start_from": "2026-11-18",
   "groups": {
    "control": {
-    "n_recorded": 42,
+    "n_recorded": 48,
     "n_settled": 0,
     "stat": null
    },
    "experiment": {
-    "n_recorded": 42,
+    "n_recorded": 48,
     "n_settled": 0,
     "stat": null
    }
   },
-  "n_days_recorded": 7
+  "n_days_recorded": 8
  }
 }
