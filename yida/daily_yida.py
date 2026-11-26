@@ -5,7 +5,12 @@
 ================================================================
 源自怡达股份(300721) 2026-08~11 走势提炼，全A股回溯验证。
 
-【版本】v6.7 阴跌≥25%提纯版（2026-11-25）—— 历史沿革见下 v5.4 块
+【版本】v7.0 评分Top6+期后结算闭环版（2026-11-26）—— 历史沿革见下
+  · v7.0：逻辑回归评分(score.py,7因子D2当天可算无前视)→每日只推评分Top6(平台4+加速2);
+    全信号落台账含评分字段;settle_score_ledger()后台自动T+3/T+5回填h3/h5/c3/c5到
+    yida/state/score_ledger.json(随流水线git add回写);评分高1/3 h3+8.38% vs低1/3+5.40%单调有效。
+    config.score_top6=false回退v6.7全量推送。
+  · v6.7 阴跌≥25%提纯版（2026-11-25）—— 历史沿革见下 v5.4 块
   · v6.7：阴跌门槛20%→25%(config.accel_decline_min)，全市场3368信号实测日均15.7→10.9、
     3日收益转正、深亏253→187，黄金5样本零误伤。放量门槛不动(肯特首日2.18x)。改回0.20回退v6.6。
   · v6.6：启动首日锚定去重；v6.5：收复前5日；v6.4：推送时序+跟踪止损；v6.3：弱反弹；v6.2：D1真涨。
@@ -71,6 +76,11 @@ for _p in (REPO, os.path.join(REPO, "common")):
 
 import kit
 import notify as common_notify
+try:
+    import score as yscore   # v7.0 评分模块(逻辑回归,纯Python无sklearn依赖)
+except Exception as _e:
+    yscore = None
+    print(f"[yida] 评分模块加载失败,回退全量推送: {_e}", flush=True)
 
 CFG_PATH = os.path.join(HERE, "config.json")
 CFG = json.load(open(CFG_PATH, encoding="utf-8"))
@@ -461,6 +471,9 @@ def _load_reco_signals(ctx):
                 shrink_line=raw.get("shrink_line"),
                 vol_mult=raw.get("vol_mult"), decline=raw.get("decline"),
                 cv=raw.get("cv"), d1_limit_up=raw.get("d1_limit_up"),
+                # v7.0 评分字段(穿过台账,供Top6过滤与结算分组)
+                score_p=raw.get("score_p"), in_top6=raw.get("in_top6"),
+                rank_in_day=raw.get("rank_in_day"), r21=raw.get("r21"),
             )
     return sigs
 
@@ -519,6 +532,75 @@ def _track_signal(sig, bars, cfg, latest_date, latest_trading_day=None):
                 buy=round(buy, 2), break_line=round(float(bl), 2))
 
 
+
+def settle_score_ledger(ctx):
+    """v7.0 评分信号期后结算台账（后台每日自动）。
+    从台账读全部含评分的历史信号，用共享K线(ctx.kline)对已满T+5的信号回填
+    c3/c5(收盘收益)、h3/h5(期间最高价收益)，写 yida/state/score_ledger.json，
+    由 workflow 的 git add yida/state 回写 GitHub，供持续优化评分。
+    """
+    import glob
+    ledger_path = os.path.join(HERE, "state", "score_ledger.json")
+    os.makedirs(os.path.dirname(ledger_path), exist_ok=True)
+    if os.path.exists(ledger_path):
+        ledger = kit._read_json(ledger_path) or {"_meta": {}, "records": []}
+    else:
+        ledger = {"_meta": {"version": "v7.0", "desc": "怡达评分信号期后结算台账"}, "records": []}
+    recs = ledger.setdefault("records", [])
+    idx = {(r.get("code"), r.get("signal")): r for r in recs}
+
+    # 从台账加载所有历史信号(含评分字段)
+    sigs = _load_reco_signals(ctx)
+    added = 0
+    for (code, signal), sig in sigs.items():
+        key = (code, signal)
+        p = sig.get("score_p")
+        if p is None:
+            continue  # 无评分的旧信号(v6.7及以前)不进评分台账
+        if key not in idx:
+            recs.append(dict(code=code, name=sig.get("name", ""), signal=signal,
+                             pattern=sig.get("pattern", "platform"), tier=sig.get("tier", 2),
+                             decline=sig.get("decline"), vol_mult=sig.get("vol_mult"),
+                             d1_chg=sig.get("d1_chg"), r21=sig.get("r21"), score_p=p,
+                             rank_in_day=sig.get("rank_in_day"), in_top6=bool(sig.get("in_top6")),
+                             buy=sig.get("buy"), settled=False,
+                             c3=None, c5=None, h3=None, h5=None))
+            idx[key] = recs[-1]
+            added += 1
+
+    # 对未结算且已满T+5的信号回填真实收益
+    done = 0
+    for r in recs:
+        if r.get("settled"):
+            continue
+        bars = kit.cm.load_kline(r["code"], offline=True)
+        if not bars:
+            continue
+        dates = [str(b["date"]) for b in bars]
+        if r["signal"] not in dates:
+            continue
+        j = dates.index(r["signal"])
+        bi = j + 1            # D3开盘买入
+        k3, k5 = j + 3, j + 5
+        if k5 >= len(bars):   # 未满T+5,等下次
+            continue
+        buy = float(bars[bi]["open"])
+        if buy <= 0:
+            continue
+        r["buy"] = round(buy, 2)
+        r["c3"] = round((float(bars[k3]["close"]) / buy - 1) * 100, 2)
+        r["c5"] = round((float(bars[k5]["close"]) / buy - 1) * 100, 2)
+        r["h3"] = round((max(float(bars[t]["high"]) for t in range(bi, k3 + 1)) / buy - 1) * 100, 2)
+        r["h5"] = round((max(float(bars[t]["high"]) for t in range(bi, k5 + 1)) / buy - 1) * 100, 2)
+        r["settled"] = True
+        r["settle_last_bar"] = dates[k5]
+        done += 1
+
+    kit._write_json(ledger_path, ledger)
+    ns = sum(1 for r in recs if r.get("settled"))
+    print(f"[yida-v7] 评分台账: 新增{added}条, 本次结算{done}条, 累计{len(recs)}条(已结算{ns})", flush=True)
+
+
 def _push_two_section(ctx, picks, universe, cfg):
     """严格两段式推送（用户定版 2026-11-24）：
     第一段 = 当天提示的票（signal == 最新交易日/最新提示日）
@@ -527,6 +609,7 @@ def _push_two_section(ctx, picks, universe, cfg):
     ★ 观察期满(≥5交易日) → 自然剔除
     """
     import datetime
+    use_top6_flag = bool(cfg.get("score_top6", True)) and yscore is not None
     today = datetime.datetime.now(kit.cm.BJT).strftime("%m-%d")
     today_full = datetime.datetime.now(kit.cm.BJT).strftime("%Y-%m-%d")
 
@@ -581,6 +664,9 @@ def _push_two_section(ctx, picks, universe, cfg):
         if st["held"] >= st["pat_hold"]:
             dropped.append(f"{code} {sig.get('name','')} 观察期满{st['held']}日")
             continue
+        # v7.0 当天新提示段只保留评分Top6(历史跟踪段seg2不受影响)
+        if sig_date == latest_signal and use_top6_flag and not item.get("in_top6"):
+            continue
         # 最新提示日那批 → 第一段；更早的历史提示仍在观察 → 第二段
         (seg1 if sig_date == latest_signal else seg2).append(item)
 
@@ -598,7 +684,8 @@ def _push_two_section(ctx, picks, universe, cfg):
     ver = str(cfg.get("_version", "v6.4")).split()[0]
     lines = [f"**怡达{ver} · {today}提示** ｜ 样本{len(universe)} ｜ D2当天实时预判", ""]
 
-    lines.append(f"【当天提示 {sig_mmdd} · {len(seg1)}只（★假破位{n_tier1}）】")
+    _top6_note = " · 评分Top6" if use_top6_flag else ""
+    lines.append(f"【当天提示 {sig_mmdd} · {len(seg1)}只（★假破位{n_tier1}）{_top6_note}】")
     if not seg1:
         lines.append("当日无新提示")
     # 干净版：个股只列代码/名称/标签，策略与买点统一放脚注说明一次
@@ -647,7 +734,39 @@ def main():
         sig["score"] = sig["vol_mult"]
         sig["close"] = sig["buy"]
         sig["board"] = x.get("board", "")
+        # v7.0 评分：补 prev1_vol(量比) → 逻辑回归打分
+        if yscore is not None:
+            try:
+                _j = None
+                _ds = [str(b["date"]) for b in bars]
+                if sig.get("signal") in _ds:
+                    _j = _ds.index(sig["signal"])
+                sig["prev1_vol"] = round(float(yscore.prev1_vol_from_bars(bars, _j)), 2) if _j is not None else 1.0
+                sig["r21"] = sig.get("d2_vol_ratio")
+                sig["score_p"] = yscore.score_signal(sig)
+            except Exception as _e:
+                sig["score_p"] = None
         picks.append(sig)
+
+    # v7.0 评分Top6标记(形态配额 平台4+加速2)
+    use_top6 = bool(cfg.get("score_top6", True)) and yscore is not None
+    top6codes = set()
+    if use_top6:
+        scored = [p for p in picks if p.get("score_p") is not None]
+        scored.sort(key=lambda z: -z["score_p"])
+        for i, p in enumerate(scored):
+            p["rank_in_day"] = i + 1
+        pairs = [(p, p["score_p"]) for p in scored]
+        chosen = yscore.pick_top6(pairs,
+                    plat_quota=int(cfg.get("score_plat_quota", 4)),
+                    accel_quota=int(cfg.get("score_accel_quota", 2)))
+        top6codes = {p["code"] for p, _ in chosen}
+        for p in picks:
+            p["in_top6"] = p["code"] in top6codes
+        print(f"[yida-v7] 全市场{len(picks)}只信号 → 评分Top6 {len(top6codes)}只", flush=True)
+        for p in scored[:10]:
+            print(f"   {p['rank_in_day']:>2} {p['code']} {p['name']} p={p['score_p']:.3f} "
+                  f"{'★入选' if p['code'] in top6codes else ''}", flush=True)
 
     n_t1 = sum(1 for p in picks if int(p.get("tier") or 2) == 1)
     print(f"[yida-v6] 识别信号 {len(picks)} 个（平台{sum(1 for p in picks if p.get('pattern')=='platform')} "
@@ -660,9 +779,16 @@ def main():
               f"阴跌{p['decline']}% 放量{p['vol_mult']}x 平台CV{p.get('plat_cv')}% "
               f"D0涨停{'是' if p.get('d0_limit_up') else '否'}/阳包阴{'是' if p.get('d1_baoyin') else '否'}", flush=True)
 
-    # 台账（自动进入统一回溯）
+    # 台账（自动进入统一回溯；评分字段随raw落盘）
     ctx.record(picks)
     print("[yida] 台账已写入", flush=True)
+
+    # v7.0 评分期后结算台账(后台自动)：全信号落库 + T+3/T+5回填真实收益
+    if yscore is not None:
+        try:
+            settle_score_ledger(ctx)
+        except Exception as e:
+            print(f"[yida] 评分结算台账跳过：{e}", flush=True)
 
     # 回溯结算
     try:
