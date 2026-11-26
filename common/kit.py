@@ -45,9 +45,13 @@ RECO_ROOT = os.path.join(cm.STATE_DIR, "recommendations")
 REVIEW_ROOT = os.path.join(cm.STATE_DIR, "reviews")
 PARAMS_ROOT = os.path.join(cm.STATE_DIR, "params")
 
-# 回溯结算口径
-HORIZONS = (1, 5, 10)          # T+1 / T+5 / T+10
-WIN_THRESHOLD = 0.0            # 相对收益 >0 记胜（可按模型覆盖）
+# 回溯结算口径（v2.0 统一规范，2026-11-26 用户确立，所有模型强制）
+# 买入=D+1开盘价，当天不可卖；卖出 1/3/5日=D+2/4/6 各算最高价+收盘价双口径；
+# 10日=D+11 仅收盘价；胜率=收益率>3%才算胜。
+HORIZONS = (1, 3, 5, 10)       # 持有 1/3/5/10 日
+DUAL_PRICE_H = (1, 3, 5)       # 这几个周期算 high+close 双口径
+CLOSE_ONLY_H = (10,)           # 只算收盘价
+WIN_THRESHOLD = 0.03           # 收益率 > 3% 才算胜（可按模型覆盖）
 LOOKBACK_SESSIONS = 20         # 近 20 个推荐批次参与胜率统计
 # 参数修正：胜率低于下限 → 收紧；高于上限 → 放宽；幅度有界，防漂移
 TIGHTEN_BELOW = 0.42
@@ -193,58 +197,83 @@ class ModelContext:
         return files[-LOOKBACK_SESSIONS:]
 
     def review(self, save=True):
-        """对本模型历史推荐做 T+1/5/10 回溯结算，产出胜率/平均收益。"""
+        """v2 统一口径回溯结算：D+1开盘买，1/3/5日 high+close 双口径，
+        10日仅 close；胜率=收益率>3%。产出各周期胜率/平均收益。"""
         files = self._load_recent_recos()
         rows = []
-        by_h = {h: {"wins": 0, "n": 0, "sum": 0.0} for h in HORIZONS}
+        # 7 组指标键：1/3/5 各 high+close，10 仅 close
+        metric_keys = []
+        for h in HORIZONS:
+            metric_keys += [(h, "high"), (h, "close")] if h in DUAL_PRICE_H else [(h, "close")]
+        by_m = {f"t{h}_{p}": {"wins": 0, "n": 0, "sum": 0.0} for h, p in metric_keys}
         for f in files:
             d = _read_json(f)
             if not d:
                 continue
             d0 = d.get("date")
-            for p in d.get("picks", []):
-                code, base = p.get("code"), p.get("close")
+            for pk in d.get("picks", []):
+                code = pk.get("code")
                 if not code:
                     continue
                 bars = cm.load_kline(code, offline=True)
                 if not bars:
                     continue
                 dates = [b["date"] for b in bars]
-                # 找到推荐日之后第一根 K 线
+                # D+1 = 提示日 D0 之后第一根 K 线（买入日，当天不可卖）
                 try:
                     idx = next(i for i, dt in enumerate(dates) if dt > d0)
                 except StopIteration:
                     continue
-                if base is None:
-                    base = bars[idx]["close"]
-                r = {"code": code, "name": p.get("name", ""), "date": d0}
+                if idx >= len(bars):
+                    continue
+                base = float(bars[idx].get("open") or 0)   # 买入价 = D+1 开盘价
+                if base <= 0:
+                    continue
+                r = {"code": code, "name": pk.get("name", ""), "date": d0}
                 for h in HORIZONS:
-                    j = idx - 1 + h
-                    if j < len(bars) and base:
-                        ret = bars[j]["close"] / base - 1.0
-                        r["t%d" % h] = round(ret, 4)
-                        by_h[h]["n"] += 1
-                        by_h[h]["sum"] += ret
-                        if ret > self.win_threshold:
-                            by_h[h]["wins"] += 1
+                    j = idx + h                            # 1->D+2, 3->D+4, 5->D+6, 10->D+11
+                    if j >= len(bars):
+                        continue
+                    sell = bars[j]
+                    prices = {}
+                    if h in DUAL_PRICE_H:
+                        prices["high"] = float(sell.get("high") or 0)
+                        prices["close"] = float(sell.get("close") or 0)
+                    else:
+                        prices["close"] = float(sell.get("close") or 0)
+                    for suf, px in prices.items():
+                        if px <= 0:
+                            continue
+                        ret = px / base - 1.0
+                        key = f"t{h}_{suf}"
+                        r[key] = round(ret, 4)
+                        by_m[key]["n"] += 1
+                        by_m[key]["sum"] += ret
+                        if ret > self.win_threshold:       # 收益率 > 3% 才算胜
+                            by_m[key]["wins"] += 1
                 rows.append(r)
         summary = {}
-        for h in HORIZONS:
-            n = by_h[h]["n"]
-            summary["t%d" % h] = {
+        for h, p in metric_keys:
+            key = f"t{h}_{p}"
+            n = by_m[key]["n"]
+            summary[key] = {
                 "samples": n,
-                "win_rate": round(by_h[h]["wins"] / n, 4) if n else None,
-                "avg_return": round(by_h[h]["sum"] / n, 4) if n else None,
+                "win_rate": round(by_m[key]["wins"] / n, 4) if n else None,
+                "avg_return": round(by_m[key]["sum"] / n, 4) if n else None,
             }
-        # 综合胜率（优先用样本最充分的 T+5，其次 T+1/T+10）
-        cand = [summary["t%d" % h]["win_rate"] for h in (5, 1, 10)
-                if summary["t%d" % h]["win_rate"] is not None]
+        # 综合胜率：以 5 日收盘价口径为主（样本最充分、最贴近实盘、不被最高价虚高干扰）
+        wr5 = summary.get("t5_close", {}).get("win_rate")
+        wr1 = summary.get("t1_close", {}).get("win_rate")
+        wr10 = summary.get("t10_close", {}).get("win_rate")
+        cand = [w for w in (wr5, wr1, wr10) if w is not None]
         overall = round(sum(cand) / len(cand), 4) if cand else None
         result = {
             "model": self.model,
+            "spec": "v2.0 (D+1开盘买; 1/3/5日high+close, 10日close; 胜率R>3%)",
             "generated_at": datetime.now(cm.BJT).isoformat(timespec="seconds"),
             "batches": len(files), "samples": len(rows),
-            "win_rate": overall, "by_horizon": summary, "details": rows[-200:],
+            "win_rate": overall, "win_rate_basis": "t5_close",
+            "by_horizon": summary, "details": rows[-200:],
         }
         if save:
             _write_json(self.review_path, result)
@@ -254,7 +283,7 @@ class ModelContext:
     def params(self, defaults):
         """返回修正后的参数。defaults 为本模型的默认阈值字典。
 
-        修正规则：近 N 批综合胜率
+        修正规则：近 N 批综合胜率（v2: 5日收盘价口径，R>3%判定）
           < TIGHTEN_BELOW → 收紧（数值上调 ADJUST_STEP，让筛选更严）
           > LOOSEN_ABOVE  → 放宽（数值下调）
           区间内        → 维持
