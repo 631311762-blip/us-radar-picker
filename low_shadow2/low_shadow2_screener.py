@@ -248,6 +248,92 @@ def pass_filter(row):
 # ----------------------------------------------------------------------------
 # 微信推送层（2026-11-16，config.push 驱动）—— 独立于选股核心，异常全吞
 # ----------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------
+# 前十日样本跟踪（2026-11-26）：历史推荐股按提示日价跟到最新收盘。
+#   规则：最新收盘价 < 提示日收盘价 → 判定破位，结束跟踪（不再展示）。
+#   展示：仅列仍在上方的活跃样本，按提示日倒序；涨幅=最新/提示日价-1。
+# ----------------------------------------------------------------------------
+TRACK = CFG.get("track", {})   # 可选；缺省用下方默认
+
+def _track_days():
+    return int(TRACK.get("lookback_days", 10))
+
+def build_tracking(today=None, kline_fn=None):
+    """扫描近 N 个交易日台账，跟踪历史样本，返回 markdown 行列表。"""
+    import glob as _glob
+    import datetime as _dt
+    today = today or pd.Timestamp.now().strftime("%Y-%m-%d")
+    kfn = kline_fn or kline
+    files = sorted(_glob.glob(os.path.join(RECO_DIR, "*.json")))
+    files = [f for f in files if os.path.basename(f)[:10] < today]
+    files = files[-_track_days():]      # 最近 N 个批次(按台账日期)
+    if not files:
+        return []
+
+    # 汇总历史事件 (code -> {name, events:[(date, base)]})
+    hist = {}
+    for f in files:
+        d = os.path.basename(f)[:10]
+        try:
+            rec = json.load(open(f, encoding="utf-8"))
+        except Exception:
+            continue
+        for p in rec.get("picks", []):
+            c = str(p.get("code", "")).zfill(6)
+            base = p.get("close")
+            if not c or not base or float(base) <= 0:
+                continue
+            e = hist.setdefault(c, {"name": p.get("name", ""), "events": []})
+            e["events"].append((d, float(base)))
+            if not e["name"]:
+                e["name"] = p.get("name", "")
+    if not hist:
+        return []
+
+    rows = []
+    for code, info in hist.items():
+        # 取该股最近一次提示作为跟踪基准(避免同股多次提示重复)
+        d0, base = max(info["events"], key=lambda x: x[0])
+        try:
+            bars = kfn(code, count=120)
+        except Exception:
+            bars = None
+        if not bars:
+            continue
+        # 最新收盘价(取日期<=today的最后一根，避免盘中未收盘数据)
+        valid = [b for b in bars if str(b.get("date", ""))[:10] <= today]
+        if not valid:
+            continue
+        last = max(valid, key=lambda b: str(b.get("date", ""))[:10])
+        cur = float(last.get("close") or 0)
+        if cur <= 0:
+            continue
+        chg = (cur / base - 1.0) * 100
+        if cur < base:      # 破位 → 结束跟踪
+            continue
+        held = (pd.Timestamp(last["date"][:10]) - pd.Timestamp(d0)).days
+        rows.append({"code": code, "name": info["name"], "date": d0,
+                     "base": base, "cur": round(cur, 2),
+                     "chg": round(chg, 2), "days": held})
+
+    rows.sort(key=lambda r: r["date"], reverse=True)
+    L = ["## 前十日样本跟踪（未破位）", ""]
+    if not rows:
+        L += ["> 近 %d 个交易日推荐样本均已跌破提示日收盘价，全部结束跟踪（无存活样本）。" % _track_days(), ""]
+        return L
+    L += ["> 规则：以提示日收盘价为成本线，最新收盘价跌破即结束跟踪；下表仅列仍在上方的 %d 只。" % len(rows), ""]
+    L += ["| 提示日 | 代码 | 名称 | 提示价 | 现价 | 累计涨跌 | 跟踪天数 |",
+          "|---|---|---|---|---|---|---|"]
+    for r in rows:
+        sign = "+" if r["chg"] > 0 else ""
+        L.append("| %s | %s | %s | %s | %s | %s%.2f%% | %d天 |" % (
+            r["date"], r["code"], r["name"], r["base"], r["cur"], sign, r["chg"], r["days"]))
+    L.append("")
+    return L
+
+
 def build_title(date, n):
     if n == 0:
         return "低位上影线二 · %s · %s" % (date, PSH.get("empty_text") or "五谷丰登")
@@ -313,6 +399,13 @@ def build_markdown(date, picks, stats=None, replay=False):
                "",
                "数据来源：共同前置层（东财/新浪日线兜底）。本清单为模型信号，不构成投资建议。"]
     L += detail
+    L.append("")
+    # 前十日样本跟踪（config.track.enabled 可一键关闭）
+    if TRACK.get("enabled", False):
+        try:
+            L += build_tracking(date)
+        except Exception as _te:
+            print("[WARN] 前十日样本跟踪异常(已忽略)：%s" % _te)
     return "\n".join(L)
 
 
