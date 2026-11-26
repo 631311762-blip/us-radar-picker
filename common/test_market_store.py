@@ -259,6 +259,37 @@ class StockV3OfflineTest(unittest.TestCase):
         self.assertEqual(pool, [{"code": "sz000001", "name": "平安银行"}])
         em.assert_not_called()
 
+    def test_offline_flag_blocks_network_when_adapter_not_ready(self):
+        df = stock_v3_datafetch
+        rows = [{"code": "000001", "name": "平安银行",
+                 "mktcap": 3e9, "turnover": 1.0}]
+        with mock.patch.dict(os.environ, {"COMMON_OFFLINE": "1"}), \
+                mock.patch.object(df._adapter, "ready", return_value=False), \
+                mock.patch.object(df.cm, "load_universe", return_value=rows), \
+                mock.patch.object(df, "_get", side_effect=AssertionError("触网")) as get, \
+                mock.patch.object(df, "_universe_em", side_effect=AssertionError("触网")) as em, \
+                mock.patch.object(df, "_kline_em", side_effect=AssertionError("触网")) as kline_em, \
+                mock.patch.object(df, "_kline_sina", side_effect=AssertionError("触网")) as sina:
+            bars = df.kline("sz000001")
+            pool = df.universe()
+        self.assertEqual(len(bars), 65)
+        self.assertEqual(pool, [{"code": "sz000001", "name": "平安银行"}])
+        get.assert_not_called()
+        em.assert_not_called()
+        kline_em.assert_not_called()
+        sina.assert_not_called()
+
+    def test_kit_fallback_disabled_by_offline_flag(self):
+        import kit
+        ctx = kit.ModelContext("offline_test")
+        with mock.patch.dict(os.environ, {"COMMON_OFFLINE": "1"}), \
+                mock.patch.object(kit.cm, "load_kline", return_value=None), \
+                mock.patch.object(kit.cm, "_fetch_one_kline",
+                                  side_effect=AssertionError("触网")) as fetch:
+            bars = ctx.kline("000001", fallback=True)
+        self.assertIsNone(bars)
+        fetch.assert_not_called()
+
 
 class RegulatoryExcludeTest(unittest.TestCase):
     """条件⑤：近一年监管立案/涉嫌违法排除集。"""

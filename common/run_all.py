@@ -114,6 +114,8 @@ def run_model(m):
     env["COMMON_UNIVERSE"] = cm.UNIVERSE_JSON
     env["COMMON_KLINE_DIR"] = cm.KLINE_DIR
     env["COMMON_LIXIN"] = cm.LIXIN_JSON
+    # 统一流水线只读共同行情库；独立运行模型时仍可保留各自联网兜底。
+    env["COMMON_OFFLINE"] = "1"
     env["TZ"] = "Asia/Shanghai"
     t0 = datetime.now()
     code = 1

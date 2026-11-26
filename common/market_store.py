@@ -282,7 +282,7 @@ class MarketStore:
         for code in keys:
             seq = idx[code]
             if n is not None:
-                seq = seq[-n:]
+                seq = seq[-n:] if n else []
             out[code] = [bar for _, bar in seq]
         return out
 

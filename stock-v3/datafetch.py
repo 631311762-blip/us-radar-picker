@@ -23,6 +23,11 @@ def shared_ready():
     """统一流水线已产出当日共同前置层时，股票列表和 K 线严格离线。"""
     return bool(_adapter and _adapter.ready())
 
+
+def use_shared():
+    """共同层就绪或统一流水线强制离线时，禁止退回逐股联网取数。"""
+    return shared_ready() or os.environ.get("COMMON_OFFLINE") == "1"
+
 ST_PAT = re.compile(r"ST|退市|退")
 _UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 _UA_SINA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -112,7 +117,7 @@ _UNI_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 def _universe_common(mv_lo, mv_hi, tr_lo, tr_hi):
     """共同样本池再应用主升浪自身市值/换手率门槛，不重新请求股票列表。"""
-    if not shared_ready():
+    if not use_shared():
         return None
     out = []
     for x in cm.load_universe() or []:
@@ -415,7 +420,7 @@ def load_market_cache(codes=None, count=500, start=None, end=""):
 def kline(code, days=320, end=""):
     """返回旧 westock 字段格式。统一流水线只读共同历史库；独立模式保留旧通道。"""
     end = end or os.environ.get("KLINE_END", "")
-    if shared_ready():
+    if use_shared():
         bars = cm.load_kline(code[2:], count=days, end=end or None, offline=True)
         out = _v3_bars(bars)
         if len(out) < 60:

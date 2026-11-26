@@ -114,10 +114,10 @@ class ModelContext:
     def kline(self, code, count=None, fallback=False):
         """读共享 K 线缓存；默认严格离线，缺失返回 None 并跳过该标的。
 
-        fallback 仅供独立调试显式开启；统一流水线中的所有模型不得开启。
+        fallback 仅供独立调试显式开启；统一流水线 COMMON_OFFLINE=1 时强制忽略。
         """
         bars = cm.load_kline(code, count=count)
-        if not bars and fallback:
+        if not bars and fallback and os.environ.get("COMMON_OFFLINE") != "1":
             raw = cm._fetch_one_kline(code, count=count or cm.KLINE_CACHE_COUNT)
             if raw:
                 cm._write_kline_csv(code, raw)
