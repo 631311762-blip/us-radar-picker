@@ -39,26 +39,11 @@
       "vol_ratio": "当日成交量 / 前5日均量（不含当日），与 volume.ma5_cap 同口径"
     }
   },
-  "pre_divergence": {
-    "enabled": true,
-    "decline_window": 10,
-    "decline_max": -0.08,
-    "vol_window": 5,
-    "vol_trend_max": 0.85,
-    "bonus_weight": 12,
-    "note": "信号发生之前的「下跌 + 量能萎缩」层（2026-11-25 用户确认启用）。全部取信号日之前的数据，无前视。enabled=false 一键回滚。",
-    "definitions": {
-      "pre_decline": "信号日前1日收盘 / 信号日前11日收盘 - 1（默认 10 日窗口）",
-      "pre_vol_trend": "信号日前5日均量 / 再前5日均量（<1 即缩量，与当日量比无关）"
-    },
-    "research": "2025-09-25~2026-11-13, 423 条信号：深跌(≤-8%)+强缩量(<0.85) 保留 172 条，T+5 80.2%/+13.08%；被剔除 251 条 T+5 61.4%/+3.78%（z=+4.12）。剔除 2026-07 后保留组 70.4%/+5.30 vs 59.9%/+2.61（z=+1.39，不显著）。代价：日均推送 4.8→1.9 只，49% 交易日空仓。"
-  },
   "push": {
-    "enabled": true,
+    "enabled": false,
     "channel": "pushplus",
     "fallback_on_failure": true,
     "empty_notice": true,
-    "empty_text": "五谷丰登",
     "title_template": "低位上影线二 · {date} · {n}只",
     "template": "markdown",
     "note": "收盘后把当日清单推送到微信。主通道 PushPlus（PUSHPLUS_TOKEN），失败/未配置时兜底 Server酱（SERVERCHAN_SENDKEY）；空仓也推一条状态通知，避免「没消息=没跑」的误判。enabled=false 一键关闭；--no-push 供本地复跑/回溯使用，不误发。异常全部吞掉，推送失败绝不影响选股与台账。",
@@ -104,14 +89,6 @@
   "task_time": "15:20",
   "_change_log": [
     {
-      "date": "2026-11-25",
-      "field": "pre_divergence",
-      "from": null,
-      "to": "enabled=true (前10日跌幅<=-8% 且 前5日量能趋势<0.85, 排序加分12)",
-      "reason": "用户确认：信号发生之前若出现「下跌 + 量能萎缩(背离)」，按硬过滤执行并保留排序加分；空仓推送文案改为「五谷丰登」。",
-      "backtest": "423 条信号：保留 172 条 T+5 80.2%/+13.08%，被剔除 251 条 61.4%/+3.78%；剔除 2026-07 后 70.4% vs 59.9%(z=1.39)。日均 4.8→1.9 只，49% 交易日空仓。"
-    },
-    {
       "date": "2026-11-11",
       "field": "volume.ma5_cap",
       "from": 1.5,
@@ -142,29 +119,6 @@
       "to": "enabled=true (PushPlus + Server酱兜底, 空仓也通知)",
       "reason": "补齐微信推送通道：此前 low_shadow2 是仓库 8 个模型中唯一没有推送代码的，只写 common/state/recommendations/ 台账，微信永远收不到。用户 2026-11-16 反馈「今天没推送至微信么，没收到」后确认落地。",
       "backtest": "无选股口径变更；detect()/vol_score()/score()/pass_filter() 逐行未改，推送层独立附加于 main() 末尾并全吞异常。"
-    },
-    {
-      "date": "2026-11-23",
-      "field": "robustness.watchdog_and_kline_index",
-      "from": "逐只kline/样本池/循环无超时;load_many逐只扫描全部分片O(n²)",
-      "to": "三层看门狗(单只20s/样本池90s/循环300s)+market_store全量索引缓存(O(1)单只查询)",
-      "reason": "11-20、11-23多次流水线卡死(2h+/20min+)。两层根因：①逐只取数无超时；②load_bars→load_many([code])每次遍历~400个gzip分片,4570只=180万次解压。修复后选股从20+分钟降到~1分钟,所有共用前置层的模型一并受益。选股口径/detect/score/pass_filter零改动。",
-      "backtest": "无选股口径变更,不产生回测差异;新增日志字段取数超时跳过N与stats.timeout_skip供云端核验覆盖率。"
-    },
-    {
-      "date": "2026-11-26",
-      "field": "track",
-      "from": null,
-      "to": "enabled=true (前十日样本跟踪: 收盘破提示日价即结束, 仅展示存活)",
-      "reason": "用户要求微信推送增加历史样本跟踪; 破位口径=最新收盘<提示日收盘(收盘价判定,避免盘中噪声), 仅列未破位样本。",
-      "backtest": "无选股口径变更; detect/score/pass_filter/pre_divergence均不改。"
     }
-  ],
-  "track": {
-    "enabled": true,
-    "lookback_days": 10,
-    "break_rule": "last_close < signal_close",
-    "show_only_alive": true,
-    "note": "2026-11-26新增：微信推送附「前十日样本跟踪」段。近10个交易日台账推荐股按提示日收盘价跟到最新收盘；最新收盘价跌破提示日收盘价即判定破位、结束跟踪(不再展示)；仅列仍在上方的活跃样本，按提示日倒序。涨幅=最新收盘/提示日收盘-1。lookback_days可配；enabled=false一键关闭。"
-  }
+  ]
 }

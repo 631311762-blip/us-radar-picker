@@ -38,8 +38,6 @@ import json
 import os
 import sys
 
-import signal
-import time as _time
 import numpy as np
 import pandas as pd
 
@@ -47,7 +45,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CFG = json.load(open(os.path.join(BASE_DIR, "config.json"), encoding="utf-8"))
 SH, POS, VOL, SC = CFG["shape"], CFG["position"], CFG["volume"], CFG["score"]
 FLT = CFG.get("filter", {})   # 可选二次过滤层；旧版 config 缺该段时为空 dict，向后兼容
-PDV = CFG.get("pre_divergence", {})  # 可选「前置下跌+量能背离」层；缺省即关闭
 PSH = CFG.get("push", {})     # 可选微信推送层；旧版 config 缺该段时为空 dict，自动静默
 KLINE_COUNT = 160          # 共享K线缓存单只读取根数（低位判定需 >= 61）
 RECO_DIR = os.path.join(BASE_DIR, "..", "common", "state", "recommendations", "low_shadow2")
@@ -83,42 +80,6 @@ def kline(code, count=None):
         except Exception:
             pass
     return None
-
-
-# ----------------------------------------------------------------------------
-# 逐只取数看门狗（2026-11-23）：防止单只行情源瞬时卡死拖垮整条流水线。
-# 根因：兜底 akshare / 共享缓存读取偶发无响应，旧版逐只调用无超时，
-#       任一只卡住即让整个模型挂起（11-20、11-23 两次事故的元凶）。
-# 方案：每只 kline() 调用套 SIGALRM 硬超时；超时即跳过该只并计数，
-#       保证流水线在有限时间内走完、正常推送。仅 Unix 主线程生效，
-#       非 Unix/非主线程自动降级为无超时（功能不受影响）。
-# ----------------------------------------------------------------------------
-SYMBOL_TIMEOUT = float(os.environ.get("LS2_SYMBOL_TIMEOUT", "20"))  # 单只取数硬超时(秒)
-UNIVERSE_TIMEOUT = float(os.environ.get("LS2_UNIVERSE_TIMEOUT", "90"))  # 样本池取数硬超时(秒)
-LOOP_BUDGET = float(os.environ.get("LS2_LOOP_BUDGET", "300"))  # 选股循环总预算(秒)，到点强制收尾并推送
-_watchdog_on = hasattr(signal, "SIGALRM") and hasattr(signal, "setitimer")
-
-class _KlineTimeout(Exception):
-    pass
-
-def _alarm_raise(signum, frame):
-    raise _KlineTimeout()
-
-def _guarded(fn, timeout, *a, **k):
-    """通用看门狗：在 timeout 秒内执行 fn(*a,**k)，超时抛 _KlineTimeout。"""
-    if not _watchdog_on:
-        return fn(*a, **k)
-    old = signal.signal(signal.SIGALRM, _alarm_raise)
-    signal.setitimer(signal.ITIMER_REAL, timeout)
-    try:
-        return fn(*a, **k)
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, old)
-
-def kline_guarded(code, count=None):
-    """带硬超时的单只 K 线读取；超时抛 _KlineTimeout 由主循环跳过。"""
-    return _guarded(kline, SYMBOL_TIMEOUT, code, count=count)
 
 
 def _to_df(bars, code):
@@ -163,20 +124,13 @@ def detect(df):
     # 前两日累计涨跌 = 信号日前1日收盘 / 前3日收盘 - 1（即信号之前两根K线的累计涨跌）。
     # 仅作为特征列输出给可选过滤层使用，不参与 sig 判定 —— 核心口径逐行不变。
     prior2_cum = c.shift(1) / c.shift(3).where(lambda s: s > 0) - 1
-    # 前置特征（全部只用信号日之前的数据，无前视）：供 pre_divergence 过滤/加分层使用
-    _dw = int(PDV.get("decline_window", 10)); _vw = int(PDV.get("vol_window", 5))
-    _cp = c.shift(1)
-    pre_decline = _cp / c.shift(_dw + 1).where(lambda s: s > 0) - 1
-    _v_roll = v.shift(1).rolling(_vw).mean()
-    pre_vol_trend = _v_roll / _v_roll.shift(_vw).where(lambda s: s > 0)
     out = pd.DataFrame({
         "date": df["date"], "open": o, "close": c, "high": h, "low": l,
         "pct": (c / prec - 1) * 100,
         "upper_body": upper / body, "upper_range": upper / rng,
         "lower_range": lower / rng, "vol_ratio": v / vol_ma5,
         "vol_ratio_prev": vol_ratio_prev, "pos60": c / hh60,
-        "upper_pct": upper_pct, "prior2_cum": prior2_cum,
-        "pre_decline": pre_decline, "pre_vol_trend": pre_vol_trend, "sig": sig})
+        "upper_pct": upper_pct, "prior2_cum": prior2_cum, "sig": sig})
     return out
 
 
@@ -194,16 +148,6 @@ def score(row):
     s = min(row["upper_pct"], SC["upper_cap"]) / SC["upper_cap"] * SC["upper_weight"]
     s += vol_score(row["vol_ratio"], row["vol_ratio_prev"])
     s += min(abs(row["pos60"] - SC["position_target"]) / SC["position_span"], 1.0) * SC["position_weight"]
-    # 前置下跌+缩量加分：跌得越深、量能萎缩越明显，加分越多（0~bonus_weight）
-    if PDV.get("enabled", False) and PDV.get("bonus_weight"):
-        try:
-            d = float(row["pre_decline"]); vt = float(row["pre_vol_trend"])
-            depth = min(max((-d + float(PDV.get("decline_max", -0.08))) / 0.12, 0.0), 1.0)
-            shrink = min(max((float(PDV.get("vol_trend_max", 0.85)) - vt) / 0.35, 0.0), 1.0)
-            if np.isfinite(depth) and np.isfinite(shrink):
-                s += (0.6 * depth + 0.4 * shrink) * float(PDV["bonus_weight"])
-        except (TypeError, ValueError, KeyError):
-            pass
     return round(float(s), 1)
 
 
@@ -232,111 +176,13 @@ def pass_filter(row):
                 return False
         except (TypeError, ValueError, KeyError):
             return False
-    # 前置下跌+量能背离层（config.pre_divergence 驱动）：只认信号日之前的数据
-    if PDV.get("enabled", False):
-        try:
-            d = float(row["pre_decline"]); vt = float(row["pre_vol_trend"])
-            if not (np.isfinite(d) and d <= float(PDV.get("decline_max", -0.08))):
-                return False
-            if not (np.isfinite(vt) and vt < float(PDV.get("vol_trend_max", 0.85))):
-                return False
-        except (TypeError, ValueError, KeyError):
-            return False
     return True
 
 
 # ----------------------------------------------------------------------------
 # 微信推送层（2026-11-16，config.push 驱动）—— 独立于选股核心，异常全吞
 # ----------------------------------------------------------------------------
-
-
-# ----------------------------------------------------------------------------
-# 前十日样本跟踪（2026-11-26）：历史推荐股按提示日价跟到最新收盘。
-#   规则：最新收盘价 < 提示日收盘价 → 判定破位，结束跟踪（不再展示）。
-#   展示：仅列仍在上方的活跃样本，按提示日倒序；涨幅=最新/提示日价-1。
-# ----------------------------------------------------------------------------
-TRACK = CFG.get("track", {})   # 可选；缺省用下方默认
-
-def _track_days():
-    return int(TRACK.get("lookback_days", 10))
-
-def build_tracking(today=None, kline_fn=None):
-    """扫描近 N 个交易日台账，跟踪历史样本，返回 markdown 行列表。"""
-    import glob as _glob
-    import datetime as _dt
-    today = today or pd.Timestamp.now().strftime("%Y-%m-%d")
-    kfn = kline_fn or kline
-    files = sorted(_glob.glob(os.path.join(RECO_DIR, "*.json")))
-    files = [f for f in files if os.path.basename(f)[:10] < today]
-    files = files[-_track_days():]      # 最近 N 个批次(按台账日期)
-    if not files:
-        return []
-
-    # 汇总历史事件 (code -> {name, events:[(date, base)]})
-    hist = {}
-    for f in files:
-        d = os.path.basename(f)[:10]
-        try:
-            rec = json.load(open(f, encoding="utf-8"))
-        except Exception:
-            continue
-        for p in rec.get("picks", []):
-            c = str(p.get("code", "")).zfill(6)
-            base = p.get("close")
-            if not c or not base or float(base) <= 0:
-                continue
-            e = hist.setdefault(c, {"name": p.get("name", ""), "events": []})
-            e["events"].append((d, float(base)))
-            if not e["name"]:
-                e["name"] = p.get("name", "")
-    if not hist:
-        return []
-
-    rows = []
-    for code, info in hist.items():
-        # 取该股最近一次提示作为跟踪基准(避免同股多次提示重复)
-        d0, base = max(info["events"], key=lambda x: x[0])
-        try:
-            bars = kfn(code, count=120)
-        except Exception:
-            bars = None
-        if not bars:
-            continue
-        # 最新收盘价(取日期<=today的最后一根，避免盘中未收盘数据)
-        valid = [b for b in bars if str(b.get("date", ""))[:10] <= today]
-        if not valid:
-            continue
-        last = max(valid, key=lambda b: str(b.get("date", ""))[:10])
-        cur = float(last.get("close") or 0)
-        if cur <= 0:
-            continue
-        chg = (cur / base - 1.0) * 100
-        if cur < base:      # 破位 → 结束跟踪
-            continue
-        held = (pd.Timestamp(last["date"][:10]) - pd.Timestamp(d0)).days
-        rows.append({"code": code, "name": info["name"], "date": d0,
-                     "base": base, "cur": round(cur, 2),
-                     "chg": round(chg, 2), "days": held})
-
-    rows.sort(key=lambda r: r["date"], reverse=True)
-    L = ["## 前十日样本跟踪（未破位）", ""]
-    if not rows:
-        L += ["> 近 %d 个交易日推荐样本均已跌破提示日收盘价，全部结束跟踪（无存活样本）。" % _track_days(), ""]
-        return L
-    L += ["> 规则：以提示日收盘价为成本线，最新收盘价跌破即结束跟踪；下表仅列仍在上方的 %d 只。" % len(rows), ""]
-    L += ["| 提示日 | 代码 | 名称 | 提示价 | 现价 | 累计涨跌 | 跟踪天数 |",
-          "|---|---|---|---|---|---|---|"]
-    for r in rows:
-        sign = "+" if r["chg"] > 0 else ""
-        L.append("| %s | %s | %s | %s | %s | %s%.2f%% | %d天 |" % (
-            r["date"], r["code"], r["name"], r["base"], r["cur"], sign, r["chg"], r["days"]))
-    L.append("")
-    return L
-
-
 def build_title(date, n):
-    if n == 0:
-        return "低位上影线二 · %s · %s" % (date, PSH.get("empty_text") or "五谷丰登")
     tpl = PSH.get("title_template") or "低位上影线二 · {date} · {n}只"
     return tpl.format(date=date, n=n)
 
@@ -375,16 +221,12 @@ def build_markdown(date, picks, stats=None, replay=False):
                     i, p.get("code", ""), p.get("name", ""), p.get("close", ""), p.get("score", "")))
         L.append("")
     else:
-        L += ["**%s**" % (PSH.get("empty_text") or "五谷丰登"), "",
-              "今日无符合条件标的（空仓），属阈值预期结果，**不是漏跑或数据源故障**。", ""]
+        L += ["**今日空仓（0 只）**", "",
+              "新口径过滤后无信号通过，属阈值预期结果，**不是漏跑或数据源故障**。", ""]
 
     # 运行口径与统计
     detail = ["- 口径：前两日累计涨跌 ≤ 0 且 当日量/前5日均量 ≥ 1.1（量比上限 2.2 不变）",
               "- 过滤层：`%s`" % ("on" if FLT.get("enabled", False) else "off")]
-    if PDV.get("enabled", False):
-        detail.append("- 前置背离层：前%d日跌幅 ≤ %.0f%% 且 前%d日量能趋势 < %.2f（已启用）"
-                      % (PDV.get("decline_window", 10), PDV.get("decline_max", -0.08) * 100,
-                         PDV.get("vol_window", 5), PDV.get("vol_trend_max", 0.85)))
     if stats:
         if stats.get("universe"):
             detail.append("- 样本池 %s 只 / 有效K线 %s" % (stats.get("universe"), stats.get("scanned", "—")))
@@ -394,18 +236,8 @@ def build_markdown(date, picks, stats=None, replay=False):
     detail += ["",
                "**确认规则**：次日高开才买入，低开放弃；T+10 结算，止损 -5% / 止盈 +20%。",
                "",
-               "📌 模型原型：本模型源自低位上影线模型2(双栏 v2.3)拆分的低位栏，提示日为回踩企稳阴线当日，基本特征：低位长上影阴线+收盘处60日区间低位+缩量企稳，次日高开确认买入得出（样本股如东山精密、欧陆通）。",
-               "📈 最优策略：提示日次日开盘买入，持有至第10天(D+11)最高价卖出（2026年回溯胜率64%、平均收益+6.0%，按盘中最高价理想成交）；跌破买入价-5%止损（止损用于控制回撤，回溯显示会略降理想收益）。",
-               "",
                "数据来源：共同前置层（东财/新浪日线兜底）。本清单为模型信号，不构成投资建议。"]
     L += detail
-    L.append("")
-    # 前十日样本跟踪（config.track.enabled 可一键关闭）
-    if TRACK.get("enabled", False):
-        try:
-            L += build_tracking(date)
-        except Exception as _te:
-            print("[WARN] 前十日样本跟踪异常(已忽略)：%s" % _te)
     return "\n".join(L)
 
 
@@ -435,13 +267,6 @@ def push_wechat(title, content, force=False):
     token = (os.environ.get("PUSHPLUS_TOKEN") or "").strip()
     sckey = (os.environ.get("SERVERCHAN_SENDKEY") or os.environ.get("FTQQ_KEY") or "").strip()
     template = PSH.get("template", "markdown")
-    try:                       # 临近财报/预告：微信推送加醒目标识（离线读本地日历）
-        import sys as _sys
-        _sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
-        import report_risk as _rr
-        title, content = _rr.decorate(title, content, template)
-    except Exception:
-        pass
     channel = (PSH.get("channel") or "pushplus").lower()
     fallback = bool(PSH.get("fallback_on_failure", True))
     order = ["pushplus", "serverchan"] if channel == "pushplus" else ["serverchan", "pushplus"]
@@ -527,7 +352,9 @@ def main():
             return 1
         lp = ledger.get("picks", [])
         st = {"picks": ledger.get("count", len(lp))}
-        ok, ch = push_report(d, lp, stats=st, replay=True)
+        # force=True：即使用户关闭了每日自动推送(push.enabled=false)，
+        # 手动 --push-only 补发仍应可用（排障/补发能力与每日推送开关解耦）
+        ok, ch = push_report(d, lp, stats=st, replay=True, force=True)
         print("[push] 补发 %s：%s（channel=%s, %d 只）" % (d, "成功" if ok else "未送达", ch, len(lp)))
         return 0 if ok else 2
 
@@ -542,30 +369,15 @@ def main():
         print("[WARN] 共同前置层未接入(%s)，使用兜底数据源" % e)
         _ad = None
 
-    try:
-        uni = _guarded(get_universe, UNIVERSE_TIMEOUT)
-    except _KlineTimeout:
-        print("[FATAL] 样本池取数超时(>%ss)，数据源异常，终止本轮避免空仓误报。" % UNIVERSE_TIMEOUT)
-        return 2
-    except Exception as e:
-        print("[FATAL] 样本池取数失败：%s，终止本轮。" % e)
-        return 2
+    uni = get_universe()
     target = pd.Timestamp.now().normalize()
-    picks, scanned, kmiss, filtered, timeout_skip = [], 0, 0, 0, 0
-    loop_start = _time.time()
+    picks, scanned, kmiss, filtered = [], 0, 0, 0
     for x in uni:
         code = str(x.get("symbol") or x.get("code") or "").zfill(6)
         nm = x.get("name", "")
         if "ST" in nm.upper() or nm.startswith("*"):
             continue
-        try:
-            bars = kline_guarded(code, count=KLINE_COUNT)
-        except _KlineTimeout:
-            timeout_skip += 1
-            continue
-        except Exception:
-            kmiss += 1
-            continue
+        bars = kline(code, count=KLINE_COUNT)
         if not bars or len(bars) < POS["window"] + 2:
             kmiss += 1
             continue
@@ -591,16 +403,9 @@ def main():
                 "vol_ratio_prev": round(float(r["vol_ratio_prev"]), 2),
                 "prior2_cum": round(float(r["prior2_cum"]) * 100, 2),
                 "pos60": round(float(r["pos60"]) * 100, 1),
-                "pre_decline": round(float(r["pre_decline"]) * 100, 2),
-                "pre_vol_trend": round(float(r["pre_vol_trend"]), 2),
-                "filter": ("v20261115_hard" if FLT.get("enabled", False) else "off")
-                          + ("+pre_div" if PDV.get("enabled", False) else ""),
+                "filter": "v20261115_hard" if FLT.get("enabled", False) else "off",
                 "source": "low_shadow2",
             }})
-        # 总预算保护：无论卡在哪只，到点强制收尾，保证推送层一定执行
-        if scanned + kmiss + timeout_skip > 0 and _time.time() - loop_start > LOOP_BUDGET:
-            print("[WARN] 选股循环达总预算 %ss，强制收尾（已扫%d只），继续推送。" % (LOOP_BUDGET, scanned))
-            break
     picks.sort(key=lambda p: p.get("score") or 0, reverse=True)
 
     if _ad:
@@ -611,12 +416,10 @@ def main():
     else:
         print("[WARN] 无共同前置层，仅打印不写台账（独立调试模式）")
 
-    print("==== 低位上影模型2 · %s · 样本池%d 有效K线%d K线缺失%d 取数超时跳过%d 核心信号%d 过滤剔除%d 候选%d (filter=%s) ===="
-          % (target.strftime("%Y-%m-%d"), len(uni), scanned, kmiss, timeout_skip,
+    print("==== 低位上影模型2 · %s · 样本池%d 有效K线%d K线缺失%d 核心信号%d 过滤剔除%d 候选%d (filter=%s) ===="
+          % (target.strftime("%Y-%m-%d"), len(uni), scanned, kmiss,
              len(picks) + filtered, filtered, len(picks),
              "on" if FLT.get("enabled", False) else "off"))
-    if timeout_skip > 0:
-        print("[WARN] 本日有 %d 只取数超时被跳过(单只上限%ss)；若占比过高通常是行情源瞬时异常，请复核样本池覆盖率。" % (timeout_skip, SYMBOL_TIMEOUT))
     for i, p in enumerate(picks[:args.top], 1):
         print("%d. %s %s 收%s 评分%s 上影/股价%.2f%% 量比(较上日)%s 60日位置%.1f%%"
               % (i, p["code"], p["name"], p["close"], p["score"],
@@ -627,7 +430,7 @@ def main():
     # ---- 微信推送层（独立附加，异常全吞，绝不影响选股/台账结果）----
     if not args.no_push:
         stats = {"universe": len(uni), "scanned": scanned, "core": len(picks) + filtered,
-                 "filtered": filtered, "picks": len(picks), "timeout_skip": timeout_skip}
+                 "filtered": filtered, "picks": len(picks)}
         try:
             ok, ch = push_report(target.strftime("%Y-%m-%d"), picks[:args.top], stats=stats)
             print("[push] %s channel=%s" % ("成功" if ok else "未送达/已跳过", ch))
