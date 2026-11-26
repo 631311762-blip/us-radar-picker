@@ -400,7 +400,8 @@ def build():
     for d, c in hist:
         if c and d and (c not in last_push or d > last_push[c]):
             last_push[c] = d
-    cal = sorted(set(x["date"] for x in rows))
+    # 2026-11-26 修复：把历史首推日并入日历再算间隔，避免历史日不在当前rows窗口时去重失效
+    cal = sorted(set([x["date"] for x in rows] + list(last_push.values()) + [base_date]))
     di = {d: i for i, d in enumerate(cal)}
     fresh_hits = []
     followed = []
@@ -547,26 +548,24 @@ def render_oya_md(r):
     # 易点共振票置于最前并重点标识（build 已排序，这里 Doubly 保证）
     fp = sorted(fp, key=lambda x: -x.get("oya_yd_prior", 0))
     for i, x in enumerate(fp, 1):
-        bd = {"创业板": "创", "科创板": "科"}.get(x.get("board", ""), "主")
         probe = x.get("oya_probe_date") or "—"
-        lu = " 🔴涨停(买进难)" if x.get("is_limit_up") else ""
-        # 洗盘缩量软标注（S2 口径：中间均量/试盘量<0.45），仅供参考不筛票
+        tags = []
+        if x.get("oya_breakdown"):
+            tags.append("洗盘")
         mv = x.get("oya_mid_vs_probe")
-        shrink = " 缩量✓" if mv is not None and mv < 0.45 else ""
-        # 易点共振重点标识（2026-11-21）：先易点启动、后奥雅突破，重点推荐
-        yd = ""
+        if mv is not None and mv < 0.45:
+            tags.append("缩量")
+        if x.get("is_limit_up"):
+            tags.append("🔴涨停")
+        # 共振标识精简（2026-11-26）：只留符号+简称，日期细节见台账
         if x.get("oya_yd_prior"):
-            yd = f" ⭐**易点共振**(易点{x['oya_yd_date']}启动·{x['oya_yd_gap']}日后突破)"
-        # 低位上影共振备注（2026-11-24）：提示日前10日内出现低位上影线模型信号
-        ls = ""
+            tags.append(f"⭐易点{x['oya_yd_date'][5:]}")
         if x.get("oya_low_shadow"):
-            ls = f" 📍**低位上影共振**({x['oya_ls_date']}·{x['oya_ls_gap']}日前)"
+            tags.append(f"📍低位影{x['oya_ls_date'][5:]}")
+        tag = f" [{'/'.join(tags)}]" if tags else ""
         md.append(
-            f"{i}. **{x['name']}**[{bd}] `{x['code']}` 分{x['score']:.0f}｜"
-            f"收{x['close']} 当日{x['day_chg']:+.1f}%｜"
-            f"试盘{probe} 压力线{x.get('oya_pressure')}(破{x.get('oya_break'):+.0f}%) "
-            f"量{x.get('oya_vol_x')}× {'洗盘✓' if x.get('oya_breakdown') else ''}"
-            f"{shrink}{lu}{yd}{ls}")
+            f"{i}. **{x['name']}** `{x['code']}` 收{x['close']} ({x['day_chg']:+.1f}%) "
+            f"试盘{probe[5:]} 破+{x.get('oya_break', 0):.0f}% 量{x.get('oya_vol_x')}×{tag}")
     md.append("")
     return md
 
@@ -665,10 +664,14 @@ def render_follow_md(r):
     if not cache:
         return []
     stopped = _load_stopped()
+    # 2026-11-26 用户要求：今日主推的票不再进历史跟踪，避免"又首推又跟踪"重复。
+    today_codes = {x.get("code") for x in r.get("latpicks", [])}
     md = ["### 🔁 历史推荐跟踪（只跟涨的｜破位/放量下跌/阴包阳即停）"]
     active, just_stopped = [], []
     for x in picks:
         code = x["code"]
+        if code in today_codes:                 # 今天已重新首推，不重复列入跟踪
+            continue
         if stopped.get(code) == x["date"]:      # 已宣告停止，永久退出
             continue
         b = cache.get(code)
