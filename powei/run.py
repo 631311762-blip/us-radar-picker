@@ -283,7 +283,7 @@ def detect(bars, const=None):
         fib_floor = rb_close - RECLAIM_FAIL_FIB * (rb_close - rb_open)
         fail = any(bars[j]["close"] < fib_floor for j in range(sig + 1, N))
         if fail:
-            t = sig + 1; continue
+            t = max(sig + 1, break_idx + 1); continue
         # ── 暴跌V反硬过滤（收复前无缩量/无企稳的连续暴跌深V反抽）──
         # 用收复日之前已知的数据判定，三条件同时成立即剔除：
         #   ① 收复前3日累计跌幅 ≤ -9%   : close[sig-1]/close[sig-3]-1
@@ -298,7 +298,7 @@ def detect(bars, const=None):
             prior5 = [bars[j]["close"] for j in range(sig - 1 - VREV_NEWLOW_WIN, sig - 1)]
             newlow = last["close"] <= min(prior5) if prior5 else False
             if pre3 <= VREV_PRE3_MAX and body <= VREV_BODY_MAX and newlow:
-                t = sig + 1; continue
+                t = max(sig + 1, break_idx + 1); continue
         avgvol = sum(x["volume"] for x in win[-20:]) / 20
         def ret(n):
             j = min(sig + n, N - 1)
@@ -338,7 +338,7 @@ def detect(bars, const=None):
             "op": op, "hold3_ret": op.get("hold3_ret"),
             "second_confirm": second_confirm,
         })
-        t = sig + 1   # 步进越过收复日：避免同一结构里相邻破位日重复映射同一收复（消重），又不漏后续独立破位
+        t = max(sig + 1, break_idx + 1)   # 步进越过收复日：避免同一结构里相邻破位日重复映射同一收复（消重），又不漏后续独立破位
     return events
 
 

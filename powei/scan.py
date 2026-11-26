@@ -243,7 +243,7 @@ def detect(d):
         fib_floor = rb_close - RECLAIM_FAIL_FIB * (rb_close - rb_open)
         fail = any(d[j]['close'] < fib_floor for j in range(sig+1, N))
         if fail:
-            t = sig + 1; continue
+            t = max(sig + 1, break_idx + 1); continue
         # ── 暴跌V反硬过滤（收复前无缩量/无企稳的连续暴跌深V反抽）──
         # 三条件同时成立即剔除（只用收复日之前数据）：
         #   ① 收复前3日累计≤-9% : close[sig-1]/close[sig-3]-1
@@ -257,7 +257,7 @@ def detect(d):
             prior5 = [d[j]['close'] for j in range(sig-1-VREV_NEWLOW_WIN, sig-1)]
             newlow = last['close'] <= min(prior5) if prior5 else False
             if pre3 <= VREV_PRE3_MAX and body <= VREV_BODY_MAX and newlow:
-                t = sig + 1; continue
+                t = max(sig + 1, break_idx + 1); continue
         avgvol=sum(x['volume'] for x in pre[-20:])/20   # 量能基准用破位前 20 日均量
         def ret(n):
             j=min(sig+n, N-1); return (d[j]['close']/sig_close-1) if j>sig else None
@@ -284,7 +284,7 @@ def detect(d):
             'r5':ret(5),'r10':ret(10),'r20':ret(20),
             'peak10':peak(10),'peak20':peak(20),'dd20':dd(20),
             'op':op,'hold3_ret':op.get('hold3_ret'),'second_confirm':second_confirm})
-        t = sig + 1   # 步进越过收复日：避免同一结构里相邻破位日重复映射同一收复（消重），又不漏掉后续独立破位
+        t = max(sig + 1, break_idx + 1)   # 步进越过收复日：避免同一结构里相邻破位日重复映射同一收复（消重），又不漏掉后续独立破位
     return events
 
 def score(e):
