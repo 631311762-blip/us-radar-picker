@@ -34,10 +34,13 @@ import json, os, sys, math, argparse, datetime, shutil
 from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(HERE)
 os.chdir(HERE)
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(REPO, "common"))
 
 import 每日推荐 as R
+import common_lib as cm
 import model2 as M
 
 PREDS = os.path.join(HERE, "predictions.json")
@@ -78,13 +81,24 @@ def jappend(f, obj):
         fp.write(json.dumps(obj, ensure_ascii=False) + "\n")
 
 
+def _load_bars_many(codes):
+    """一次性读取共同前复权行情库；回溯/结算不访问网络。"""
+    codes = sorted(set(codes))
+    bare = {c: (c[2:] if str(c).startswith(("sh", "sz", "bj")) else str(c)).zfill(6)
+            for c in codes}
+    stored = cm.MARKET_STORE.load_many(list(bare.values()), count=400)
+    out = {}
+    for code in codes:
+        rows = stored.get(bare[code], [])
+        out[code] = [{
+            "date": b["date"], "open": b["open"], "last": b["close"],
+            "high": b["high"], "low": b["low"], "volume": b["volume"],
+        } for b in rows]
+    return out
+
+
 def get_bars(code):
-    """优先命中当日K线缓存（秒级），缓存没有再走网络"""
-    cache, _ = R.load_cache()
-    b = cache.get(code)
-    if b and len(b) >= 200:
-        return sorted(b, key=lambda x: x["date"])
-    return R.kline(code, 400)
+    return _load_bars_many([code]).get(code)
 
 
 def fmt_pct(x):
@@ -92,9 +106,9 @@ def fmt_pct(x):
 
 
 # ────────────────────────────── 第2层：结算 ──────────────────────────────
-def settle_one(p):
+def settle_one(p, bars=None):
     """结算一条推荐：按与回测 diagnose2.py 完全一致的口径算 g10/d10/launch"""
-    b = get_bars(p["code"])
+    b = bars if bars is not None else get_bars(p["code"])
     if not b:
         return None
     dates = [x["date"] for x in b]
@@ -153,10 +167,11 @@ def settle(preds, done_keys):
     if not todo:
         return []
     got = []
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        for r in ex.map(settle_one, todo):
-            if r:
-                got.append(r)
+    bars_map = _load_bars_many([p["code"] for p in todo])
+    for p in todo:
+        r = settle_one(p, bars_map.get(p["code"]))
+        if r:
+            got.append(r)
     new = []
     for r in got:
         k = (r["date"], r["code"], r["kind"])
@@ -175,11 +190,7 @@ def observe(preds, last_date):
     if not cur:
         return []
     codes = sorted({p["code"] for p in cur})
-    bars = {}
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        for c, b in zip(codes, ex.map(get_bars, codes)):
-            if b:
-                bars[c] = b
+    bars = {c: b for c, b in _load_bars_many(codes).items() if b}
     # 同一只票可能同时进 A/B/C 榜，这里合并展示
     merged = {}
     for p in cur:

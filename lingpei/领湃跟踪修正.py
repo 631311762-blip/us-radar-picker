@@ -10,12 +10,11 @@
 领湃模型_每日.py 合并进当日唯一一条选股清单推送。
 若临时需要完整结算简报，设 LINGPEI_SETTLE_PUSH=1 单独开启（仍按天去重）。
 
-统一流水线严格读取共同历史行情库；独立运行才允许显式本地缓存 → 东方财富 → 新浪。
+统一流水线与独立结算均严格读取共同历史行情库；缺数时留待下次结算，不逐股联网。
 **条件冻结**：本脚本只做结算，不改任何模型阈值；条件更新须在结算结果出来后单独进行。
 """
 import os
 import sys
-import re
 import json
 import statistics
 import datetime
@@ -32,53 +31,16 @@ except Exception:
     _ad = None
 
 HORIZONS = (3, 5, 10)
-# 本地缓存仅在本轮验证时通过 LINGPEI_KCACHE 显式启用；云端默认走在线行情，避免误读旧缓存。
-KCACHE = os.environ.get("LINGPEI_KCACHE", "")
-
-
-def _sina_hist(code, count=220):
-    """新浪日线兜底，返回 [{d,o,c,h,l,v}]（成交量股数转手）。"""
-    import requests
-    secid = ("sh" + code) if code.startswith("6") else (
-        ("bj" + code) if code.startswith(("4", "8", "9")) else ("sz" + code))
-    url = ("https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_=/CN_MarketDataService.getKLineData"
-           "?symbol=" + secid + "&scale=240&ma=no&datalen=" + str(count))
-    try:
-        r = requests.get(url, timeout=15, headers={
-            "User-Agent": "Mozilla/5.0", "Referer": "https://finance.sina.com.cn"})
-        m = re.search(r"\((\[.*\])\)", r.text, re.S)
-        if m:
-            bars = [{"d": str(d["day"]), "o": float(d["open"]), "c": float(d["close"]),
-                     "h": float(d["high"]), "l": float(d["low"]),
-                     "v": float(d["volume"]) / 100.0} for d in json.loads(m.group(1))]
-            return bars or None
-    except Exception:
-        pass
-    return None
 
 
 def load_bars(code):
-    """返回 ([{d,o,c,h,l,v}], 数据源)，按日期升序；正式流水线不联网。"""
-    if _ad and _ad.ready():
-        bars = _ad.kline_for(code, "lingpei", count=220)
-        if bars and len(bars) >= 65:
-            return bars, "market_daily"
-        return None, "market_daily_miss"
-    p = os.path.join(KCACHE, code + ".json") if KCACHE else ""
-    if p and os.path.exists(p):
-        try:
-            bars = json.load(open(p))
-            if len(bars) >= 65:
-                return bars, "cache"
-        except Exception:
-            pass
-    bars = tb.em_hist(code, 220)
+    """返回 ([{d,o,c,h,l,v}], 数据源)，按日期升序；独立运行也不联网。"""
+    if not _ad:
+        return None, "common_adapter_unavailable"
+    bars = _ad.kline_for(code, "lingpei", count=220)
     if bars and len(bars) >= 65:
-        return bars, "em"
-    bars = _sina_hist(code, 220)
-    if bars and len(bars) >= 65:
-        return bars, "sina"
-    return None, "fail"
+        return bars, "market_daily"
+    return None, "market_daily_miss"
 
 
 def settle_one(s, bars):

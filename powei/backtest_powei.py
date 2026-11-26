@@ -24,14 +24,39 @@ import argparse, json, os, sys, time, datetime, statistics
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(REPO, "common"))
 import scan
+import common_lib as cm
 
 HORIZONS = [3, 5, 10]
+KLINE_COUNT = 330
+KLINE_BATCH_SIZE = 200
 
-def worker(s):
+
+def _load_market_bars(stocks):
+    """按批读取共同前复权行情库，转换为 scan.detect 的字段口径。"""
+    codes = [scan._bare(s["symbol"]) for s in stocks]
+    stored = cm.MARKET_STORE.load_many(codes, count=KLINE_COUNT)
+    out = {}
+    for s in stocks:
+        code = scan._bare(s["symbol"])
+        out[s["symbol"]] = [{
+            "day": b["date"], "open": b["open"], "high": b["high"],
+            "low": b["low"], "close": b["close"], "volume": b["volume"],
+        } for b in stored.get(code, [])]
+    return out
+
+
+def _bars_for(s, bars_map):
+    if bars_map is None:
+        bars_map = _load_market_bars([s])
+    return bars_map.get(s["symbol"])
+
+def worker(s, bars_map=None):
     code = s['symbol']; name = s.get('name', '')
-    d = scan.fetch_kline(code, use_cache=True)
+    d = _bars_for(s, bars_map)
     if not d:
         return []
     for x in d:
@@ -62,10 +87,10 @@ def calc_returns(events):
         pass
     return rows
 
-def worker_ret(s):
-    """取 K 线 + 检测 + 直接算两种买法各持有期收益，避免回传巨量 K 线。"""
+def worker_ret(s, bars_map=None):
+    """从预载 K 线检测并直接算两种买法各持有期收益。"""
     code = s['symbol']; name = s.get('name', '')
-    d = scan.fetch_kline(code, use_cache=True)
+    d = _bars_for(s, bars_map)
     if not d:
         return []
     for x in d:
@@ -154,29 +179,38 @@ def fmt(s):
                s['gt5_rate'] * 100, s['loss_rate'] * 100, s['min'] * 100, s['max'] * 100))
 
 def run(limit=None, workers=16, sample_only=False):
-    stocks = scan.get_stocklist()
-    lixin = scan.load_lixin()
-    stocks = [s for s in stocks if scan._bare(s['symbol']) not in lixin]
-    stocks = [s for s in stocks if 'ST' not in s.get('name', '').upper()]
-    if limit:
-        stocks = stocks[:limit]
     if sample_only:
-        # 只用 3 个已知样本做逻辑自测
+        # 只用 3 个已知样本做逻辑自测，股票列表也不访问网络。
         stocks = [{'symbol': 'sh688306', 'name': '均普智能'},
                   {'symbol': 'sz300528', 'name': '幸福蓝海'},
                   {'symbol': 'sz301395', 'name': '仁信新材'}]
-    scan.log('回测扫描 %d 只（已剔 ST/立信）' % len(stocks))
+    else:
+        rows = cm.get_market_universe()
+        stocks = [{'symbol': cm.tx_secid_of(r['code']), 'name': r.get('name', '')}
+                  for r in rows if r.get('code', '').startswith(('0', '3', '6'))]
+        lixin = scan.load_lixin()
+        stocks = [s for s in stocks if scan._bare(s['symbol']) not in lixin]
+        stocks = [s for s in stocks if 'ST' not in s.get('name', '').upper()]
+    if limit:
+        stocks = stocks[:limit]
+    scan.log('回测扫描 %d 只（已剔 ST/立信，行情仅读 market_daily）' % len(stocks))
 
     all_recs = []
+    loaded = 0
     t0 = time.time()
+    done = 0
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        futs = [ex.submit(worker_ret, s) for s in stocks]
-        done = 0
-        for f in as_completed(futs):
-            done += 1
-            all_recs += f.result()
-            if done % 500 == 0:
-                scan.log('进度', done, '/', len(stocks), '信号', len(all_recs), '%.0fs' % (time.time() - t0))
+        for offset in range(0, len(stocks), KLINE_BATCH_SIZE):
+            chunk = stocks[offset:offset + KLINE_BATCH_SIZE]
+            bars_map = _load_market_bars(chunk)
+            loaded += sum(1 for s in chunk if bars_map.get(s['symbol']))
+            futs = [ex.submit(worker_ret, s, bars_map) for s in chunk]
+            for f in as_completed(futs):
+                done += 1
+                all_recs += f.result()
+                if done % 500 == 0:
+                    scan.log('进度', done, '/', len(stocks), '信号', len(all_recs), '%.0fs' % (time.time() - t0))
+    scan.log('共同行情库命中 %d / %d 只' % (loaded, len(stocks)))
     scan.log('检测完成：%d 个信号事件，耗时 %.1fs' % (len(all_recs), time.time() - t0))
 
     # 有效事件（至少 3 日未来K线，A法可用）
