@@ -667,7 +667,7 @@ def _push_report(cands, today):
                 e["code"], e.get("name", ""), e["support"], e["break_day"], e["sig_day"],
                 e.get("vol_ratio"), (e["op"].get("vol_ratio_buy") or 0), score(e)))
     # 固定操作策略（每次必附）+ 模型原始样本标注（便于回忆）
-    lines += ["", OPER_RULE, "", ORIGINAL_SAMPLES]
+    lines += ["", "📈 最优策略(v2口径)：D+1开盘买、当天不卖，持有至10日(D+11)收盘卖出——胜率71.93%/均+10.6%（2026回溯，胜率=收益>3%）；跌破买入价-5%止损（控制回撤）。", "", OPER_RULE, "", ORIGINAL_SAMPLES]
     push("%s %s（%d只）" % (MODEL_LABEL, today, len(cands)), "\n".join(lines))
 
 
