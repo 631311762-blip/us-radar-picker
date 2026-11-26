@@ -664,14 +664,10 @@ def render_follow_md(r):
     if not cache:
         return []
     stopped = _load_stopped()
-    # 2026-11-26 用户要求：今日主推的票不再进历史跟踪，避免"又首推又跟踪"重复。
-    today_codes = {x.get("code") for x in r.get("latpicks", [])}
     md = ["### 🔁 历史推荐跟踪（只跟涨的｜破位/放量下跌/阴包阳即停）"]
     active, just_stopped = [], []
     for x in picks:
         code = x["code"]
-        if code in today_codes:                 # 今天已重新首推，不重复列入跟踪
-            continue
         if stopped.get(code) == x["date"]:      # 已宣告停止，永久退出
             continue
         b = cache.get(code)
