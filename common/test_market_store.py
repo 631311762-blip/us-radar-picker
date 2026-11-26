@@ -291,6 +291,45 @@ class StockV3OfflineTest(unittest.TestCase):
         fetch.assert_not_called()
 
 
+class MarketReadinessGateTest(unittest.TestCase):
+    def gate(self, is_td=True, quote_date="2026-11-26", stats=None,
+             history=None, minimum=0.9):
+        from prefilter import evaluate_market_gate
+        return evaluate_market_gate(
+            is_td, quote_date,
+            stats if stats is not None else {"targets": 100, "coverage": 0.95},
+            history if history is not None else {"last_date": "2026-11-26"},
+            minimum)
+
+    def test_ready_when_coverage_and_date_meet_threshold(self):
+        self.assertEqual(self.gate(), (True, "ok"))
+        self.assertEqual(
+            self.gate(stats={"targets": 100, "coverage": 0.9}),
+            (True, "ok"))
+
+    def test_blocks_when_coverage_below_threshold_after_repair(self):
+        ready, reason = self.gate(stats={"targets": 100, "coverage": 0.89})
+        self.assertFalse(ready)
+        self.assertEqual(reason, "coverage_below_threshold")
+
+    def test_blocks_stale_market_even_with_full_coverage(self):
+        ready, reason = self.gate(
+            stats={"targets": 100, "coverage": 1.0},
+            history={"last_date": "2026-11-25"})
+        self.assertFalse(ready)
+        self.assertEqual(reason, "market_last_date_stale")
+
+    def test_blocks_empty_market_targets(self):
+        ready, reason = self.gate(stats={"targets": 0, "coverage": 1.0})
+        self.assertFalse(ready)
+        self.assertEqual(reason, "no_market_targets")
+
+    def test_non_trading_day_never_releases_models(self):
+        ready, reason = self.gate(is_td=False)
+        self.assertFalse(ready)
+        self.assertEqual(reason, "non_trading_day")
+
+
 class RegulatoryExcludeTest(unittest.TestCase):
     """条件⑤：近一年监管立案/涉嫌违法排除集。"""
 

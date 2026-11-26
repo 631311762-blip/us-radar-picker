@@ -107,6 +107,9 @@ jobs:
           # （Settings → Secrets and variables → Actions → Variables），
           # 日常增量缺省 900s；首次完整回填请勾选手动 history_backfill。
           KLINE_BATCH_BUDGET: ${{ vars.KLINE_BATCH_BUDGET || '900' }}
+          # 首次行情复核未达标时，集中补数的时间预算与最终放行覆盖率门槛。
+          KLINE_REPAIR_BUDGET: ${{ vars.KLINE_REPAIR_BUDGET || '300' }}
+          KLINE_MIN_COVERAGE: ${{ vars.KLINE_MIN_COVERAGE || '0.90' }}
           LIST_FETCH_DEADLINE: ${{ vars.LIST_FETCH_DEADLINE || '300' }}
           # 2026-11-20 提速：样本池快照优先(跳过东财列表退避)、立信F10复用、
           # 当日行情批量快照写入。凯众不复权预填并发 4→16（原先 4306 只约8分钟）。
@@ -124,9 +127,11 @@ jobs:
           if [ "${{ github.event.inputs.no_kline }}" = "true" ]; then ARGS="$ARGS --no-kline"; fi
           if [ "${{ github.event.inputs.weekly_refresh }}" = "true" ]; then ARGS="$ARGS --weekly-refresh"; fi
           python3 common/prefilter.py $ARGS
-          # 输出 trading_day 供后续步骤判断
+          # 输出交易日与行情复核放行标记；models_ready=false 时绝不运行模型。
           TD=$(python3 -c "import json;print('true' if json.load(open('common/state/meta.json')).get('trading_day') else 'false')")
+          READY=$(python3 -c "import json;print('true' if json.load(open('common/state/meta.json')).get('models_ready') else 'false')")
           echo "trading_day=$TD" >> "$GITHUB_OUTPUT"
+          echo "models_ready=$READY" >> "$GITHUB_OUTPUT"
 
       # 2026-11-13：前置层可观测性 —— 把降级模式、K线覆盖率、快照健康、
       # 告警清单写进 Step Summary，避免「静默用残缺数据」无人察觉。
@@ -147,6 +152,7 @@ jobs:
           kz = m.get("kz_kline") or {}
           hist = m.get("market_history") or {}
           sh = m.get("snapshot_health") or {}
+          gate = m.get("model_gate") or {}
           out = os.environ.get("GITHUB_OUTPUT")
           if out:
               with open(out, "a", encoding="utf-8") as fh:
@@ -157,6 +163,8 @@ jobs:
                   "周刷新（立信/监管立案/快照全量，跳过K线）" if m.get("weekly_refresh") else "日增量（仅行情，复用上周排除集）",
                   "一二三四五六日"[m.get("weekday", 0)] if isinstance(m.get("weekday"), int) and 0 <= m.get("weekday", 0) <= 6 else "-",
                   m.get("trading_day", "-")),
+              "- 模型放行：%s（原因：%s）" % (
+                  "是" if m.get("models_ready") else "否", gate.get("reason", "-")),
               "- 样本池：%s 只，来源：%s" % (m.get("universe_count", "-"), m.get("universe_source", "-")),
               "- 立信排除：%s 只；近一年监管立案/涉嫌违法排除：%s 只" % (
                   m.get("lixin_count", "-"), m.get("regulatory_count", "-")),
@@ -171,6 +179,12 @@ jobs:
                   sh.get("ok", "-"), sh.get("rows", "-"),
                   "" if sh.get("ok") else " / " + str(sh.get("reason", ""))),
           ]
+          if "coverage" in gate:
+              lines.append("- 行情放行复核：覆盖率 %.1f%% / 门槛 %.1f%%，行情最新日 %s（应为 %s），集中补数：%s" % (
+                  float(gate.get("coverage") or 0) * 100,
+                  float(gate.get("min_coverage") or 0) * 100,
+                  gate.get("last_date", "-"), gate.get("quote_date", "-"),
+                  "是" if gate.get("repair_attempted") else "否"))
           if k and not k.get("skipped"):
               lines.append("- 共享K线覆盖率：%.1f%%（成功 %s / 需拉 %s，失败 %s，超预算跳过 %s）" % (
                   k.get("coverage", 0) * 100, k.get("ok", "-"), k.get("targets", "-"),
@@ -203,7 +217,7 @@ jobs:
           echo "失败详情已由 failure-notify.yml 按天聚合成一条告警，当日后续失败不再重复推送。" >> "$GITHUB_STEP_SUMMARY"
 
       - name: 运行全部模型（共同样本池 + 统一回溯/修正）
-        if: steps.prefilter.outputs.trading_day == 'true'
+        if: steps.prefilter.outputs.models_ready == 'true'
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           FTQQ_KEY: ${{ secrets.FTQQ_KEY }}

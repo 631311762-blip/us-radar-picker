@@ -54,6 +54,11 @@ prefilter.py —— 共同前置层入口（合并流水线第一步，全局强
   模式由星期几自动判定（周六=5），也可用 --weekly-refresh / --no-weekly-refresh
   显式覆盖；周中发生的 ST/立信/监管变化要等到下周六才会反映（已确认取舍）。
 
+2026-11-26 行情容灾：
+  快照 + 多源增量补抓后复核覆盖率与行情库最新日；首次未达标会集中在
+  前置层再补一次。最终仍不达标则 models_ready=false、告警并返回失败，
+  workflow 不运行任何模型，避免使用旧行情或残缺数据静默推票。
+
 用法：
   python3 common/prefilter.py                  # 自动按星期判定（周中增量 / 周六周刷新）
   python3 common/prefilter.py --weekly-refresh  # 强制周刷新（非周六手动补跑）
@@ -91,6 +96,20 @@ def _alert(title, content):
         print("[prefilter][ALERT] 推送 %s：%s" % ("成功" if ok else "未送达", detail))
     except Exception as e:
         print("[prefilter][ALERT] 推送异常（忽略）：%s" % e)
+
+
+def evaluate_market_gate(is_td, quote_date, stats, history, min_coverage):
+    """复核当日行情是否足够支撑全模型运行，返回 (ready, reason)。"""
+    if not is_td:
+        return False, "non_trading_day"
+    if not stats.get("targets"):
+        return False, "no_market_targets"
+    last_date = history.get("last_date")
+    if not quote_date or last_date != quote_date:
+        return False, "market_last_date_stale"
+    if float(stats.get("coverage") or 0.0) < min_coverage:
+        return False, "coverage_below_threshold"
+    return True, "ok"
 
 
 def main():
@@ -140,6 +159,8 @@ def main():
         "date": today,
         "generated_at": datetime.datetime.now(BJT).isoformat(timespec="seconds"),
         "degraded": False,
+        "models_ready": False,
+        "model_gate": {"ready": False, "reason": "not_evaluated"},
         "alerts": ALERTS,
     }
 
@@ -152,8 +173,20 @@ def main():
     # 周刷新模式（周六）休市无新行情，但仍需跑立信/监管立案/快照全量，
     # 因此绕开「非交易日直接返回」的硬闸门；其余非交易日（周日/节假日）照旧跳过。
     if not is_td and not weekly_refresh:
+        reason = "quote_unavailable" if not quote_date else "non_trading_day"
+        meta["model_gate"] = {"ready": False, "reason": reason}
         print("[prefilter] 非交易日 / 行情未更新（最新日 %s ≠ 当日 %s），"
               "整体跳过，仅产出 meta。" % (quote_date, today))
+        # 节假日仍会返回上一交易日，正常跳过；工作日连样本行情都取不到则是
+        # 数据源故障，必须明确失败并告警，不能静默当成休市。
+        if weekday < 5 and not quote_date:
+            meta["degraded"] = True
+            meta["error"] = "quote_unavailable"
+            _alert("交易日行情检测失败，已停跑全部模型",
+                   "多个行情源均无法取得样本股票最新交易日，本次不运行任何模型，"
+                   "也不会使用旧行情推送选股结果。请检查行情源与网络。")
+            cm.save_meta(meta)
+            return 1
         cm.save_meta(meta)
         return 0
 
@@ -300,11 +333,17 @@ def main():
     # 周刷新（周六）休市无新行情，跳过 K 线批量；日增量才追加当日一根。
     if skip_kline:
         why = "--no-kline" if args.no_kline else "周刷新/休市（无新行情）"
+        reason = "kline_skipped" if args.no_kline else "weekly_refresh"
         print("[prefilter] 跳过 K 线批量缓存（%s）。" % why)
         meta["kline"] = {"skipped": True}
+        meta["model_gate"] = {"ready": False, "reason": reason}
     else:
         market_universe = cm.get_market_universe()
         meta["market_universe_count"] = len(market_universe)
+        materialize_codes = [x["code"] for x in universe]
+        min_coverage = float(os.environ.get(
+            "KLINE_MIN_COVERAGE", str(cm.KLINE_COVERAGE_WARN)))
+        repair_budget = int(os.environ.get("KLINE_REPAIR_BUDGET", "300"))
 
         # 【提速核心】历史分片已完整持久化（2024 起），每日只需追加当日一根。
         # 用腾讯批量快照一次写入当日全市场（约数秒），替代逐只 K 线抓取
@@ -318,24 +357,66 @@ def main():
                 snap = {"error": str(e)}
         meta["snapshot_bars"] = snap
 
-        # 快照已覆盖标的的 last_date 已更新到当日，fetch_klines_batch 会自动判
-        # 为 fresh 跳过逐只抓取；本步退化为「补快照漏掉的少数标的 + 物化 CSV」。
+        # 快照已覆盖标的会判为 fresh；本步补快照漏掉的标的并物化 CSV。
         ok, fail = cm.fetch_klines_batch(
             market_universe, count=cm.KLINE_CACHE_COUNT,
             workers=cm.KLINE_WORKERS, quote_date=quote_date,
-            materialize_codes=[x["code"] for x in universe])
+            materialize_codes=materialize_codes)
+        initial = cm.kline_stats()
+        meta["kline_initial"] = initial
+        history = cm.MARKET_STORE.coverage()
+        ready, reason = evaluate_market_gate(
+            is_td, quote_date, initial, history, min_coverage)
+
+        # 首次未达标时只在共同前置层再补一次。_fetch_one_kline 内部已按
+        # 东财 → 新浪/腾讯多源兜底；模型始终保持离线，不各自补抓。
+        repair = {"attempted": False, "budget": repair_budget}
+        if not ready:
+            repair["attempted"] = True
+            print("[prefilter] 行情复核未达标（%s），启动集中补数，预算 %ds。"
+                  % (reason, repair_budget))
+            ok, fail = cm.fetch_klines_batch(
+                market_universe, count=cm.KLINE_CACHE_COUNT,
+                workers=cm.KLINE_WORKERS, quote_date=quote_date,
+                materialize_codes=materialize_codes, budget=repair_budget)
+            repair["stats"] = cm.kline_stats()
+        meta["kline_repair"] = repair
+
         meta["kline_ok"] = ok
         meta["kline_fail"] = fail
         meta["kline"] = cm.kline_stats()
         meta["market_history"] = cm.MARKET_STORE.coverage()
         st = meta["kline"]
+        history = meta["market_history"]
+        ready, reason = evaluate_market_gate(
+            is_td, quote_date, st, history, min_coverage)
+        meta["models_ready"] = ready
+        meta["model_gate"] = {
+            "ready": ready, "reason": reason,
+            "coverage": st.get("coverage", 0.0),
+            "min_coverage": min_coverage,
+            "targets": st.get("targets", 0), "ok": st.get("ok", 0),
+            "quote_date": quote_date, "last_date": history.get("last_date"),
+            "repair_attempted": repair["attempted"],
+        }
+        if not ready:
+            meta["degraded"] = True
+            meta["error"] = reason
+            _alert("行情数据未就绪，已停跑全部模型",
+                   "集中补数后仍未通过复核：%s。\n"
+                   "覆盖率 %.1f%%（门槛 %.1f%%），成功 %s / 目标 %s，"
+                   "行情库最新日 %s，应为 %s。\n"
+                   "本次不运行任何模型、不使用旧行情推送结果；请检查行情源、"
+                   "网络及 KLINE_BATCH_BUDGET / KLINE_REPAIR_BUDGET。"
+                   % (reason, float(st.get("coverage") or 0.0) * 100,
+                      min_coverage * 100, st.get("ok", "-"), st.get("targets", "-"),
+                      history.get("last_date"), quote_date))
+            cm.save_meta(meta)
+            return 1
         if st.get("degraded"):
-            _alert("共享K线缓存覆盖率不足",
-                   "成功 %d / 需拉 %d（覆盖率 %.1f%%），失败 %d、超预算跳过 %d。\n"
-                   "缺失标的会被下游模型跳过，不再逐模型访问外网；"
-                   "若持续发生请调 KLINE_BATCH_BUDGET 或检查兜底源。"
-                   % (st["ok"], st["targets"], st["coverage"] * 100,
-                      st["fail"], st["skip"]))
+            _alert("共享K线缓存覆盖率不足（已达放行门槛）",
+                   "集中补数后覆盖率 %.1f%%，达到 %.1f%% 放行门槛，模型继续离线运行。"
+                   % (st["coverage"] * 100, min_coverage * 100))
 
     # ---- 凯众专用：不复权 K 线预填（使凯众零网络抓取，口径与新浪逐日一致）----
     if skip_kline or args.no_kz:
@@ -385,7 +466,7 @@ def main():
     cm.save_meta(meta)
     print("[prefilter] 完成：模式=%s，样本池 %d 只，立信排除 %d 只（%s），"
           "监管立案排除 %d 只（%s），大解禁排除 %d 只（%s），财报窗口 %s 只，"
-          "trading_day=%s，来源=%s，降级=%s，告警=%d 条"
+          "trading_day=%s，模型放行=%s（%s），来源=%s，降级=%s，告警=%d 条"
           % ("周刷新" if weekly_refresh else "日增量",
              len(universe), meta.get("lixin_count", 0),
              "复用" if meta.get("lixin_reused") else "全量重扫",
@@ -394,6 +475,7 @@ def main():
              meta.get("unlock_count", 0),
              "复用" if meta.get("unlock_reused") else "重建",
              (meta.get("report_risk") or {}).get("in_window", "-"), is_td,
+             meta["models_ready"], meta["model_gate"].get("reason"),
              meta["universe_source"], meta["degraded"], len(ALERTS)))
     return 0
 
