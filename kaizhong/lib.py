@@ -499,6 +499,12 @@ def detect_today_triggers(hist, last_date):
 
 # ---------------- 方糖（Server酱）推送 ----------------
 def push_ftqq(title, md):
+    # ★2026-11-27 用户要求停止微信推送（准确率不高）：凯众模型所有推送统一在此拦截。
+    #   本函数只被 kaizhong 的 daily_ry.py / daily_v4.py 调用，其他模型走各自的推送，不受影响。
+    #   恢复推送：设环境变量 KZ_PUSH_DISABLED=0，或删掉下面这段。选股/报告/台账照常生成。
+    if os.environ.get("KZ_PUSH_DISABLED", "1") == "1":
+        print("[push] 凯众模型微信推送已停用（KZ_PUSH_DISABLED=1），本次不发送")
+        return False
     try:                       # 临近财报/预告：微信推送加醒目标识（离线读本地日历）
         import sys as _sys
         _sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
