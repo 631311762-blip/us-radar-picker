@@ -59,6 +59,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ETF_UNIVERSE_FILE = os.path.join(HERE, "etf_universe.json")
 SECTOR_MEMBERS_FILE = os.path.join(HERE, "sector_members.json")
 ETF_DAILY_FILE = os.path.join(HERE, "etf_daily_qfq.json.gz")   # 本地缓存（qfq日线，gzip，每周刷新）
+STATE_DIR = os.path.join(HERE, "state")                        # 周度状态落盘目录
+STRONG_FILE = os.path.join(STATE_DIR, "strong_codes.json")     # 强共振行业成分股清单（供每日推送读取）
 _ETF_CACHE = None   # 惰性加载：{code: {theme,name,bars:[{d,o,h,l,c,v}]}}
 
 
@@ -219,6 +221,46 @@ def weekly_resonance_all(end_date=None, top_only=False):
 def strong_themes(resonance_list):
     """提取强共振行业主题名列表。"""
     return [r["theme"] for r in resonance_list if r.get("强共振")]
+
+
+def save_strong_codes(resonance_list):
+    """把强共振行业的成分股代码→行业映射落盘，供每日模型推送读取。
+
+    写入 industry_trend/state/strong_codes.json：
+      {updated, week, themes:[...], code2theme:{code:{theme,board,etf_code}}}
+    即使本周无强共振也写空清单（覆盖旧的），避免每日推送误用过期数据。
+    """
+    themes = strong_themes(resonance_list)
+    members = load_sector_members()
+    code2theme = {}
+    for t in themes:
+        info = members.get(t, {})
+        for c in info.get("codes", []):
+            code2theme[c] = {"theme": t, "board": info.get("board", ""),
+                             "etf_code": info.get("etf_code", "")}
+    payload = {
+        "updated": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "week": datetime.now().strftime("%G-W%V"),
+        "themes": themes,
+        "code2theme": code2theme,
+    }
+    os.makedirs(STATE_DIR, exist_ok=True)
+    _dump_json(STRONG_FILE, payload)
+    print("[周度] 强共振清单落盘: %d行业, %d只成分股 -> %s" % (
+        len(themes), len(code2theme), STRONG_FILE))
+    return payload
+
+
+def load_strong_codes(repo_root=None):
+    """读取强共振清单。每日模型调用；找不到/过期返回空，绝不因它报错。
+
+    repo_root：仓库根目录；不传则用模块所在目录的父级（适配 industry_trend 布局）。
+    """
+    path = STRONG_FILE
+    if repo_root:
+        path = os.path.join(repo_root, "industry_trend", "state", "strong_codes.json")
+    data = _load_json(path, {}) or {}
+    return data
 
 
 def refresh_etf_cache(end_date=None):
@@ -520,6 +562,10 @@ def run_weekly(do_refresh_etf=True, do_refresh_members=True, do_push=True,
     report["strong"] = strong_themes(res)
     report["emphasized"] = len(emph)
     report["stats"] = stats
+    # 落盘强共振清单，供每日模型推送加共振标签用
+    payload = save_strong_codes(res)
+    report["strong_codes"] = {"themes": len(payload["themes"]),
+                              "codes": len(payload["code2theme"])}
 
     if do_push:
         title = "行业趋势·周线共振播报 %s" % datetime.now().strftime("%m-%d")
