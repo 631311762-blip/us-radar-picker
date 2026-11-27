@@ -86,6 +86,18 @@ CFG_PATH = os.path.join(HERE, "config.json")
 CFG = json.load(open(CFG_PATH, encoding="utf-8"))
 
 
+def _resonance_mark(code):
+    """行业共振标签：读 industry_trend/state/strong_codes.json，失败静默返回空。"""
+    try:
+        _p = os.path.join(REPO, "industry_trend", "state", "strong_codes.json")
+        _d = json.load(open(_p, encoding="utf-8"))
+        _c = "".join(ch for ch in str(code) if ch.isdigit())[-6:]
+        _m = _d.get("code2theme", {}).get(_c)
+        return " 🔥行业共振(%s)" % _m["theme"] if _m and _m.get("theme") else ""
+    except Exception:
+        return ""
+
+
 def load_cfg():
     return CFG
 
@@ -690,14 +702,14 @@ def _push_two_section(ctx, picks, universe, cfg):
         lines.append("当日无新提示")
     # 干净版：个股只列代码/名称/标签，策略与买点统一放脚注说明一次
     for x in sorted(seg1, key=rank):
-        lines.append(f"`{x['code']}` {x['name']} {tag(x)}")
+        lines.append(f"`{x['code']}` {x['name']} {tag(x)}{_resonance_mark(x['code'])}")
 
     lines += ["", f"【二、历史跟踪·持有中 {len(seg2)}只（未出局）】"]
     if not seg2:
         lines.append("无")
     for x in sorted(seg2, key=lambda z: (z["signal"], int(z.get("tier") or 2)), reverse=True):
         flag = "✓" if x["ret"] >= cfg["target"] * 100 else ""
-        lines.append(f"`{x['code']}` {x['name']} {tag(x)} {x['signal'][5:]}提示 买{x['buy']} "
+        lines.append(f"`{x['code']}` {x['name']} {tag(x)}{_resonance_mark(x['code'])} {x['signal'][5:]}提示 买{x['buy']} "
                      f"观察{x['held']}/{x['pat_hold']}日 {x['ret']:+.1f}%{flag}")
 
     foot = ("★假破位收复优先 ｜ 跟3日,三日内收盘破D1阳线实体一半即出局" if not entry_open
