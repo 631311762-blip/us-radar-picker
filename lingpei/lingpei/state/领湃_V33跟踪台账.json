@@ -3045,6 +3045,47 @@
         "ret": null,
         "done": false
       }
+    },
+    {
+      "code": "603198",
+      "name": "迎驾贡酒",
+      "date": "2026-11-27",
+      "batch": "2026-11-27",
+      "score": 66.42,
+      "dev_signed": 0.0185,
+      "dev60": 0.0185,
+      "drop_from_peak": 0.1496,
+      "gap_days": 18,
+      "trial_date": "2026-10-30",
+      "fall_pp": 7.84,
+      "sig_vr40": 0.748,
+      "shrink_prev3": 0.971,
+      "trial_vr": 1.997,
+      "k_amp": 0.0259,
+      "k_lower": 0.794,
+      "k_c_from_low": 0.0251,
+      "k_low_vs_prev": -0.0078,
+      "near_ma": "MA60",
+      "entry_close": 41.6,
+      "position": "MA60上方",
+      "t3": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t5": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      },
+      "t10": {
+        "date": null,
+        "close": null,
+        "ret": null,
+        "done": false
+      }
     }
   ]
 }

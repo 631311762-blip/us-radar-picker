@@ -1,0 +1,46 @@
+{
+  "date": "2026-11-27",
+  "model": "lingpei",
+  "count": 1,
+  "picks": [
+    {
+      "code": "603198",
+      "name": "迎驾贡酒",
+      "close": null,
+      "score": 66.42,
+      "board": "",
+      "raw": {
+        "signal": true,
+        "score": 66.42,
+        "gap_days": 18,
+        "drop_from_peak": 0.1496,
+        "dev60": 0.0185,
+        "dev_signed": 0.0185,
+        "fall_pp": 7.84,
+        "sig_vr40": 0.748,
+        "shrink_prev3": 0.971,
+        "trial_vr": 1.997,
+        "k_amp": 0.0259,
+        "k_lower": 0.794,
+        "k_c_from_low": 0.0251,
+        "k_low_vs_prev": -0.0078,
+        "preprobe_date": "2026-11-19",
+        "preprobe_lower": 0.451,
+        "preprobe_pullback": 0.0396,
+        "near_ma": "MA60",
+        "trial_date": "2026-10-30",
+        "code": "603198",
+        "name": "迎驾贡酒",
+        "entry_close": 41.6
+      }
+    }
+  ],
+  "dropped": [],
+  "extra": {},
+  "gate": {
+    "lixin": 777,
+    "universe": 4546,
+    "dropped": 0
+  },
+  "written_at": "2026-11-27T16:40:02+08:00"
+}

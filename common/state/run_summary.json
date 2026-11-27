@@ -1,73 +1,73 @@
 {
-  "generated_at": "2026-11-26T16:44:13+08:00",
+  "generated_at": "2026-11-27T16:40:29+08:00",
   "results": [
     {
       "name": "low_shadow2",
       "label": "低位上影模型2（双栏拆分·低位栏）",
       "exit": 0,
-      "seconds": 487.4
+      "seconds": 86.7
     },
     {
       "name": "lingpei",
       "label": "领湃模型 B_V3.4.1（前置试探·回落企稳）",
       "exit": 0,
-      "seconds": 300.9
+      "seconds": 403.5
     },
     {
       "name": "kaizhong",
       "label": "反包阳线前期入选模型 RY（2026-11-21 替换缩量二次突破V3作主提示）",
       "exit": 0,
-      "seconds": 123.2
+      "seconds": 79.9
     },
     {
       "name": "yida",
       "label": "怡达模型（阴跌+平台温和放量·D2提示）",
       "exit": 0,
-      "seconds": 97.6
+      "seconds": 80.2
     },
     {
       "name": "powei",
       "label": "破位后上涨模型（假破位收复）",
       "exit": 0,
-      "seconds": 176.3
+      "seconds": 124.1
     },
     {
       "name": "zhushanglang",
       "label": "主升浪 V5·奥雅式突破",
       "exit": 0,
-      "seconds": 127.3
+      "seconds": 128.4
     }
   ],
   "settlements": [
     {
       "model": "low_shadow2",
-      "batches": 7,
-      "samples": 98,
-      "win_rate": 0.064
+      "batches": 8,
+      "samples": 99,
+      "win_rate": 0.0766
     },
     {
       "model": "lingpei",
-      "batches": 6,
-      "samples": 42,
-      "win_rate": 0.0333
+      "batches": 7,
+      "samples": 47,
+      "win_rate": 0.0651
     },
     {
       "model": "kaizhong",
-      "batches": 8,
-      "samples": 29,
-      "win_rate": 0.1222
+      "batches": 9,
+      "samples": 32,
+      "win_rate": 0.1809
     },
     {
       "model": "yida",
-      "batches": 1,
-      "samples": 27,
-      "win_rate": 0.0741
+      "batches": 2,
+      "samples": 248,
+      "win_rate": 1.0
     },
     {
       "model": "powei",
-      "batches": 6,
-      "samples": 68,
-      "win_rate": 0.1165
+      "batches": 7,
+      "samples": 75,
+      "win_rate": 0.0871
     }
   ]
 }
