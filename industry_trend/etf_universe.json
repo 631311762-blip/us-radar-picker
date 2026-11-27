@@ -1,0 +1,266 @@
+[
+ {
+  "theme": "半导体",
+  "etf_code": "588170",
+  "etf_name": "科创半导体ETF华夏",
+  "board": "半导体",
+  "amount": 16466612575.0,
+  "candidates": 25
+ },
+ {
+  "theme": "消费电子",
+  "etf_code": "159732",
+  "etf_name": "消费电子ETF华夏",
+  "board": "消费电子",
+  "amount": 216255587.783,
+  "candidates": 7
+ },
+ {
+  "theme": "通信",
+  "etf_code": "515880",
+  "etf_name": "通信ETF国泰",
+  "board": "通信设备",
+  "amount": 4029891332.0,
+  "candidates": 7
+ },
+ {
+  "theme": "计算机",
+  "etf_code": "159998",
+  "etf_name": "计算机ETF天弘",
+  "board": "计算机设备",
+  "amount": 87728987.355,
+  "candidates": 3
+ },
+ {
+  "theme": "软件",
+  "etf_code": "159852",
+  "etf_name": "软件ETF嘉实",
+  "board": "软件开发",
+  "amount": 645633260.535,
+  "candidates": 17
+ },
+ {
+  "theme": "人工智能",
+  "etf_code": "159363",
+  "etf_name": "创业板人工智能ETF华宝",
+  "board": "软件开发",
+  "amount": 1387391411.606,
+  "candidates": 42
+ },
+ {
+  "theme": "医药",
+  "etf_code": "512010",
+  "etf_name": "医药ETF易方达",
+  "board": "化学制药",
+  "amount": 442513676.0,
+  "candidates": 16
+ },
+ {
+  "theme": "医疗",
+  "etf_code": "512170",
+  "etf_name": "医疗ETF华宝",
+  "board": "医疗器械",
+  "amount": 591911720.0,
+  "candidates": 8
+ },
+ {
+  "theme": "白酒",
+  "etf_code": "512690",
+  "etf_name": "酒ETF鹏华",
+  "board": "白酒Ⅱ",
+  "amount": 426253277.0,
+  "candidates": 1
+ },
+ {
+  "theme": "食品饮料",
+  "etf_code": "515170",
+  "etf_name": "食品饮料ETF华夏",
+  "board": "食品饮料",
+  "amount": 55775377.0,
+  "candidates": 6
+ },
+ {
+  "theme": "证券",
+  "etf_code": "512880",
+  "etf_name": "证券ETF国泰",
+  "board": "证券",
+  "amount": 2856008937.0,
+  "candidates": 19
+ },
+ {
+  "theme": "银行",
+  "etf_code": "512800",
+  "etf_name": "银行ETF华宝",
+  "board": "银行",
+  "amount": 1552724465.0,
+  "candidates": 13
+ },
+ {
+  "theme": "保险",
+  "etf_code": "512070",
+  "etf_name": "证券保险ETF易方达",
+  "board": "保险",
+  "amount": 416805224.0,
+  "candidates": 2
+ },
+ {
+  "theme": "房地产",
+  "etf_code": "159707",
+  "etf_name": "地产ETF华宝",
+  "board": "房地产",
+  "amount": 122855804.108,
+  "candidates": 9
+ },
+ {
+  "theme": "有色金属",
+  "etf_code": "159980",
+  "etf_name": "有色ETF大成",
+  "board": "有色金属",
+  "amount": 964324019.581,
+  "candidates": 27
+ },
+ {
+  "theme": "煤炭",
+  "etf_code": "515220",
+  "etf_name": "煤炭ETF国泰",
+  "board": "煤炭行业",
+  "amount": 464630199.0,
+  "candidates": 1
+ },
+ {
+  "theme": "钢铁",
+  "etf_code": "515210",
+  "etf_name": "钢铁ETF国泰",
+  "board": "钢铁行业",
+  "amount": 66030466.0,
+  "candidates": 1
+ },
+ {
+  "theme": "化工",
+  "etf_code": "159981",
+  "etf_name": "能源化工ETF建信",
+  "board": "基础化工",
+  "amount": 749374014.12,
+  "candidates": 14
+ },
+ {
+  "theme": "电力",
+  "etf_code": "159611",
+  "etf_name": "电力ETF广发",
+  "board": "电力行业",
+  "amount": 317495003.485,
+  "candidates": 23
+ },
+ {
+  "theme": "光伏",
+  "etf_code": "515790",
+  "etf_name": "光伏ETF华泰柏瑞",
+  "board": "光伏设备",
+  "amount": 186156951.0,
+  "candidates": 16
+ },
+ {
+  "theme": "锂电",
+  "etf_code": "159840",
+  "etf_name": "锂电池ETF工银",
+  "board": "电池",
+  "amount": 72101554.8,
+  "candidates": 1
+ },
+ {
+  "theme": "新能源车",
+  "etf_code": "515030",
+  "etf_name": "新能源车ETF华夏",
+  "board": "汽车整车",
+  "amount": 139445857.0,
+  "candidates": 8
+ },
+ {
+  "theme": "军工",
+  "etf_code": "512660",
+  "etf_name": "军工ETF国泰",
+  "board": "国防军工",
+  "amount": 396361023.0,
+  "candidates": 4
+ },
+ {
+  "theme": "家电",
+  "etf_code": "159996",
+  "etf_name": "家电ETF国泰",
+  "board": "黑色家电",
+  "amount": 45655803.5,
+  "candidates": 12
+ },
+ {
+  "theme": "农业",
+  "etf_code": "159825",
+  "etf_name": "农业ETF富国",
+  "board": "农业综合Ⅱ",
+  "amount": 56266688.639,
+  "candidates": 7
+ },
+ {
+  "theme": "游戏",
+  "etf_code": "159869",
+  "etf_name": "游戏ETF华夏",
+  "board": "游戏",
+  "amount": 610386755.411,
+  "candidates": 3
+ },
+ {
+  "theme": "传媒",
+  "etf_code": "512980",
+  "etf_name": "传媒ETF广发",
+  "board": "文化传媒",
+  "amount": 627494502.0,
+  "candidates": 4
+ },
+ {
+  "theme": "建材",
+  "etf_code": "159745",
+  "etf_name": "建材ETF国泰",
+  "board": "建筑材料",
+  "amount": 116339642.7,
+  "candidates": 3
+ },
+ {
+  "theme": "机械",
+  "etf_code": "515970",
+  "etf_name": "工程机械ETF华夏",
+  "board": "专用设备",
+  "amount": 127350678.0,
+  "candidates": 18
+ },
+ {
+  "theme": "环保",
+  "etf_code": "512580",
+  "etf_name": "环保ETF广发",
+  "board": "环保行业",
+  "amount": 4448352.0,
+  "candidates": 1
+ },
+ {
+  "theme": "旅游",
+  "etf_code": "159766",
+  "etf_name": "旅游ETF富国",
+  "board": "旅游酒店",
+  "amount": 136499010.294,
+  "candidates": 2
+ },
+ {
+  "theme": "基建",
+  "etf_code": "516970",
+  "etf_name": "基建ETF广发",
+  "board": "建筑装饰",
+  "amount": 51430046.0,
+  "candidates": 4
+ },
+ {
+  "theme": "石油石化",
+  "etf_code": "561360",
+  "etf_name": "石油ETF国泰",
+  "board": "石油石化",
+  "amount": 103597615.0,
+  "candidates": 17
+ }
+]
