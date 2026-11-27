@@ -58,15 +58,32 @@ MA20_LOOKBACK    = 3       # 个股MA20拐头回看
 HERE = os.path.dirname(os.path.abspath(__file__))
 ETF_UNIVERSE_FILE = os.path.join(HERE, "etf_universe.json")
 SECTOR_MEMBERS_FILE = os.path.join(HERE, "sector_members.json")
+ETF_DAILY_FILE = os.path.join(HERE, "etf_daily_qfq.json.gz")   # 本地缓存（qfq日线，gzip，每周刷新）
+_ETF_CACHE = None   # 惰性加载：{code: {theme,name,bars:[{d,o,h,l,c,v}]}}
 
 
 # ============ 数据加载 ============
 def _load_json(path, default=None):
     try:
+        if path.endswith(".gz"):
+            import gzip
+            with gzip.open(path, "rt", encoding="utf-8") as f:
+                return json.load(f)
         with open(path, encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return default
+
+
+def _dump_json(path, obj):
+    """按扩展名决定明文/gzip 写入。"""
+    if path.endswith(".gz"):
+        import gzip
+        with gzip.open(path, "wt", encoding="utf-8") as f:
+            json.dump(obj, f, ensure_ascii=False, separators=(",", ":"))
+    else:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(obj, f, ensure_ascii=False, separators=(",", ":"))
 
 
 def load_etf_universe():
@@ -77,16 +94,48 @@ def load_sector_members():
     return _load_json(SECTOR_MEMBERS_FILE, {}) or {}
 
 
+def load_etf_cache(force=False):
+    """惰性加载本地 ETF 日线缓存（优先，避免每次联网现抓）。"""
+    global _ETF_CACHE
+    if _ETF_CACHE is None or force:
+        _ETF_CACHE = _load_json(ETF_DAILY_FILE, {}) or {}
+    return _ETF_CACHE
+
+
+def _bars_to_frame(bars):
+    """把缓存里的紧凑 bar [{d,o,h,l,c,v}] 转成模型用的中文列 DataFrame。"""
+    if not bars:
+        return None
+    df = pd.DataFrame(bars).rename(columns={
+        "d": "日期", "o": "开盘", "h": "最高", "l": "最低", "c": "收盘", "v": "成交量"})
+    df["日期"] = pd.to_datetime(df["日期"])
+    for col in ("收盘", "开盘", "最高", "最低", "成交量"):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df.sort_values("日期").reset_index(drop=True)
+
+
 # ============ 【A】行业周线共振分析 ============
 def _fetch_etf_daily(code, end_date=None, days=300):
-    """抓 ETF 前复权日线（akshare qfq），返回 DataFrame（中文列）或 None。"""
+    """取 ETF 前复权日线：优先读本地缓存（qfq，每周刷新），未命中才 akshare 现抓。"""
+    code = str(code).zfill(6)
+    # 1) 本地缓存优先
+    cache = load_etf_cache()
+    node = cache.get(code)
+    if node and node.get("bars"):
+        df = _bars_to_frame(node["bars"])
+        if df is not None and len(df) >= 30:
+            if end_date:
+                df = df[df["日期"] <= pd.to_datetime(end_date)]
+            return df.reset_index(drop=True) if len(df) >= 30 else None
+    # 2) 回退：akshare 现抓
     import akshare as ak
     end = (end_date or datetime.now().strftime("%Y%m%d")).replace("-", "")
     d_obj = pd.to_datetime(end)
     start = (d_obj - pd.Timedelta(days=days * 2)).strftime("%Y%m%d")
     for attempt in range(3):
         try:
-            df = ak.fund_etf_hist_em(symbol=str(code), period="daily",
+            df = ak.fund_etf_hist_em(symbol=code, period="daily",
                                      start_date=start, end_date=end, adjust="qfq")
             if df is not None and len(df) >= 30:
                 df["日期"] = pd.to_datetime(df["日期"])
@@ -170,6 +219,83 @@ def weekly_resonance_all(end_date=None, top_only=False):
 def strong_themes(resonance_list):
     """提取强共振行业主题名列表。"""
     return [r["theme"] for r in resonance_list if r.get("强共振")]
+
+
+def refresh_etf_cache(end_date=None):
+    """刷新本地 ETF 日线缓存（qfq）。供每周 workflow 调用；失败保留旧缓存。
+
+    返回 (成功只数, 失败列表)。写入 etf_daily_qfq.json。
+    """
+    import akshare as ak
+    uni = load_etf_universe()
+    cache = {}
+    fail = []
+    end = (end_date or datetime.now().strftime("%Y%m%d")).replace("-", "")
+    for item in uni:
+        code = str(item["etf_code"]).zfill(6)
+        ok = False
+        for attempt in range(3):
+            try:
+                df = ak.fund_etf_hist_em(symbol=code, period="daily",
+                                         start_date="20240101", end_date=end, adjust="qfq")
+                if df is not None and len(df) >= 30:
+                    bars = []
+                    for _, r in df.iterrows():
+                        bars.append({
+                            "d": str(r["日期"])[:10], "o": round(float(r["开盘"]), 4),
+                            "h": round(float(r["最高"]), 4), "l": round(float(r["最低"]), 4),
+                            "c": round(float(r["收盘"]), 4), "v": float(r["成交量"]),
+                        })
+                    cache[code] = {"theme": item["theme"], "name": item.get("etf_name", ""), "bars": bars}
+                    ok = True
+                    break
+            except Exception:
+                time.sleep(1.0)
+        if not ok:
+            fail.append(code)
+        time.sleep(0.15)
+    # 仅当成功数足够时才覆盖，避免大面积失败把缓存清空
+    if len(cache) >= max(10, len(uni) // 2):
+        _dump_json(ETF_DAILY_FILE, cache)
+        load_etf_cache(force=True)
+    return len(cache), fail
+
+
+def refresh_sector_members():
+    """刷新行业成分股映射（akshare 东财板块）。供每周 workflow 调用；失败保留旧表。
+
+    返回 (成功行业数, 失败列表)。写入 sector_members.json。
+    """
+    import akshare as ak
+    members = load_sector_members()
+    old = dict(members)
+    fail = []
+    try:
+        boards = ak.stock_board_industry_name_em()
+        board_names = set(boards["板块名称"].astype(str).tolist())
+    except Exception as e:
+        return 0, ["板块列表: %s" % str(e)[:50]]
+    for theme, info in old.items():
+        board = info.get("board", "")
+        matched = board if board in board_names else next(
+            (b for b in board_names if board in b or b in board), None)
+        if not matched:
+            fail.append(theme)
+            continue
+        try:
+            cons = ak.stock_board_industry_cons_em(symbol=matched)
+            codes = [str(c).zfill(6) for c in cons["代码"].tolist()]
+            members[theme] = dict(info)
+            members[theme]["board"] = matched
+            members[theme]["codes"] = codes
+            members[theme]["count"] = len(codes)
+        except Exception:
+            fail.append(theme)
+        time.sleep(0.3)
+    ok = len(old) - len(fail)
+    if ok >= max(10, len(old) // 2):
+        _dump_json(SECTOR_MEMBERS_FILE, members)
+    return ok, fail
 
 
 # ============ 【B】三模型选股按强行业过滤 ============
@@ -349,6 +475,56 @@ def batch_confirm(codes, names=None, end_date=None):
 
 def filter_focus(codes, names=None, end_date=None):
     return [r for r in batch_confirm(codes, names, end_date) if r["等级"] == "重点样本"]
+
+
+# ============ 【E】微信推送 ============
+def push_weekly(title, text):
+    """通过 PushPlus 发微信（与全仓库统一通道）。无 token 时仅打印。返回是否成功。"""
+    token = (os.environ.get("PUSHPLUS_TOKEN") or "").strip()
+    if not token:
+        print("[推送] 未配置 PUSHPLUS_TOKEN，仅打印正文")
+        return False
+    try:
+        import requests
+        r = requests.post("https://www.pushplus.plus/send", json={
+            "token": token, "title": title, "content": text, "template": "txt"}, timeout=20)
+        ok = bool(r.ok and r.json().get("code") == 200)
+        print("[推送] %s" % ("成功" if ok else "失败: %s" % r.text[:120]))
+        return ok
+    except Exception as e:
+        print("[推送] 异常: %s" % str(e)[:120])
+        return False
+
+
+# ============ 【F】周度主入口（供 workflow 一键调用）============
+def run_weekly(do_refresh_etf=True, do_refresh_members=True, do_push=True,
+               repo_root=None, end_date=None):
+    """完整周度流程：刷新数据→共振分析→三模型叠加→推送。返回 (推送文本, 报告dict)。
+
+    do_refresh_etf / do_refresh_members：是否联网刷新数据缓存（workflow 里为 True）。
+    do_push：是否发微信（本地调试设 False）。
+    """
+    report = {}
+    if do_refresh_etf:
+        n, fail = refresh_etf_cache(end_date)
+        report["etf_cache"] = {"ok": n, "fail": fail}
+        print("[周度] ETF缓存刷新: %d只成功, 失败%s" % (n, fail))
+    if do_refresh_members:
+        n, fail = refresh_sector_members()
+        report["sector_members"] = {"ok": n, "fail": fail}
+        print("[周度] 行业成分刷新: %d行业成功, 失败%s" % (n, fail))
+
+    res = weekly_resonance_all(end_date)
+    emph, stats = overlay_model_picks(res, repo_root=repo_root)
+    text = build_weekly_push(res, emph, stats)
+    report["strong"] = strong_themes(res)
+    report["emphasized"] = len(emph)
+    report["stats"] = stats
+
+    if do_push:
+        title = "行业趋势·周线共振播报 %s" % datetime.now().strftime("%m-%d")
+        push_weekly(title, text)
+    return text, report
 
 
 if __name__ == "__main__":
