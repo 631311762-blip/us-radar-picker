@@ -33,6 +33,19 @@ PUSH = _LSKILL if os.path.exists(_LSKILL) else os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "wechat_push.py")
 
 
+def _resonance_mark(code):
+    """行业共振标签：读 industry_trend/state/strong_codes.json，失败静默返回空。"""
+    try:
+        _repo = os.path.dirname(HERE)
+        _p = os.path.join(_repo, "industry_trend", "state", "strong_codes.json")
+        _d = json.load(open(_p, encoding="utf-8"))
+        _c = "".join(ch for ch in str(code) if ch.isdigit())[-6:]
+        _m = _d.get("code2theme", {}).get(_c)
+        return " 🔥行业共振(%s)" % _m["theme"] if _m and _m.get("theme") else ""
+    except Exception:
+        return ""
+
+
 def fmt(row, board_show=True):
     arrow = "+" if row["day_chg"] >= 0 else ""
     bd = f"[{row.get('board', '-')}]" if board_show else ""
@@ -65,7 +78,8 @@ def fmt(row, board_show=True):
         fresh += f"　·选入第1日(今日新选入)"
     elif s:
         fresh += f"　·选入第{s.get('days','?')}日(自{s.get('first','?')}首推)"
-    return (f"**{row['name']}**{bd} `{row['code']}` 分{row['score']:.0f}{tag}{fresh}  \n"
+    rm = _resonance_mark(row['code'])
+    return (f"**{row['name']}**{bd} `{row['code']}` 分{row['score']:.0f}{tag}{rm}{fresh}  \n"
             f"　收 {row['close']}　当日 {arrow}{row['day_chg']:.2f}%　"
             f"5日 {arrow}{row['chg5']:.1f}%　10日 {arrow}{row['chg10']:.1f}%  \n"
             f"　[行情](https://gu.qq.com/{row['code']})｜"
