@@ -54,6 +54,18 @@ for _p in (REPO, os.path.join(REPO, "common")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+def _resonance_mark(code):
+    """行业共振标签：读 industry_trend/state/strong_codes.json，失败静默返回空。"""
+    try:
+        _p = os.path.join(REPO, "industry_trend", "state", "strong_codes.json")
+        _d = json.load(open(_p, encoding="utf-8"))
+        _c = "".join(ch for ch in str(code) if ch.isdigit())[-6:]
+        _m = _d.get("code2theme", {}).get(_c)
+        return " 🔥行业共振(%s)" % _m["theme"] if _m and _m.get("theme") else ""
+    except Exception:
+        return ""
+
+
 MODEL_NAME = "powei"
 MODEL_LABEL = "破位后上涨模型（假破位收复）"
 
@@ -648,7 +660,7 @@ def _push_report(cands, today):
         for i, e in enumerate(confirmed, 1):
             sc = e["second_confirm"]
             lines.append("| %d | %s | %s | %.2f | %s | %s | %s(间隔%d日·涨%.1f%%) | %d | %s | %d |" % (
-                i, e["code"], e.get("name", ""), e["support"], e["break_day"], e["sig_day"],
+                i, e["code"], e.get("name", "") + _resonance_mark(e["code"]), e["support"], e["break_day"], e["sig_day"],
                 sc["day"], sc["gap"], sc["chg"] * 100, e["age"], e.get("vol_ratio"), score(e)))
     # ── 观察样本 ──
     if watch:
@@ -657,7 +669,7 @@ def _push_report(cands, today):
                   "|---|---|---|---|---|---|---|---|---|"]
         for i, e in enumerate(watch, 1):
             lines.append("| %d | %s | %s | %.2f | %s | %s | %d | %s | %d |" % (
-                i, e["code"], e.get("name", ""), e["support"], e["break_day"],
+                i, e["code"], e.get("name", "") + _resonance_mark(e["code"]), e["support"], e["break_day"],
                 e["sig_day"], e["age"], e.get("vol_ratio"), score(e)))
     # 量能精选层（买点放量 + 破位→收复间隔≤3，回测3日胜率71.5%）：优先关注视图
     elite = [e for e in cands
@@ -667,7 +679,7 @@ def _push_report(cands, today):
         lines += ["", "### 量能精选层（买点放量 + 破位→收复间隔≤3，回测3日胜率 71.5%，优先关注）"]
         for e in elite:
             lines.append("- %s %s：支撑 %.2f ｜ 破位 %s → 收复 %s ｜ 量比 %s ｜ 买点量比 %.2f ｜ 评分 %d" % (
-                e["code"], e.get("name", ""), e["support"], e["break_day"], e["sig_day"],
+                e["code"], e.get("name", "") + _resonance_mark(e["code"]), e["support"], e["break_day"], e["sig_day"],
                 e.get("vol_ratio"), (e["op"].get("vol_ratio_buy") or 0), score(e)))
     # 固定操作策略（每次必附）+ 模型原始样本标注（便于回忆）
     lines += ["", OPER_RULE, "", ORIGINAL_SAMPLES]
