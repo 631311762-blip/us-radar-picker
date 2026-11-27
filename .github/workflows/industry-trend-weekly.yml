@@ -1,0 +1,82 @@
+name: 行业趋势·周线共振（每周）
+
+# 行业趋势模型周度自动化：
+#   每周五 A 股收盘后（北京 17:00 = UTC 09:00）跑一次：
+#     ① 刷新 33 行业 ETF 的 qfq 日线缓存 + 行业成分股映射（akshare）
+#     ② 周线共振分析（周线向上 + 放量 = 强共振行业）
+#     ③ 叠加破位/奥雅/怡达最近选股，命中标【行业共振·重点】
+#     ④ 微信推送周度播报
+#     ⑤ 回写刷新后的数据文件（供下周复用）
+# 独立 workflow，不进 registry、不改主流水线，可单独停用/删除。
+
+on:
+  schedule:
+    - cron: "0 9 * * 5"   # UTC 周五 09:00 = 北京 17:00（周五收盘后）
+  workflow_dispatch:      # 手动补跑
+
+permissions:
+  contents: write
+
+concurrency:
+  group: industry-trend-weekly
+  cancel-in-progress: false
+
+jobs:
+  weekly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: python3 -m pip install --quiet --upgrade pip && python3 -m pip install --quiet requests numpy pandas akshare
+
+      # 幂等：同一自然周只跑一次，防止 schedule + 手动补跑重复推送
+      - name: 本周是否已推送
+        id: guard
+        run: |
+          WEEK=$(date -u +%G-W%V)
+          MARK="industry_trend/state/last_push_week.txt"
+          if [ -f "$MARK" ] && [ "$(cat "$MARK" | tr -d ' ')" = "$WEEK" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "本周 $WEEK 已推送，跳过"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "本周 $WEEK 未推送，执行"
+          fi
+
+      - name: 运行周度共振分析并推送
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+        run: |
+          cd industry_trend
+          python3 -c "
+          import 行业趋势模型 as m
+          text, rep = m.run_weekly(do_refresh_etf=True, do_refresh_members=True, do_push=True)
+          print('=== 报告 ===')
+          print('强共振行业:', rep.get('strong'))
+          print('叠加命中:', rep.get('emphasized'))
+          print('ETF缓存刷新:', rep.get('etf_cache'))
+          print('行业成分刷新:', rep.get('sector_members'))
+          "
+
+      - name: 记录本周已推送
+        if: steps.guard.outputs.skip != 'true' && success()
+        run: |
+          mkdir -p industry_trend/state
+          date -u +%G-W%V > industry_trend/state/last_push_week.txt
+
+      - name: 回写刷新后的数据文件
+        if: steps.guard.outputs.skip != 'true' && success()
+        run: |
+          git config user.name "industry-trend-bot"
+          git config user.email "industry-trend-bot@users.noreply.github.com"
+          git add industry_trend/etf_daily_qfq.json.gz industry_trend/sector_members.json industry_trend/state/last_push_week.txt 2>/dev/null || true
+          git commit -m "industry-trend weekly: $(date -u +%F) [skip ci]" || echo "无数据变更"
+          git pull --rebase origin main || true
+          git push || echo "推送失败（不影响本次分析）"
