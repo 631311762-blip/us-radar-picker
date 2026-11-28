@@ -74,27 +74,44 @@
 
 ---
 
+## 每日自动推送（GitHub Actions）✅
+
+莲花模型已按仓库统一契约接入，**每个交易日北京时间 15:10 由统一流水线 `a-share-pipeline.yml` 自动运行并微信推送**，与其他模型（怡达/凯众/低位上影2等）完全一致：
+
+- 已登记在 `common/registry.json`（`name: lotus`，`enabled: true`），由 `run_all.py` 顺序调度；
+- 读共同前置层样本池（已剔除 ST/立信/次新）+ 共享 K 线缓存，**严格离线，不依赖 akshare 联网**；
+- 结果经 `ctx.record()` 落统一台账，自动进入次日回溯结算；
+- 推送复用 `common/notify.py`，token 走仓库 Secret `PUSHPLUS_TOKEN`（无需在本目录放明文）；
+- 另有 `.github/workflows/lotus.yml` 供手动调试 / 主流水线失败时兜底。
+
+> 无需在当前软件里设置定时任务——推送完全在 GitHub 云端完成。
+
 ## 文件
 
-- `config.json` —— 模型参数（主策略 + 精选池四闸门），**推送 token 已脱敏，需本地填写**
-- `verify.py` —— 三黄金样本逐条校验脚本（真实行情，独立可跑）
-- `pipeline.py` —— 统一选股流水线（候选扫描 → 分级 → 报告 → PushPlus 推送）
+- `daily_lotus.py` —— **每日入口**（统一流水线版，读共享数据 + 落台账 + 推送）
+- `config.json` —— 模型参数（主策略 + 精选池四闸门），推送 token 已脱敏
+- `verify.py` —— 三黄金样本逐条校验脚本（用 akshare 真实行情，独立可跑）
+- `pipeline.py` —— 独立版选股脚本（自建候选池，依赖 akshare，供脱离仓库单独使用）
 - `README.md` —— 本说明
 
 ## 使用
 
 ```bash
-# 校验三黄金样本是否全过（规则变更后必跑）
-python3 verify.py
+# 校验三黄金样本是否全过（规则变更后必跑，需 akshare）
+python3 lotus/verify.py
 
-# 选股（指定日期，不推送）
-python3 pipeline.py --date 20261127 --dry-run
+# 每日入口：只选股落台账，不推送（调试）
+python3 lotus/daily_lotus.py --no-push
 
-# 正式选股+推送（需先在 config.json 填 pushplus_token）
-python3 pipeline.py
+# 每日入口：正式（统一流水线自动调用，推送 token 从环境变量读）
+python3 lotus/daily_lotus.py
+
+# 独立版选股（依赖 akshare，需先在 config.json 填 token）
+python3 lotus/pipeline.py --date 20261127 --dry-run
 ```
 
-依赖：`akshare`、`pandas`、`numpy`、`requests`
+`daily_lotus.py` 依赖：`requests`、`numpy`、`pandas`（仓库统一流水线已预装）
+`verify.py` / `pipeline.py` 额外依赖：`akshare`
 
 ## 免责声明
 
