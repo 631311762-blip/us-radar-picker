@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-27T16:33:18+08:00",
-  "as_of": "2026-11-27",
+  "generated_at": "2026-11-28T11:10:42+08:00",
+  "as_of": "2026-11-28",
   "horizon_days": 60,
   "warn_days": 15,
   "source": "eastmoney:RPT_PUBLIC_BS_APPOIN",
@@ -16,6 +16,6 @@
     "codes": 1,
     "in_window": 0,
     "scan_empty": false,
-    "window": "2026-11-27~2027-01-26"
+    "window": "2026-11-28~2027-01-27"
   }
 }
